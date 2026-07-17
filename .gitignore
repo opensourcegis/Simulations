@@ -1,0 +1,15 @@
+# Build artifacts
+*.exe
+*.dll
+*.syso
+
+# Editor / tooling local state
+.claude/settings.local.json
+.agents/
+.vscode/
+.idea/
+
+# OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store
