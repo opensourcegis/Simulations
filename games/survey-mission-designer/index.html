@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Survey Mission Designer — Payload &amp; Terrain Trainer</title>
+<meta name="description" content="Design a UAV survey mission on a real map: digitize the survey block, place take-off and entry waypoint, pick the right payload for the deliverable, and clear the review board on GSD, overlap, buffers and endurance.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #eef2f6;
+    --panel: #ffffff;
+    --panel-2: #f5f8fa;
+    --line: #d6dee7;
+    --line-soft: #e5ebf1;
+    --text: #16202c;
+    --text-dim: #56677a;
+    --text-faint: #7d8fa1;
+    --accent: #0f8a4d;
+    --accent-dim: #9ad9b8;
+    --accent-wash: rgba(15, 138, 77, .09);
+    --warn: #b06a00;
+    --warn-wash: rgba(176, 106, 0, .10);
+    --bad: #c62828;
+    --bad-wash: rgba(198, 40, 40, .08);
+    --info: #1565c0;
+    --info-wash: rgba(21, 101, 192, .07);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 10px 34px rgba(22, 32, 44, .16);
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 15% -10%, rgba(21, 101, 192, .07) 0%, transparent 55%), var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--info);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .app {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 100%;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    box-shadow: 0 1px 2px rgba(22, 32, 44, .05);
+  }
+  .back-link {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .back-link:hover { color: var(--text); border-color: var(--text-faint); }
+  .title-block { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+  .title-block h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+  .title-block .sub { font-size: 12.5px; color: var(--text-faint); }
+
+  .mission-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
+  .mission-tabs button {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .mission-tabs button:hover { border-color: var(--text-faint); }
+  .mission-tabs button[aria-pressed="true"] {
+    background: var(--accent-wash);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .mission-tabs .grade-chip {
+    display: inline-block; margin-left: 6px;
+    font-size: 10.5px; font-weight: 700;
+    padding: 0 5px; border-radius: 4px;
+    background: var(--accent); color: #fff;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 372px;
+    gap: 14px;
+    align-items: start;
+  }
+  .stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(22, 32, 44, .05);
+  }
+  .card-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--panel-2);
+  }
+  .card-head h2 { margin: 0; font-size: 13.5px; font-weight: 600; letter-spacing: .3px; }
+  .card-head .spacer { margin-left: auto; }
+  .card-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---------- Map ---------- */
+  #map {
+    height: min(72vh, 660px);
+    min-height: 420px;
+    background: #dfe6ec;
+  }
+  #map.digitizing { cursor: crosshair; }
+  .leaflet-container { font-family: var(--font); font-size: 13px; }
+
+  .map-note {
+    padding: 8px 14px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--line-soft);
+    background: var(--panel-2);
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .map-note .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: 0 0 8px; }
+  .map-note.mode-on { color: var(--info); font-weight: 600; }
+  .map-note.mode-on .dot { background: var(--info); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  .wp-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    font-size: 11px; font-weight: 700; color: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(22,32,44,.5);
+  }
+  .wp-icon.to { background: #e37400; }
+  .wp-icon.s1 { background: #1565c0; }
+
+  .obst-label {
+    background: rgba(255,255,255,.92);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0 4px;
+    font-size: 10.5px;
+    color: var(--bad);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* ---------- Brief ---------- */
+  .brief-obj {
+    font-size: 13.5px;
+    background: var(--info-wash);
+    border: 1px solid #bfd5ee;
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    color: #24435f;
+  }
+  .brief-obj b { color: var(--text); }
+  .spec-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .spec-table td { padding: 4px 0; border-bottom: 1px dashed var(--line-soft); vertical-align: top; }
+  .spec-table td:first-child { color: var(--text-dim); padding-right: 10px; white-space: nowrap; }
+  .spec-table td:last-child { text-align: right; font-weight: 600; }
+  .spec-table tr:last-child td { border-bottom: 0; }
+  .platform-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700;
+    border-radius: 999px; padding: 3px 11px;
+    background: var(--warn-wash); color: var(--warn);
+    border: 1px solid rgba(176,106,0,.3);
+  }
+  .platform-tag.multi { background: var(--info-wash); color: var(--info); border-color: rgba(21,101,192,.3); }
+
+  /* ---------- Digitize toolbar ---------- */
+  .tool-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+  .tool-btn {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 8px 6px;
+    font-size: 12.5px;
+    text-align: center;
+    display: flex; flex-direction: column; gap: 2px; align-items: center;
+  }
+  .tool-btn:hover { border-color: var(--text-faint); }
+  .tool-btn[aria-pressed="true"] {
+    background: var(--info-wash); border-color: var(--info); color: var(--info); font-weight: 600;
+  }
+  .tool-btn .st { font-size: 11px; color: var(--text-faint); font-weight: 400; }
+  .tool-btn .st.done { color: var(--accent); font-weight: 600; }
+  .ghost-btn {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+  .ghost-btn:hover { border-color: var(--text-faint); background: var(--panel-2); }
+
+  /* ---------- Controls ---------- */
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button {
+    flex: 1 1 0; min-width: 84px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 8px 6px;
+    font-size: 13px;
+    text-align: center;
+  }
+  .seg button:hover { border-color: var(--text-faint); }
+  .seg button[aria-pressed="true"] {
+    background: var(--accent-wash);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .seg button .hint { display: block; font-size: 10.5px; color: var(--text-faint); font-weight: 400; }
+  .seg button[aria-pressed="true"] .hint { color: var(--accent); }
+
+  .control { display: flex; flex-direction: column; gap: 6px; }
+  .control > .label {
+    font-size: 12.5px; color: var(--text-dim);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .control > .label .spacer { margin-left: auto; }
+  .control > .label .readout {
+    font-family: var(--mono); font-size: 13px; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .control.disabled { opacity: .45; pointer-events: none; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 26px; background: transparent; margin: 0; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: var(--line); }
+  input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: var(--line); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 20px; height: 20px; margin-top: -7px;
+    border-radius: 50%; background: var(--accent);
+    border: 3px solid #fff; box-shadow: 0 0 0 1px var(--accent), 0 1px 3px rgba(22, 32, 44, .3);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 20px; height: 20px;
+    border-radius: 50%; background: var(--accent);
+    border: 3px solid #fff; box-shadow: 0 0 0 1px var(--accent), 0 1px 3px rgba(22, 32, 44, .3);
+  }
+  .range-scale {
+    display: flex; justify-content: space-between; gap: 8px;
+    font-size: 11px; color: var(--text-faint); margin-top: -4px;
+  }
+
+  /* ---------- Compass dials ---------- */
+  .dials { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dial-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .dial-cell .caption { font-size: 12px; color: var(--text-dim); text-align: center; }
+  .dial {
+    width: 100%; max-width: 118px; aspect-ratio: 1;
+    touch-action: none; cursor: grab; user-select: none;
+  }
+  .dial:active { cursor: grabbing; }
+  .dial-readout {
+    font-family: var(--mono); font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wind-chip {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; color: var(--info);
+    white-space: nowrap;
+  }
+  .wind-chip .arr { display: inline-block; font-size: 13px; }
+
+  /* ---------- Metrics ---------- */
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .metric {
+    background: var(--panel-2);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .metric .label { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; }
+  .metric .value { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .metric .note { font-size: 11.5px; color: var(--text-dim); }
+  .metric.is-bad .value { color: var(--bad); }
+  .metric.is-warn .value { color: var(--warn); }
+  .metric.is-good .value { color: var(--accent); }
+
+  .coach {
+    font-size: 13px;
+    background: var(--info-wash);
+    border: 1px solid #bfd5ee;
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-sm);
+    padding: 9px 11px;
+    color: #24435f;
+  }
+  .coach b { color: var(--text); }
+  .coach.alert {
+    background: var(--bad-wash);
+    border-color: rgba(198, 40, 40, .35);
+    border-left-color: var(--bad);
+    color: #6e2020;
+  }
+  .coach.warn2 {
+    background: var(--warn-wash);
+    border-color: rgba(176,106,0,.35);
+    border-left-color: var(--warn);
+    color: #5c3a00;
+  }
+
+  .primary-btn {
+    width: 100%;
+    background: linear-gradient(180deg, #12a25b, #0d7a44);
+    color: #fff;
+    border: 0;
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    font-size: 14px; font-weight: 650;
+    box-shadow: 0 1px 2px rgba(22, 32, 44, .18);
+  }
+  .primary-btn:hover { filter: brightness(1.07); }
+  .primary-btn:disabled { filter: grayscale(.7) brightness(1.2); cursor: not-allowed; }
+
+  /* ---------- Debrief ---------- */
+  .debrief-overlay {
+    position: fixed; inset: 0; z-index: 1200;
+    background: rgba(22, 32, 44, .45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 24px 14px;
+    overflow-y: auto;
+  }
+  .debrief {
+    width: min(680px, 100%);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .debrief-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--panel-2);
+  }
+  .debrief-head h2 { margin: 0; font-size: 16px; }
+  .grade-badge {
+    font-size: 22px; font-weight: 800;
+    width: 46px; height: 46px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; flex: 0 0 46px;
+  }
+  .grade-badge.A { background: #0f8a4d; }
+  .grade-badge.B { background: #6a9a12; }
+  .grade-badge.C { background: #b06a00; }
+  .grade-badge.F { background: #c62828; }
+  .debrief-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .score-rows { display: flex; flex-direction: column; gap: 10px; }
+  .score-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: center; }
+  .score-row .name { font-size: 13px; color: var(--text); font-weight: 600; }
+  .score-row .num { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .score-row .why { grid-column: 1 / -1; font-size: 12.5px; color: var(--text-dim); margin-top: -2px; }
+  .bar { grid-column: 1 / -1; height: 6px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; }
+  .bar .full { background: var(--accent); }
+  .bar .part { background: var(--warn); }
+  .bar .zero { background: var(--bad); }
+  .debrief .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .footnote { font-size: 11.5px; color: var(--text-faint); }
+
+  @media (max-width: 1080px) {
+    .layout { grid-template-columns: 1fr; }
+    #map { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <a class="back-link" href="../../">← All simulators</a>
+    <div class="title-block">
+      <h1>Survey Mission Designer</h1>
+      <span class="sub">Payload · terrain · endurance — P&amp;RS Division, NIGST</span>
+    </div>
+    <nav class="mission-tabs" id="missionTabs" aria-label="Missions"></nav>
+  </header>
+
+  <div class="layout">
+
+    <!-- ================= MAP COLUMN ================= -->
+    <div class="stack">
+      <!-- Mission brief -->
+      <div class="card">
+        <div class="card-head">
+          <h2 id="briefTitle">Mission brief</h2>
+          <span class="spacer"></span>
+          <span class="platform-tag" id="platformTag">—</span>
+        </div>
+        <div class="card-body">
+          <div class="brief-obj" id="briefObjective"></div>
+          <table class="spec-table" id="specTable"></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="map"></div>
+        <div class="map-note" id="mapNote"><span class="dot"></span><span id="mapNoteText">Pick a mission, then digitize the survey block.</span><span class="wind-chip" id="windChip"></span></div>
+      </div>
+    </div>
+
+    <!-- ================= CONTROL COLUMN ================= -->
+    <div class="stack">
+
+      <!-- Digitize -->
+      <div class="card">
+        <div class="card-head">
+          <h2>1 · Digitize</h2>
+          <span class="spacer"></span>
+          <button class="ghost-btn" id="clearBtn" style="padding:4px 10px;font-size:12px;">Clear all</button>
+        </div>
+        <div class="card-body">
+          <div class="tool-row">
+            <button class="tool-btn" id="toolAoi" aria-pressed="false">
+              ▭ Survey block <span class="st" id="stAoi">not drawn</span>
+            </button>
+            <button class="tool-btn" id="toolTakeoff" aria-pressed="false">
+              ▲ Take-off <span class="st" id="stTakeoff">not placed</span>
+            </button>
+            <button class="tool-btn" id="toolStart" aria-pressed="false">
+              ⦿ Start WP <span class="st" id="stStart">not placed</span>
+            </button>
+          </div>
+          <div class="footnote">Survey block: click one corner, then the opposite corner. Obstructions (red) are live from OpenStreetMap where available, plus site-recce reports — plan around them.</div>
+        </div>
+      </div>
+
+      <!-- Payload -->
+      <div class="card">
+        <div class="card-head"><h2>2 · Payload</h2></div>
+        <div class="card-body">
+          <div class="seg" id="payloadSeg">
+            <button data-payload="nadir" aria-pressed="false">Nadir RGB<span class="hint">20 MP mapping cam · full endurance</span></button>
+            <button data-payload="oblique" aria-pressed="false">Oblique 5-cam<span class="hint">for 3D façades · −15% endurance</span></button>
+            <button data-payload="lidar" aria-pressed="false">LiDAR<span class="hint">sees through canopy · −32% endurance</span></button>
+          </div>
+          <div class="coach warn2" id="payloadNote" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Flight parameters -->
+      <div class="card">
+        <div class="card-head"><h2>3 · Flight parameters</h2></div>
+        <div class="card-body">
+          <div class="control" id="ctlAlt">
+            <div class="label">Flying height (AGL) <span class="spacer"></span><span class="readout" id="altOut">— m</span></div>
+            <input type="range" id="altRange" min="40" max="120" step="5" value="80">
+            <div class="range-scale"><span id="altMin">40 m</span><span id="altMax">120 m</span></div>
+          </div>
+          <div class="control" id="ctlFront">
+            <div class="label">Forward overlap <span class="spacer"></span><span class="readout" id="frontOut">75%</span></div>
+            <input type="range" id="frontRange" min="50" max="95" step="5" value="75">
+          </div>
+          <div class="control" id="ctlSide">
+            <div class="label"><span id="sideLabel">Side overlap</span> <span class="spacer"></span><span class="readout" id="sideOut">65%</span></div>
+            <input type="range" id="sideRange" min="20" max="90" step="5" value="65">
+          </div>
+          <div class="control" id="ctlSpeed">
+            <div class="label">Airspeed <span class="spacer"></span><span class="readout" id="speedOut">8 m/s</span></div>
+            <input type="range" id="speedRange" min="4" max="12" step="1" value="8">
+          </div>
+          <div class="dials">
+            <div class="dial-cell">
+              <div class="caption">Take-off heading</div>
+              <svg class="dial" id="dialTO" viewBox="0 0 100 100" role="slider" aria-label="Take-off heading"></svg>
+              <div class="dial-readout" id="toHdgOut">000°</div>
+            </div>
+            <div class="dial-cell">
+              <div class="caption">Leg heading</div>
+              <svg class="dial" id="dialLeg" viewBox="0 0 100 100" role="slider" aria-label="Flight line heading"></svg>
+              <div class="dial-readout" id="legHdgOut">090°</div>
+            </div>
+          </div>
+          <div class="footnote" id="windNote"></div>
+        </div>
+      </div>
+
+      <!-- Live metrics -->
+      <div class="card">
+        <div class="card-head"><h2>4 · Plan readout</h2></div>
+        <div class="card-body">
+          <div class="metrics" id="metricsGrid"></div>
+          <div class="coach" id="liveCoach" style="display:none;"></div>
+          <button class="primary-btn" id="evalBtn" disabled>Submit plan to review board</button>
+          <div class="footnote" id="terrainNote">Terrain: waiting for elevation samples…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Debrief modal -->
+<div class="debrief-overlay" id="debriefOverlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="debriefTitle">
+  <div class="debrief">
+    <div class="debrief-head">
+      <div class="grade-badge" id="gradeBadge">–</div>
+      <div>
+        <h2 id="debriefTitle">Review board</h2>
+        <div style="font-size:13px;color:var(--text-dim);" id="debriefSub"></div>
+      </div>
+    </div>
+    <div class="debrief-body">
+      <div class="score-rows" id="scoreRows"></div>
+      <div id="debriefCoach" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div class="btn-row">
+        <button class="ghost-btn" id="debriefClose">Revise the plan</button>
+        <button class="primary-btn" id="debriefNext" style="width:auto;">Next mission →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+"use strict";
+
+/* =====================================================================
+   Survey Mission Designer
+   Single-file trainer. Real basemaps (OSM / Esri imagery / Esri hillshade),
+   real terrain (AWS Terrarium elevation tiles), obstructions from OSM
+   Overpass merged with seeded synthetic "site recce" obstacles.
+   ===================================================================== */
+
+/* ---------------- geo helpers ---------------- */
+const DEG = Math.PI / 180;
+function distM(a, b) {                       // haversine, latlng-like {lat,lng}
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * DEG, dLng = (b.lng - a.lng) * DEG;
+  const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(a.lat * DEG) * Math.cos(b.lat * DEG) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function offsetM(p, dxE, dyN) {              // move point by metres east/north
+  return {
+    lat: p.lat + dyN / 111320,
+    lng: p.lng + dxE / (111320 * Math.cos(p.lat * DEG))
+  };
+}
+function fmt(n, d = 0) { return n.toLocaleString("en-IN", { maximumFractionDigits: d, minimumFractionDigits: d }); }
+function pad3(d) { return String(Math.round(d)).padStart(3, "0"); }
+function cardinal(d) { return ["N","NE","E","SE","S","SW","W","NW"][Math.round(((d % 360) + 360) % 360 / 45) % 8]; }
+function angDiff(a, b) { const d = Math.abs(((a - b) % 360 + 360) % 360); return Math.min(d, 360 - d); }
+function axisDiff(a, b) { const d = angDiff(a, b) % 180; return Math.min(d, 180 - d); }
+function mins(t) {
+  if (!isFinite(t)) return "—";
+  const m = Math.floor(t), s = Math.round((t - m) * 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/* Mulberry32 — seeded PRNG so every trainee sees the same recce obstacles */
+function rng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------------- sensor models ---------------- */
+const SENSORS = {
+  nadir:   { name: "Nadir RGB (20 MP)",  pxUm: 2.41, focalMm: 8.8, imgW: 5472, imgH: 3648, gsdFactor: 1.0,  endur: 1.00 },
+  oblique: { name: "Oblique 5-cam",      pxUm: 2.41, focalMm: 8.8, imgW: 5472, imgH: 3648, gsdFactor: 1.25, endur: 0.85 },
+  lidar:   { name: "LiDAR",              fovDeg: 75, usableHz: 60000,                              endur: 0.68 }
+};
+function gsdCm(payload, altM) {              // effective ground sample distance
+  const s = SENSORS[payload];
+  if (!s || payload === "lidar") return null;
+  return (s.pxUm * altM) / s.focalMm / 10 * s.gsdFactor;
+}
+function lidarSwathM(altM) {
+  return 2 * altM * Math.tan((SENSORS.lidar.fovDeg / 2) * DEG);
+}
+function lidarDensity(altM, spdMs) {         // pts/m² single pass
+  return SENSORS.lidar.usableHz / (spdMs * lidarSwathM(altM));
+}
+
+/* ---------------- platforms ---------------- */
+const PLATFORMS = {
+  multi: { name: "Multirotor", baseEndur: 32, climbPenMinPer100m: 0.5, turnSec: 7,  spdMin: 4,  spdMax: 12, spdDef: 8,  altMax: 120, transClearM: 30,  transClearNote: "30 m clear pad" },
+  fixed: { name: "Fixed-wing", baseEndur: 60, climbPenMinPer100m: 0.3, turnRadM: 70, spdMin: 14, spdMax: 24, spdDef: 17, altMax: 300, transClearM: 160, transClearNote: "160 m transition corridor" }
+};
+
+/* ---------------- missions ---------------- */
+const MISSIONS = [
+  {
+    id: "m1", tab: "1 · Urban ortho",
+    title: "Mission 1 — Urban base map, Dehradun",
+    center: { lat: 30.3245, lng: 78.0339 }, zoom: 15, seed: 11,
+    wind: { dirDeg: 290, speedMs: 3 },
+    base: "imagery", hillshade: false,
+    platform: "multi", requiredPayload: "nadir",
+    deliverable: "Orthophoto + DSM",
+    objective: `<b>Objective:</b> Large-scale <b>orthophoto and DSM</b> of a dense city block in Dehradun
+      for a municipal property-tax base map. Platform assigned: <b>multirotor</b> (tight airspace,
+      vertical take-off between buildings). Digitize a 2–3 km² survey block inside the demand zone,
+      fix a safe take-off point and the entry waypoint, and design the block flight.`,
+    concept: `<b>Concept taught:</b> GSD is set by flying height — every metre up coarsens the pixel.
+      In town, masts and high-rise blocks force you up; the spec pulls you down. Find the band that
+      satisfies both, and keep 30 m of vertical clearance over the tallest obstruction in the block.`,
+    spec: { gsdMaxCm: 5.0, densityMin: null, frontMin: 75, sideMin: 65,
+            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 5, vAccCm: 10, reservePct: 15, batteries: 4 },
+    zoneRadM: 1500,
+    obstacles: { n: 9, types: ["mast", "hirise", "watertank", "mast", "chimney"] }
+  },
+  {
+    id: "m2", tab: "2 · 3D heritage",
+    title: "Mission 2 — 3D city model, Golconda Fort",
+    center: { lat: 17.3833, lng: 78.4011 }, zoom: 15, seed: 23,
+    wind: { dirDeg: 200, speedMs: 3 },
+    base: "imagery", hillshade: false,
+    platform: "multi", requiredPayload: "oblique",
+    deliverable: "Textured 3D city model",
+    objective: `<b>Objective:</b> A <b>textured 3D model</b> of the Golconda fort precinct and the
+      settlement at its base, for heritage conservation and tourism. Platform assigned:
+      <b>multirotor</b>. A nadir camera looks straight down and never images a wall — pick the
+      payload that captures façades. Block of 2–3 km² over the demand zone.`,
+    concept: `<b>Concept taught:</b> Deliverable drives payload. 3D reconstruction needs oblique
+      views of every vertical surface, higher overlaps (80/75) for the mesh, and the extra lens
+      rig costs ~15% endurance — your area budget shrinks accordingly.`,
+    spec: { gsdMaxCm: 5.0, densityMin: null, frontMin: 80, sideMin: 75,
+            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 8, vAccCm: 12, reservePct: 15, batteries: 7 },
+    zoneRadM: 1500,
+    obstacles: { n: 8, types: ["wall", "watertank", "mast", "tree"] }
+  },
+  {
+    id: "m3", tab: "3 · Forest DTM",
+    title: "Mission 3 — Forest DTM, Thano range",
+    center: { lat: 30.2530, lng: 78.1630 }, zoom: 14, seed: 37,
+    wind: { dirDeg: 320, speedMs: 2 },
+    base: "imagery", hillshade: true,
+    platform: "multi", requiredPayload: "lidar",
+    deliverable: "DTM + 1 m contours (under canopy)",
+    objective: `<b>Objective:</b> A <b>bare-earth DTM with 1 m contours</b> under sal forest canopy
+      in the Thano range, for a road alignment study. Platform assigned: <b>multirotor</b>
+      (terrain-hugging, low ground speed). Photogrammetry only ever sees the treetops — a camera
+      DSM is the wrong product here. Choose the sensor that reaches the forest floor.`,
+    concept: `<b>Concept taught:</b> Cameras stop at the canopy; only LiDAR returns reach the
+      ground between leaves. The price is the heaviest payload — roughly a third of your battery.
+      Watch point density (spec ≥ 16 pts/m²): slower and lower means denser.`,
+    spec: { gsdMaxCm: null, densityMin: 16, frontMin: null, sideMin: 30,
+            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 15, vAccCm: 10, reservePct: 15, batteries: 4 },
+    zoneRadM: 1600,
+    obstacles: { n: 7, types: ["tree", "mast", "tree", "pylon"] }
+  },
+  {
+    id: "m4", tab: "4 · Canal (FW)",
+    title: "Mission 4 — Canal command area, Punjab plains",
+    center: { lat: 30.7800, lng: 75.6500 }, zoom: 14, seed: 51,
+    wind: { dirDeg: 270, speedMs: 6 },
+    base: "imagery", hillshade: false,
+    platform: "fixed", requiredPayload: "nadir",
+    deliverable: "Orthophoto (5 cm) over 3 km²",
+    objective: `<b>Objective:</b> <b>Orthophoto at 5 cm GSD</b> across a canal command area for an
+      irrigation department crop census — flat farmland, big area, no ground detail smaller than a
+      bund. Platform assigned: <b>fixed-wing</b> for its endurance. Fixed-wing needs a
+      <b>clear 160 m transition corridor</b> around the launch strip: it climbs shallow, so a
+      pylon near the take-off point is a mission-ender.`,
+    concept: `<b>Concept taught:</b> Fixed-wing trades agility for endurance — fly higher (the 5 cm
+      spec allows ~180 m), widen the footprint, cut the line count, and 3 km² fits in one flight.
+      But every turn burns a wide arc, and launch/recovery needs open ground.`,
+    spec: { gsdMaxCm: 5.0, densityMin: null, frontMin: 70, sideMin: 60,
+            areaMinKm2: 2.4, areaMaxKm2: 3.2, hAccCm: 10, vAccCm: 20, reservePct: 15, batteries: 1 },
+    zoneRadM: 1800,
+    obstacles: { n: 8, types: ["pylon", "mast", "tree", "pylon", "chimney"] }
+  },
+  {
+    id: "m5", tab: "5 · Hill topo",
+    title: "Mission 5 — Hill township topo, Mussoorie ridge",
+    center: { lat: 30.4540, lng: 78.0660 }, zoom: 14, seed: 67,
+    wind: { dirDeg: 300, speedMs: 7 },
+    base: "hillshadeBase", hillshade: true,
+    platform: "fixed", requiredPayload: "lidar",
+    deliverable: "DTM + 2 m contours in high relief",
+    objective: `<b>Objective:</b> <b>DTM and 2 m contours</b> across a ridge-and-valley block near
+      Mussoorie for township drainage design. Slopes are wooded and shadowed — the board has ruled
+      out image matching and expects <b>LiDAR</b>. Platform assigned: <b>fixed-wing VTOL</b>
+      (vertical lift-off, wing cruise) — but you still owe it a clear transition corridor.
+      The take-off site sits near 2 000 m AMSL: thin air taxes the battery before you fly a line.`,
+    concept: `<b>Concept taught:</b> Terrain is a planning input. Read the hillshade: launch high,
+      lose endurance to air density; fly one fixed height over 300 m of relief and your swath —
+      and point density — swings valley to crest. The review board samples real elevation under
+      your block and takes it out of your battery.`,
+    spec: { gsdMaxCm: null, densityMin: 8, frontMin: null, sideMin: 40,
+            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 20, vAccCm: 15, reservePct: 20, batteries: 1 },
+    zoneRadM: 1700,
+    obstacles: { n: 7, types: ["mast", "tree", "watertank", "mast"] }
+  }
+];
+
+const OBST_TYPES = {
+  mast:      { label: "Comms mast",   hMin: 40, hMax: 72 },
+  pylon:     { label: "HT pylon",     hMin: 35, hMax: 55 },
+  hirise:    { label: "High-rise",    hMin: 30, hMax: 60 },
+  chimney:   { label: "Chimney",      hMin: 30, hMax: 55 },
+  watertank: { label: "Water tank",   hMin: 22, hMax: 34 },
+  tree:      { label: "Emergent tree",hMin: 25, hMax: 42 },
+  wall:      { label: "Fort bastion", hMin: 18, hMax: 30 }
+};
+const OBST_H_BUFFER = 50;   // m horizontal stand-off from any obstruction
+const OBST_V_BUFFER = 30;   // m vertical clearance over obstruction top
+
+/* ---------------- state ---------------- */
+const S = {
+  mission: null,
+  payload: null,
+  alt: 80, front: 75, side: 65, speed: 8,
+  takeoffHdg: 0, legHdg: 90,
+  aoi: null,            // L.LatLngBounds
+  takeoff: null,        // {lat,lng}
+  startwp: null,
+  obstacles: [],        // {lat,lng,h,label,src}
+  elevTakeoff: null,    // m AMSL
+  elevGrid: null,       // {mean,min,max} over AOI
+  mode: null            // 'aoi' | 'takeoff' | 'start'
+};
+let bestGrades = {};
+try { bestGrades = JSON.parse(localStorage.getItem("smd-best") || "{}"); } catch (e) { bestGrades = {}; }
+
+/* ---------------- map ---------------- */
+const map = L.map("map", { zoomControl: true, attributionControl: true });
+const baseImagery = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom: 19, attribution: "Imagery © Esri & contributors" });
+const baseOsm = L.tileLayer(
+  "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { maxZoom: 19, attribution: "© OpenStreetMap contributors" });
+const baseHillshade = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom: 16, attribution: "Hillshade © Esri" });
+const overlayHillshade = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
+  { maxZoom: 16, opacity: 0.45, attribution: "Hillshade © Esri" });
+baseImagery.addTo(map);
+L.control.layers(
+  { "Imagery": baseImagery, "Streets (OSM)": baseOsm, "Hillshade": baseHillshade },
+  { "Hillshade drape": overlayHillshade },
+  { position: "topright", collapsed: true }).addTo(map);
+L.control.scale({ imperial: false }).addTo(map);
+
+const layers = {
+  zone: L.layerGroup().addTo(map),
+  obstacles: L.layerGroup().addTo(map),
+  aoi: L.layerGroup().addTo(map),
+  lines: L.layerGroup().addTo(map),
+  points: L.layerGroup().addTo(map),
+  preview: L.layerGroup().addTo(map)
+};
+
+/* ---------------- elevation (AWS Terrarium tiles) ---------------- */
+const DEM_Z = 12;
+const demTiles = new Map();   // "z/x/y" -> ImageData | "pending" promise | "failed"
+function demTileXY(lat, lng) {
+  const n = 2 ** DEM_Z;
+  const x = (lng + 180) / 360 * n;
+  const latR = lat * DEG;
+  const y = (1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n;
+  return { x, y };
+}
+function loadDemTile(tx, ty) {
+  const key = `${DEM_Z}/${tx}/${ty}`;
+  if (demTiles.has(key)) return demTiles.get(key);
+  const p = new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const t = setTimeout(() => { resolve(null); }, 9000);
+    img.onload = () => {
+      clearTimeout(t);
+      try {
+        const c = document.createElement("canvas");
+        c.width = 256; c.height = 256;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        resolve(ctx.getImageData(0, 0, 256, 256));
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = () => { clearTimeout(t); resolve(null); };
+    img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${DEM_Z}/${tx}/${ty}.png`;
+  });
+  demTiles.set(key, p);
+  return p;
+}
+async function elevAt(lat, lng) {
+  const { x, y } = demTileXY(lat, lng);
+  const tx = Math.floor(x), ty = Math.floor(y);
+  const data = await loadDemTile(tx, ty);
+  if (!data) return null;
+  const px = Math.min(255, Math.floor((x - tx) * 256));
+  const py = Math.min(255, Math.floor((y - ty) * 256));
+  const i = (py * 256 + px) * 4;
+  return (data.data[i] * 256 + data.data[i + 1] + data.data[i + 2] / 256) - 32768;
+}
+async function sampleAoiElev(bounds) {
+  const pts = [];
+  const n = 4;
+  for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) {
+    pts.push({
+      lat: bounds.getSouth() + (bounds.getNorth() - bounds.getSouth()) * i / n,
+      lng: bounds.getWest() + (bounds.getEast() - bounds.getWest()) * j / n
+    });
+  }
+  const els = (await Promise.all(pts.map(p => elevAt(p.lat, p.lng)))).filter(e => e !== null);
+  if (!els.length) return null;
+  return {
+    mean: els.reduce((a, b) => a + b, 0) / els.length,
+    min: Math.min(...els),
+    max: Math.max(...els)
+  };
+}
+
+/* ---------------- obstacles ---------------- */
+function synthObstacles(m) {
+  const r = rng(m.seed * 7919 + 13);
+  const out = [];
+  for (let i = 0; i < m.obstacles.n; i++) {
+    const type = m.obstacles.types[i % m.obstacles.types.length];
+    const t = OBST_TYPES[type];
+    const ang = r() * Math.PI * 2;
+    const rad = 180 + r() * (m.zoneRadM - 260);
+    const p = offsetM(m.center, Math.cos(ang) * rad, Math.sin(ang) * rad);
+    out.push({
+      lat: p.lat, lng: p.lng,
+      h: Math.round(t.hMin + r() * (t.hMax - t.hMin)),
+      label: t.label, src: "recce"
+    });
+  }
+  return out;
+}
+async function osmObstacles(m) {
+  const rad = m.zoneRadM + 300;
+  const q = `[out:json][timeout:8];(
+    node(around:${rad},${m.center.lat},${m.center.lng})["man_made"~"tower|mast|chimney|communications_tower|water_tower"];
+    way(around:${rad},${m.center.lat},${m.center.lng})["man_made"~"tower|mast|chimney"];
+  );out center 30;`;
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST", body: "data=" + encodeURIComponent(q), signal: ctl.signal
+    });
+    clearTimeout(t);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.elements || []).slice(0, 12).map(el => {
+      const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon;
+      if (lat == null) return null;
+      const tags = el.tags || {};
+      let h = parseFloat(tags.height) || null;
+      if (!h) h = tags.man_made === "chimney" ? 45 : 50;
+      return { lat, lng, h: Math.round(h), label: (tags.man_made || "tower").replace(/_/g, " "), src: "OSM" };
+    }).filter(Boolean);
+  } catch (e) { return []; }
+}
+function renderObstacles() {
+  layers.obstacles.clearLayers();
+  for (const o of S.obstacles) {
+    L.circle([o.lat, o.lng], {
+      radius: OBST_H_BUFFER, color: "#c62828", weight: 1.2,
+      dashArray: "5 4", fillColor: "#c62828", fillOpacity: 0.10
+    }).addTo(layers.obstacles);
+    const mk = L.circleMarker([o.lat, o.lng], {
+      radius: 5.5, color: "#fff", weight: 1.5, fillColor: "#c62828", fillOpacity: 1
+    }).addTo(layers.obstacles);
+    mk.bindTooltip(`${o.label} · ${o.h} m`, { direction: "top", className: "obst-label", offset: [0, -7] });
+    mk.bindPopup(`<b>${o.label}</b><br>Height ≈ ${o.h} m AGL<br>Source: ${o.src === "OSM" ? "OpenStreetMap" : "site recce report"}<br>Stand-off: ${OBST_H_BUFFER} m · overfly with +${OBST_V_BUFFER} m`);
+  }
+}
+async function loadObstacles(m) {
+  S.obstacles = synthObstacles(m);
+  renderObstacles();
+  const osm = await osmObstacles(m);
+  if (S.mission !== m) return;              // user switched missions mid-fetch
+  const merged = [...S.obstacles];
+  for (const o of osm) {
+    if (merged.every(x => distM(x, o) > 120)) merged.push(o);
+  }
+  S.obstacles = merged.slice(0, 14);
+  renderObstacles();
+  recalc();
+}
+
+/* ---------------- digitize tools ---------------- */
+let aoiCornerA = null;
+const noteEl = document.getElementById("mapNote");
+const noteTxt = document.getElementById("mapNoteText");
+
+function setMode(mode) {
+  S.mode = (S.mode === mode) ? null : mode;
+  aoiCornerA = null;
+  layers.preview.clearLayers();
+  for (const [id, m] of [["toolAoi", "aoi"], ["toolTakeoff", "takeoff"], ["toolStart", "start"]]) {
+    document.getElementById(id).setAttribute("aria-pressed", String(S.mode === m));
+  }
+  document.getElementById("map").classList.toggle("digitizing", !!S.mode);
+  noteEl.classList.toggle("mode-on", !!S.mode);
+  noteTxt.textContent =
+    S.mode === "aoi" ? "Survey block: click the FIRST corner of the rectangle…" :
+    S.mode === "takeoff" ? "Click the take-off / launch point (open ground, clear of red buffers)." :
+    S.mode === "start" ? "Click the first waypoint — where the block flight should begin (inside the block, on the edge facing take-off)." :
+    "Adjust parameters, then submit the plan for review.";
+}
+
+map.on("click", (e) => {
+  if (!S.mode) return;
+  if (S.mode === "takeoff") {
+    S.takeoff = { lat: e.latlng.lat, lng: e.latlng.lng };
+    setMode(null); drawPoints(); refreshTakeoffElev(); recalc();
+  } else if (S.mode === "start") {
+    S.startwp = { lat: e.latlng.lat, lng: e.latlng.lng };
+    setMode(null); drawPoints(); recalc();
+  } else if (S.mode === "aoi") {
+    if (!aoiCornerA) {
+      aoiCornerA = e.latlng;
+      noteTxt.textContent = "…now click the OPPOSITE corner. Aim for 2–3 km².";
+    } else {
+      S.aoi = L.latLngBounds(aoiCornerA, e.latlng);
+      aoiCornerA = null;
+      const d2 = aoiDims(S.aoi);                 // start legs on the long axis; trainee re-aims for wind
+      S.legHdg = d2.w >= d2.h ? 90 : 0;
+      renderDials();
+      setMode(null); drawAoi(); refreshAoiElev(); recalc();
+    }
+  }
+});
+map.on("mousemove", (e) => {
+  if (S.mode === "aoi" && aoiCornerA) {
+    layers.preview.clearLayers();
+    const b = L.latLngBounds(aoiCornerA, e.latlng);
+    L.rectangle(b, { color: "#1565c0", weight: 1.5, dashArray: "6 5", fillOpacity: 0.05 }).addTo(layers.preview);
+    const a = aoiAreaKm2(b);
+    L.tooltip({ permanent: true, direction: "top", className: "obst-label" })
+      .setLatLng(b.getCenter()).setContent(`${a.toFixed(2)} km²`).addTo(layers.preview);
+  }
+});
+
+function aoiAreaKm2(b) {
+  const c = b.getCenter();
+  const w = distM({ lat: c.lat, lng: b.getWest() }, { lat: c.lat, lng: b.getEast() });
+  const h = distM({ lat: b.getSouth(), lng: c.lng }, { lat: b.getNorth(), lng: c.lng });
+  return (w * h) / 1e6;
+}
+function aoiDims(b) {
+  const c = b.getCenter();
+  const w = distM({ lat: c.lat, lng: b.getWest() }, { lat: c.lat, lng: b.getEast() });
+  const h = distM({ lat: b.getSouth(), lng: c.lng }, { lat: b.getNorth(), lng: c.lng });
+  return { w, h };
+}
+
+function drawAoi() {
+  layers.aoi.clearLayers();
+  if (!S.aoi) return;
+  L.rectangle(S.aoi, { color: "#0f8a4d", weight: 2, fillColor: "#0f8a4d", fillOpacity: 0.06 }).addTo(layers.aoi);
+}
+function drawPoints() {
+  layers.points.clearLayers();
+  if (S.takeoff) {
+    L.marker(S.takeoff, {
+      icon: L.divIcon({ className: "", html: `<div class="wp-icon to">T</div>`, iconSize: [24, 24], iconAnchor: [12, 12] })
+    }).addTo(layers.points).bindTooltip("Take-off", { direction: "top", offset: [0, -12] });
+    const plat = S.mission ? PLATFORMS[S.mission.platform] : null;
+    if (plat) {
+      L.circle(S.takeoff, {
+        radius: plat.transClearM, color: "#e37400", weight: 1.2, dashArray: "4 4", fillOpacity: 0.04
+      }).addTo(layers.points).bindTooltip(
+        S.mission.platform === "fixed" ? "Transition corridor — must be obstacle-free" : "Launch pad clearance",
+        { direction: "bottom" });
+    }
+  }
+  if (S.startwp) {
+    L.marker(S.startwp, {
+      icon: L.divIcon({ className: "", html: `<div class="wp-icon s1">S1</div>`, iconSize: [24, 24], iconAnchor: [12, 12] })
+    }).addTo(layers.points).bindTooltip("Start waypoint", { direction: "top", offset: [0, -12] });
+  }
+  updateDigitizeStatus();
+}
+
+async function refreshTakeoffElev() {
+  S.elevTakeoff = null; updateTerrainNote();
+  if (!S.takeoff) return;
+  const p = S.takeoff;
+  const e = await elevAt(p.lat, p.lng);
+  if (S.takeoff && S.takeoff.lat === p.lat) { S.elevTakeoff = e; updateTerrainNote(); recalc(); }
+}
+async function refreshAoiElev() {
+  S.elevGrid = null; updateTerrainNote();
+  if (!S.aoi) return;
+  const b = S.aoi;
+  const g = await sampleAoiElev(b);
+  if (S.aoi === b) { S.elevGrid = g; updateTerrainNote(); recalc(); }
+}
+function updateTerrainNote() {
+  const el = document.getElementById("terrainNote");
+  const bits = [];
+  if (S.elevTakeoff != null) bits.push(`take-off ≈ ${fmt(S.elevTakeoff)} m AMSL`);
+  if (S.elevGrid) bits.push(`block terrain ${fmt(S.elevGrid.min)}–${fmt(S.elevGrid.max)} m (relief ${fmt(S.elevGrid.max - S.elevGrid.min)} m)`);
+  el.textContent = bits.length
+    ? "Terrain (SRTM via AWS): " + bits.join(" · ")
+    : (S.takeoff || S.aoi) ? "Terrain: sampling elevation…" : "Terrain: place take-off and block to sample real elevation.";
+}
+
+function updateDigitizeStatus() {
+  const st = (id, ok, txt) => {
+    const el = document.getElementById(id);
+    el.textContent = txt;
+    el.classList.toggle("done", ok);
+  };
+  st("stAoi", !!S.aoi, S.aoi ? `${aoiAreaKm2(S.aoi).toFixed(2)} km² ✓` : "not drawn");
+  st("stTakeoff", !!S.takeoff, S.takeoff ? "placed ✓" : "not placed");
+  st("stStart", !!S.startwp, S.startwp ? "placed ✓" : "not placed");
+}
+
+/* ---------------- flight-line generation ---------------- */
+/* Lines run along S.legHdg (compass), spaced perpendicular, clipped to the block. */
+function planLines() {
+  if (!S.aoi || !S.payload) return null;
+  const dims = aoiDims(S.aoi);
+  const b = S.aoi, c = b.getCenter();
+
+  let stripW;                                    // usable strip width on ground
+  if (S.payload === "lidar") stripW = lidarSwathM(S.alt);
+  else {
+    const g = gsdCm(S.payload, S.alt) / 100;     // m/px
+    stripW = SENSORS[S.payload].imgW * g / SENSORS[S.payload].gsdFactor;
+  }
+  const spacing = Math.max(10, stripW * (1 - S.side / 100));
+
+  const th = (S.legHdg % 180) * DEG;
+  const dir = { x: Math.sin(th), y: Math.cos(th) };       // (east, north) unit
+  const perp = { x: dir.y, y: -dir.x };
+  const hw = dims.w / 2, hh = dims.h / 2;
+  let smin = 1e9, smax = -1e9;
+  for (const [x, y] of [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]) {
+    const s = x * perp.x + y * perp.y;
+    if (s < smin) smin = s;
+    if (s > smax) smax = s;
+  }
+  smin += 0.5; smax -= 0.5;                     // keep edge lines clippable
+  const range = Math.max(0, smax - smin);
+  const n0 = Math.max(1, Math.ceil(range / spacing) + 1);
+
+  const lines = [];
+  for (let i = 0; i < n0; i++) {
+    const s = n0 === 1 ? (smin + smax) / 2 : smin + range * i / (n0 - 1);
+    const px = perp.x * s, py = perp.y * s;
+    // Liang-Barsky clip of p + t·dir against the block rectangle
+    let t0 = -1e9, t1 = 1e9, ok = true;
+    for (const [d, p, min, max] of [[dir.x, px, -hw, hw], [dir.y, py, -hh, hh]]) {
+      if (Math.abs(d) < 1e-9) { if (p < min || p > max) { ok = false; break; } continue; }
+      let ta = (min - p) / d, tb = (max - p) / d;
+      if (ta > tb) [ta, tb] = [tb, ta];
+      if (ta > t0) t0 = ta;
+      if (tb < t1) t1 = tb;
+    }
+    if (!ok || t1 - t0 < 2) continue;
+    lines.push({
+      a: offsetM(c, px + dir.x * t0, py + dir.y * t0),
+      e: offsetM(c, px + dir.x * t1, py + dir.y * t1),
+      len: t1 - t0
+    });
+  }
+  if (!lines.length) return null;
+  const n = lines.length;
+
+  // serpentine ordering, starting nearest the start WP (or take-off)
+  const anchor = S.startwp || S.takeoff || c;
+  if (distM(anchor, lines[n - 1].a) + distM(anchor, lines[n - 1].e) <
+      distM(anchor, lines[0].a) + distM(anchor, lines[0].e)) lines.reverse();
+  const flip = distM(anchor, lines[0].e) < distM(anchor, lines[0].a);
+  const azBase = ((S.legHdg % 180) + (flip ? 180 : 0)) % 360;  // azimuth of odd legs
+
+  const path = [], lens = [];
+  lines.forEach((l, i) => {
+    const rev = (i % 2 === 0) ? flip : !flip;
+    path.push(rev ? l.e : l.a, rev ? l.a : l.e);
+    lens.push(l.len);
+  });
+  return { lines, path, lens, n, spacing,
+           along: Math.max(dims.w, dims.h), across: Math.min(dims.w, dims.h),
+           stripW, azBase };
+}
+
+function drawPlan(plan) {
+  layers.lines.clearLayers();
+  if (!plan) return;
+  L.polyline(plan.path.map(p => [p.lat, p.lng]),
+    { color: "#0f8a4d", weight: 2, opacity: 0.9 }).addTo(layers.lines);
+  if (S.takeoff) {
+    L.polyline([[S.takeoff.lat, S.takeoff.lng], [plan.path[0].lat, plan.path[0].lng]],
+      { color: "#e37400", weight: 1.6, dashArray: "6 5" }).addTo(layers.lines);
+  }
+}
+
+/* ---------------- performance model ---------------- */
+function computePlan() {
+  const m = S.mission;
+  if (!m) return null;
+  const plat = PLATFORMS[m.platform];
+  const plan = planLines();
+
+  // endurance
+  const pf = S.payload ? SENSORS[S.payload].endur : 1;
+  let endur = plat.baseEndur * pf;
+  let elevDerate = 0;
+  if (S.elevTakeoff != null && S.elevTakeoff > 300) {
+    elevDerate = Math.min(0.25, (S.elevTakeoff - 300) / 1000 * 0.08);
+    endur *= (1 - elevDerate);
+  }
+  endur -= (S.alt / 100) * plat.climbPenMinPer100m;
+
+  let flightMin = null, transit = 0, relief = S.elevGrid ? (S.elevGrid.max - S.elevGrid.min) : 0;
+  let gsA = null, gsB = null, crossComp = 0, headComp = 0, windBlocked = false;
+  const wind = m.wind;
+  if (plan) {
+    const entry = plan.path[0];
+    transit = S.takeoff ? distM(S.takeoff, entry) : 0;
+
+    // wind triangle on the legs: S.speed is airspeed, ground speed alternates
+    const windTo = (wind.dirDeg + 180) % 360;
+    const phi = (plan.azBase - windTo) * DEG;
+    crossComp = Math.abs(wind.speedMs * Math.sin(phi));
+    headComp = Math.abs(wind.speedMs * Math.cos(phi));
+    if (crossComp >= S.speed - 0.5) windBlocked = true;   // cannot hold the track
+    else {
+      const fwd = Math.sqrt(S.speed * S.speed - crossComp * crossComp);
+      const alongW = wind.speedMs * Math.cos(phi);
+      gsA = fwd + alongW; gsB = fwd - alongW;
+      if (gsA <= 0.5 || gsB <= 0.5) windBlocked = true;   // no headway into wind
+    }
+
+    if (!windBlocked) {
+      let lineSec = 0;
+      plan.lens.forEach((len, i) => { lineSec += len / (i % 2 === 0 ? gsA : gsB); });
+      let turnMin = 0;
+      if (m.platform === "multi") turnMin = (plan.n - 1) * plat.turnSec / 60;
+      else {
+        const arc = Math.PI * Math.max(plat.turnRadM, plan.spacing / 2);
+        turnMin = (plan.n - 1) * (arc / S.speed) / 60;
+      }
+      flightMin = lineSec / 60
+        + ((plan.n - 1) * plan.spacing + transit * 2) / S.speed / 60
+        + turnMin;
+      if (relief > 60) flightMin *= 1.05;        // terrain-following overhead
+    }
+  }
+
+  // sortie split: multirotor swaps batteries; fixed-wing must do it in one flight
+  const usable = endur * (1 - m.spec.reservePct / 100);
+  let sorties = null;
+  if (flightMin != null) {
+    if (m.platform === "multi") {
+      sorties = Math.max(1, Math.ceil(flightMin / usable));
+      if (sorties > 1 && transit > 0) {          // each swap ferries home and back out
+        flightMin += (sorties - 1) * 2 * (transit / S.speed) / 60;
+        sorties = Math.max(1, Math.ceil(flightMin / usable));
+      }
+    } else sorties = 1;
+  }
+
+  const g = gsdCm(S.payload, S.alt);
+  const gsFast = gsA != null ? Math.max(gsA, gsB) : S.speed;   // tailwind leg drives the camera
+  const dens = S.payload === "lidar" ? lidarDensity(S.alt, S.speed) : null;
+  const photoInt = (S.payload && S.payload !== "lidar")
+    ? (SENSORS[S.payload].imgH * (gsdCm(S.payload, S.alt) / 100 / SENSORS[S.payload].gsdFactor) * (1 - S.front / 100)) / gsFast
+    : null;
+
+  return { plan, endur, elevDerate, flightMin, transit, relief, gsd: g, dens, photoInt,
+           usable, sorties, wind, gsA, gsB, crossComp, headComp, windBlocked,
+           margin: (plan && flightMin != null) ? (endur - flightMin) / endur : null };
+}
+
+/* ---------------- live metrics ---------------- */
+function metricCell(label, value, note, cls) {
+  return `<div class="metric ${cls || ""}"><span class="label">${label}</span><span class="value">${value}</span>${note ? `<span class="note">${note}</span>` : ""}</div>`;
+}
+function recalc() {
+  const m = S.mission;
+  if (!m) return;
+  const r = computePlan();
+  drawPlan(r ? r.plan : null);
+  const spec = m.spec;
+  const cells = [];
+
+  if (S.payload === "lidar") {
+    const ok = r.dens != null && spec.densityMin && r.dens >= spec.densityMin;
+    cells.push(metricCell("Point density", r.dens ? `${fmt(r.dens, 0)} <small>pts/m²</small>` : "—",
+      spec.densityMin ? `spec ≥ ${spec.densityMin}` : "no spec", r.dens ? (ok || !spec.densityMin ? "is-good" : "is-bad") : ""));
+    cells.push(metricCell("Swath", `${fmt(lidarSwathM(S.alt))} m`, `at ${S.alt} m AGL`));
+  } else if (S.payload) {
+    const ok = spec.gsdMaxCm && r.gsd <= spec.gsdMaxCm;
+    cells.push(metricCell("GSD", `${r.gsd.toFixed(1)} cm`,
+      spec.gsdMaxCm ? `spec ≤ ${spec.gsdMaxCm} cm` : "no spec", spec.gsdMaxCm ? (ok ? "is-good" : "is-bad") : ""));
+    cells.push(metricCell("Est. accuracy", `${(r.gsd * 1.5).toFixed(0)}/${(r.gsd * 2.5).toFixed(0)} cm`, "H / V with GCPs"));
+  } else {
+    cells.push(metricCell("Sensor", "—", "choose a payload"));
+    cells.push(metricCell("Est. accuracy", "—", ""));
+  }
+
+  if (r.plan) {
+    cells.push(metricCell("Flight lines", fmt(r.plan.n), `spacing ${fmt(r.plan.spacing)} m`));
+    cells.push(metricCell("Block", `${aoiAreaKm2(S.aoi).toFixed(2)} km²`,
+      `spec ${spec.areaMinKm2}–${spec.areaMaxKm2} km²`,
+      (aoiAreaKm2(S.aoi) >= spec.areaMinKm2 && aoiAreaKm2(S.aoi) <= spec.areaMaxKm2) ? "is-good" : "is-warn"));
+  } else {
+    cells.push(metricCell("Flight lines", "—", "draw block + payload"));
+    cells.push(metricCell("Block", S.aoi ? `${aoiAreaKm2(S.aoi).toFixed(2)} km²` : "—", `spec ${spec.areaMinKm2}–${spec.areaMaxKm2} km²`));
+  }
+
+  cells.push(metricCell("Wind", `${r.wind.speedMs} m/s`,
+    `from ${pad3(r.wind.dirDeg)}° ${cardinal(r.wind.dirDeg)}`));
+  if (r.gsA != null) {
+    cells.push(metricCell("Ground speed", `${r.gsA.toFixed(1)} / ${r.gsB.toFixed(1)}`,
+      `m/s out / back · cross ${r.crossComp.toFixed(1)} m/s`,
+      Math.min(r.gsA, r.gsB) < S.speed * 0.55 ? "is-warn" : ""));
+  } else if (r.windBlocked) {
+    cells.push(metricCell("Ground speed", "—", "wind beats the aircraft on this heading", "is-bad"));
+  } else {
+    cells.push(metricCell("Ground speed", "—", "incomplete plan"));
+  }
+
+  cells.push(metricCell("Endurance / battery", `${mins(r.endur)} min`,
+    r.elevDerate ? `−${(r.elevDerate * 100).toFixed(0)}% altitude derate` : `${PLATFORMS[m.platform].name.toLowerCase()} · ${S.payload ? SENSORS[S.payload].name.split(" ")[0].toLowerCase() : "no"} payload`));
+  if (r.flightMin != null) {
+    if (m.platform === "multi") {
+      cells.push(metricCell("Flight time", `${mins(r.flightMin)} min`,
+        `${r.sorties} sortie${r.sorties > 1 ? "s" : ""} · budget ${spec.batteries} batteries`,
+        r.sorties <= spec.batteries ? "is-good" : "is-bad"));
+    } else {
+      const mg = r.margin * 100;
+      cells.push(metricCell("Flight time", `${mins(r.flightMin)} min`,
+        `one flight · reserve ${mg.toFixed(0)}% (need ≥ ${spec.reservePct}%)`,
+        mg >= spec.reservePct ? "is-good" : mg >= 0 ? "is-warn" : "is-bad"));
+    }
+  } else {
+    cells.push(metricCell("Flight time", "—", "incomplete plan"));
+  }
+
+  document.getElementById("metricsGrid").innerHTML = cells.join("");
+
+  // live coach — one nudge at a time
+  const coach = document.getElementById("liveCoach");
+  let msg = null, cls = "coach";
+  if (r.plan && r.windBlocked) {
+    msg = `<b>Wind beats the aircraft.</b> ${r.wind.speedMs} m/s wind vs ${S.speed} m/s airspeed on a ${pad3(S.legHdg)}° leg heading — the drone cannot hold the line. Speed up or change the leg heading.`;
+    cls = "coach alert";
+  } else if (r.photoInt != null && r.photoInt < 1.6) {
+    msg = `<b>Camera can’t keep up:</b> trigger interval ${r.photoInt.toFixed(1)} s. Slow down, fly higher, or drop forward overlap.`;
+    cls = "coach alert";
+  } else if (r.flightMin != null && m.platform === "multi" && r.sorties > spec.batteries) {
+    msg = `<b>Over the battery budget:</b> ${r.sorties} sorties needed, ${spec.batteries} batteries carried. Fly higher (wider strip), trim side-lap toward spec, speed up, or shrink the block.`;
+    cls = "coach alert";
+  } else if (r.flightMin != null && m.platform === "fixed" && r.margin < 0) {
+    msg = `<b>Over endurance.</b> Fixed-wing gets one flight — no battery swaps mid-block. Fly higher, widen spacing (less side-lap), speed up, or shrink the block.`;
+    cls = "coach alert";
+  } else if (r.transit > 600) {
+    msg = `<b>Long transit:</b> ${fmt(r.transit)} m from take-off to the first line — battery burnt before survey starts. Move take-off closer.`;
+    cls = "coach warn2";
+  }
+  coach.style.display = msg ? "" : "none";
+  coach.className = cls;
+  coach.innerHTML = msg || "";
+
+  document.getElementById("evalBtn").disabled = !(S.aoi && S.takeoff && S.startwp && S.payload);
+}
+
+/* ---------------- evaluation ---------------- */
+function pointInBounds(p, b, padM = 0) {
+  if (!p || !b) return false;
+  const pad = padM / 111320;
+  return p.lat > b.getSouth() - pad && p.lat < b.getNorth() + pad &&
+         p.lng > b.getWest() - pad / Math.cos(p.lat * DEG) && p.lng < b.getEast() + pad / Math.cos(p.lat * DEG);
+}
+
+function evaluate() {
+  const m = S.mission, spec = m.spec, plat = PLATFORMS[m.platform];
+  const r = computePlan();
+  const rows = [];   // {name, pts, max, why}
+  const tips = [];   // coach paragraphs
+
+  /* 1 · payload choice — 15 */
+  {
+    let pts = 0, why;
+    if (S.payload === m.requiredPayload) { pts = 15; why = `${SENSORS[S.payload].name} is exactly what "${m.deliverable}" needs.`; }
+    else if (m.requiredPayload === "lidar") {
+      pts = 0; why = `A camera only images the surface it can see — for "${m.deliverable}" you need LiDAR returns from the ground.`;
+      tips.push(`<div class="coach alert"><b>Wrong sensor for the product.</b> ${m.id === "m3" ? "Photogrammetric matching stops at the canopy: your DSM would map treetops, not terrain." : "Image matching fails on wooded, shadowed slopes; the board specified LiDAR for the DTM."}</div>`);
+    } else if (m.requiredPayload === "oblique") {
+      pts = S.payload === "nadir" ? 4 : 0;
+      why = S.payload === "nadir" ? "Nadir images give roofs but no façades — the 3D mesh will have melted walls." : "LiDAR gives geometry but no photo texture for the model.";
+      tips.push(`<div class="coach alert"><b>3D model needs oblique.</b> Vertical surfaces are only reconstructed when they are actually imaged — that is the oblique rig's job.</div>`);
+    } else {
+      pts = S.payload === "oblique" ? 8 : 0;
+      why = S.payload === "oblique" ? "Obliques can be orthorectified, but you paid 15% endurance for lenses this product never needed." : "LiDAR delivers no image — an orthophoto cannot be made from it.";
+      if (S.payload === "lidar") tips.push(`<div class="coach alert"><b>No pictures, no orthophoto.</b> LiDAR is a ranging sensor; the deliverable here is imagery.</div>`);
+    }
+    rows.push({ name: "Payload matches deliverable", pts, max: 15, why });
+  }
+
+  /* 2 · sensing spec (GSD / density) — 15 */
+  {
+    let pts = 0, why = "No usable sensing figure.";
+    if (S.payload === "lidar" && spec.densityMin) {
+      if (r.dens >= spec.densityMin) { pts = 15; why = `${fmt(r.dens)} pts/m² ≥ spec ${spec.densityMin}.`; }
+      else { pts = Math.round(15 * r.dens / spec.densityMin); why = `${fmt(r.dens)} pts/m² is under the ${spec.densityMin} pts/m² spec — fly lower or slower.`; }
+    } else if (S.payload !== "lidar" && S.payload && spec.gsdMaxCm) {
+      if (r.gsd <= spec.gsdMaxCm) {
+        pts = 15; why = `${r.gsd.toFixed(1)} cm meets the ≤ ${spec.gsdMaxCm} cm spec.`;
+        if (r.gsd < spec.gsdMaxCm * 0.4) { pts = 12; why += " But you are flying far lower than needed — wasted battery and data volume."; }
+      } else {
+        pts = Math.max(0, Math.round(15 * (2 - r.gsd / spec.gsdMaxCm)));
+        why = `${r.gsd.toFixed(1)} cm is coarser than the ${spec.gsdMaxCm} cm spec — descend.`;
+        tips.push(`<div class="coach warn2"><b>GSD out of spec.</b> GSD scales linearly with height: to hit ${spec.gsdMaxCm} cm with this camera, stay at or below ${fmt(spec.gsdMaxCm / (SENSORS[S.payload]?.pxUm ?? 2.41) * (SENSORS[S.payload]?.focalMm ?? 8.8) * 10 / (SENSORS[S.payload]?.gsdFactor ?? 1))} m AGL.</div>`);
+      }
+    } else if (S.payload === "lidar" && !spec.densityMin) {
+      pts = 5; why = "Density fine, but this mission never asked for LiDAR.";
+    } else if (S.payload && spec.densityMin) {
+      pts = 0; why = "Point-density spec cannot be met by a camera.";
+    }
+    rows.push({ name: S.payload === "lidar" ? "Point density vs spec" : "GSD vs spec", pts, max: 15, why });
+  }
+
+  /* 3 · overlaps — 10 */
+  {
+    let pts = 0; const parts = [];
+    if (S.payload === "lidar") {
+      if (S.side >= spec.sideMin) { pts = 10; parts.push(`swath overlap ${S.side}% ≥ ${spec.sideMin}% ✓`); }
+      else { pts = Math.round(10 * S.side / spec.sideMin); parts.push(`swath overlap ${S.side}% < ${spec.sideMin}% — gaps on slopes`); }
+    } else {
+      const fOk = spec.frontMin == null || S.front >= spec.frontMin;
+      const sOk = spec.sideMin == null || S.side >= spec.sideMin;
+      pts = (fOk ? 5 : 2) + (sOk ? 5 : 2);
+      if (spec.frontMin != null && spec.sideMin != null && S.front >= 88 && S.side >= 85) { pts = 8; parts.push("overlaps far beyond spec — doubling flight time for nothing"); }
+      parts.push(`forward ${S.front}%${spec.frontMin ? ` (spec ≥ ${spec.frontMin}%)` : ""} ${fOk ? "✓" : "✗"}`);
+      parts.push(`side ${S.side}%${spec.sideMin ? ` (spec ≥ ${spec.sideMin}%)` : ""} ${sOk ? "✓" : "✗"}`);
+      if (!fOk || !sOk) tips.push(`<div class="coach warn2"><b>Overlap short.</b> This mission needs ${spec.frontMin}/${spec.sideMin}. Thin overlap means weak tie-points, holes in the ${m.requiredPayload === "oblique" ? "mesh" : "orthomosaic"}, and a re-fly.</div>`);
+    }
+    rows.push({ name: "Overlap design", pts: Math.min(10, pts), max: 10, why: parts.join(" · ") });
+  }
+
+  /* 4 · block geometry — 10 */
+  {
+    const a = aoiAreaKm2(S.aoi);
+    const inZone = distM(S.aoi.getCenter(), m.center) <= m.zoneRadM * 1.15;
+    let pts, why;
+    if (!inZone) { pts = 0; why = "The block is outside the demand zone (blue circle) — surveying the wrong ground."; }
+    else if (a >= spec.areaMinKm2 && a <= spec.areaMaxKm2) { pts = 10; why = `${a.toFixed(2)} km² inside the ${spec.areaMinKm2}–${spec.areaMaxKm2} km² tasking, over the demand zone.`; }
+    else if (a >= spec.areaMinKm2 * 0.75 && a <= spec.areaMaxKm2 * 1.25) { pts = 5; why = `${a.toFixed(2)} km² is outside the ${spec.areaMinKm2}–${spec.areaMaxKm2} km² tasking.`; }
+    else { pts = 0; why = `${a.toFixed(2)} km² — nowhere near the ${spec.areaMinKm2}–${spec.areaMaxKm2} km² tasking.`; }
+    rows.push({ name: "Survey block", pts, max: 10, why });
+  }
+
+  /* 5 · endurance — 20 */
+  {
+    let pts = 0, why;
+    const derateNote = r.elevDerate ? ` (incl. ${(r.elevDerate * 100).toFixed(0)}% thin-air derate at ${fmt(S.elevTakeoff)} m AMSL)` : "";
+    if (r.plan && r.windBlocked) {
+      why = `${r.wind.speedMs} m/s wind against ${S.speed} m/s airspeed on a ${pad3(S.legHdg)}° leg heading — the aircraft cannot hold the line.`;
+      tips.push(`<div class="coach alert"><b>Wind beats the aircraft.</b> Ground speed goes to zero (or the crosswind exceeds what the drone can crab against). Raise airspeed or swing the leg heading away from the wind axis.</div>`);
+    }
+    else if (r.flightMin == null) { why = "No complete plan to time."; }
+    else if (m.platform === "multi") {
+      const over = r.sorties - spec.batteries;
+      if (over <= 0) { pts = 20; why = `${mins(r.flightMin)} min of flying → ${r.sorties} sortie${r.sorties > 1 ? "s" : ""} of ${mins(r.usable)} min usable each${derateNote} — inside the ${spec.batteries}-battery budget.`; }
+      else {
+        pts = Math.max(0, 20 - 7 * over);
+        why = `${mins(r.flightMin)} min needs ${r.sorties} sorties but only ${spec.batteries} batteries are carried${derateNote}.`;
+        tips.push(`<div class="coach alert"><b>Battery budget bust.</b> Levers, in order: fly higher (wider strip, spec permitting), trim side-lap toward the spec minimum, fly faster, move take-off closer (each swap ferries the transit twice), or shrink the block.</div>`);
+      }
+    } else {
+      const mg = r.margin * 100;
+      if (mg >= spec.reservePct) { pts = 20; why = `${mins(r.flightMin)} min flown of ${mins(r.endur)} min aboard${derateNote} — ${mg.toFixed(0)}% reserve in one flight.`; }
+      else if (mg >= spec.reservePct / 2) { pts = 14; why = `Reserve ${mg.toFixed(0)}% is under the ${spec.reservePct}% policy — one headwind from a forced landing.`; }
+      else if (mg >= 0) { pts = 7; why = `Reserve ${mg.toFixed(0)}% — the plan lands on fumes.`; }
+      else {
+        pts = 0; why = `Needs ${mins(r.flightMin)} min but only ${mins(r.endur)} min aboard${derateNote} — the aircraft comes down inside the block.`;
+        tips.push(`<div class="coach alert"><b>Endurance bust.</b> A fixed-wing gets one flight. Levers, in order: fly higher (wider strip), reduce side-lap toward spec minimum, fly faster, shorten transit, or shrink the block.${r.elevDerate ? ` The thin-air derate at ${fmt(S.elevTakeoff)} m AMSL is costing you ${(r.elevDerate * 100).toFixed(0)}% before wheels-off — launch altitude is part of the plan.` : ""}</div>`);
+      }
+    }
+    rows.push({ name: "Endurance & reserve", pts, max: 20, why });
+  }
+
+  /* 6 · obstacle clearance — 15 */
+  {
+    const inBlock = S.obstacles.filter(o => pointInBounds(o, S.aoi, OBST_H_BUFFER));
+    const tallest = inBlock.reduce((mx, o) => Math.max(mx, o.h), 0);
+    const vBad = inBlock.filter(o => S.alt < o.h + OBST_V_BUFFER);
+    const nearTO = S.obstacles.filter(o => S.takeoff && distM(o, S.takeoff) < OBST_H_BUFFER);
+    const nearS1 = S.obstacles.filter(o => S.startwp && distM(o, S.startwp) < OBST_H_BUFFER);
+    let pts = 15; const probs = [];
+    if (vBad.length) { pts -= 8; probs.push(`${vBad.length} obstruction(s) in the block reach within ${OBST_V_BUFFER} m of your flight height (tallest ${tallest} m — need ≥ ${tallest + OBST_V_BUFFER} m AGL)`); }
+    if (nearTO.length) { pts -= 4; probs.push(`take-off inside the ${OBST_H_BUFFER} m stand-off of ${nearTO[0].label}`); }
+    if (nearS1.length) { pts -= 3; probs.push(`start waypoint inside the ${OBST_H_BUFFER} m stand-off of ${nearS1[0].label}`); }
+    pts = Math.max(0, pts);
+    if (probs.length) tips.push(`<div class="coach alert"><b>Buffer infringement.</b> ${probs.join("; ")}.</div>`);
+    rows.push({ name: "Obstacle buffers", pts, max: 15,
+      why: probs.length ? probs.join("; ") : (inBlock.length ? `${inBlock.length} obstruction(s) in the block, all cleared by ≥ ${OBST_V_BUFFER} m; stand-offs respected.` : "No obstructions inside the block; stand-offs respected.") });
+  }
+
+  /* 7 · take-off & entry — 10 */
+  {
+    let pts = 0; const parts = [];
+    const dTO = distM(S.takeoff, S.aoi.getCenter());
+    if (dTO < 1600) { pts += 4; parts.push("take-off within working range ✓"); }
+    else parts.push(`take-off ${fmt(dTO)} m from the block — long, blind transit`);
+    if (pointInBounds(S.startwp, S.aoi)) { pts += 3; parts.push("start WP inside block ✓"); }
+    else parts.push("start WP outside the block");
+    const corners = [S.aoi.getSouthWest(), S.aoi.getSouthEast(), S.aoi.getNorthWest(), S.aoi.getNorthEast()]
+      .map(ll => ({ lat: ll.lat, lng: ll.lng }));
+    const nearestCornerToTO = corners.reduce((bp, c) => distM(c, S.takeoff) < distM(bp, S.takeoff) ? c : bp);
+    if (distM(S.startwp, nearestCornerToTO) < 350) { pts += 3; parts.push("entry at the corner facing take-off ✓"); }
+    else parts.push("entry corner is not the one facing take-off — wasted transit");
+    rows.push({ name: "Take-off & entry", pts, max: 10, why: parts.join(" · ") });
+  }
+
+  /* 8 · platform ops — 5 (clearance 3 + into-wind take-off 2) */
+  {
+    const R2 = plat.transClearM;
+    const conflict = S.obstacles.filter(o => distM(o, S.takeoff) < R2 && o.h > (m.platform === "fixed" ? 20 : 10));
+    let pts = 0; const parts = [];
+    if (!conflict.length) {
+      pts += 3;
+      parts.push(m.platform === "fixed" ? `transition corridor (${R2} m) clear ✓` : `launch pad clearance (${R2} m) clear ✓`);
+    } else {
+      parts.push(`${conflict[0].label} (${conflict[0].h} m) sits ${fmt(distM(conflict[0], S.takeoff))} m from take-off — inside the ${R2} m ${m.platform === "fixed" ? "transition corridor" : "pad clearance"}`);
+      if (m.platform === "fixed") tips.push(`<div class="coach alert"><b>Transition conflict.</b> A fixed-wing climbs shallow while it transitions to wing-borne flight — it cannot hop over a ${conflict[0].h} m ${conflict[0].label.toLowerCase()} at ${fmt(distM(conflict[0], S.takeoff))} m. Move the launch point to open ground.</div>`);
+    }
+    const hd = angDiff(S.takeoffHdg, m.wind.dirDeg);
+    if (hd <= 30) { pts += 2; parts.push(`take-off heading ${pad3(S.takeoffHdg)}° into the ${m.wind.speedMs} m/s wind ✓`); }
+    else if (hd <= 60) { pts += 1; parts.push(`take-off ${hd.toFixed(0)}° off the wind — workable, not clean`); }
+    else {
+      parts.push(`take-off heading ${pad3(S.takeoffHdg)}° is ${hd >= 135 ? "downwind" : "crosswind"} (wind from ${pad3(m.wind.dirDeg)}°)`);
+      tips.push(`<div class="coach warn2"><b>Take off into the wind.</b> ${m.platform === "fixed" ? "A downwind launch stretches the ground roll and flattens the climb — straight at whatever stands in the corridor." : "A downwind departure costs control authority just when the aircraft is slow and low."} Point the nose at ${pad3(m.wind.dirDeg)}°.</div>`);
+    }
+    rows.push({ name: m.platform === "fixed" ? "Transition & take-off wind" : "Launch & take-off wind", pts, max: 5, why: parts.join(" · ") });
+  }
+
+  /* wind vs leg-heading advisory (no points — it already costs flight time) */
+  if (r.gsA != null && m.wind.speedMs >= 4 && axisDiff(S.legHdg, m.wind.dirDeg) <= 25) {
+    tips.push(`<div class="coach warn2"><b>Legs run along the wind.</b> Half your lines fight a ${r.headComp.toFixed(1)} m/s headwind (ground speed ${Math.min(r.gsA, r.gsB).toFixed(1)} m/s) — that asymmetry is burning battery. Crosswind legs hold a steadier ground speed for the camera, at the price of a ${r.crossComp.toFixed(1)} m/s crab.</div>`);
+  }
+
+  const total = rows.reduce((a, x) => a + x.pts, 0);
+  const grade = total >= 85 ? "A" : total >= 70 ? "B" : total >= 50 ? "C" : "F";
+  if (grade === "A" && !tips.length) tips.push(`<div class="coach"><b>Plan approved.</b> ${m.requiredPayload === "lidar" ? "Sensor, density and terrain margins all hold." : "Right sensor, right height, right margins."} File the flight plan and NOTAM.</div>`);
+  return { rows, total, grade, tips };
+}
+
+function showDebrief(res) {
+  const m = S.mission;
+  document.getElementById("gradeBadge").textContent = res.grade;
+  document.getElementById("gradeBadge").className = "grade-badge " + res.grade;
+  document.getElementById("debriefSub").textContent =
+    `${m.title} — ${res.total}/100 · ${res.grade === "A" ? "Approved" : res.grade === "B" ? "Approved with remarks" : res.grade === "C" ? "Returned for rework" : "Rejected"}`;
+  document.getElementById("scoreRows").innerHTML = res.rows.map(rw => {
+    const pct = rw.pts / rw.max * 100;
+    const cls = pct >= 99 ? "full" : pct > 0 ? "part" : "zero";
+    return `<div class="score-row">
+      <span class="name">${rw.name}</span><span class="num">${rw.pts}/${rw.max}</span>
+      <div class="bar"><i class="${cls}" style="width:${Math.max(3, pct)}%"></i></div>
+      <span class="why">${rw.why}</span></div>`;
+  }).join("");
+  document.getElementById("debriefCoach").innerHTML = res.tips ? res.tips.join("") : "";
+  document.getElementById("debriefOverlay").style.display = "flex";
+
+  const prev = bestGrades[m.id];
+  if (!prev || res.total > prev.total) {
+    bestGrades[m.id] = { total: res.total, grade: res.grade };
+    try { localStorage.setItem("smd-best", JSON.stringify(bestGrades)); } catch (e) {}
+    renderTabs();
+  }
+}
+
+document.getElementById("evalBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("evalBtn");
+  btn.disabled = true; btn.textContent = "Sampling terrain…";
+  // make sure terrain is in before the board rules
+  if (S.takeoff && S.elevTakeoff == null) S.elevTakeoff = await elevAt(S.takeoff.lat, S.takeoff.lng);
+  if (S.aoi && !S.elevGrid) S.elevGrid = await sampleAoiElev(S.aoi);
+  updateTerrainNote(); recalc();
+  const res = evaluate();
+  showDebrief(res);
+  btn.disabled = false; btn.textContent = "Submit plan to review board";
+});
+
+document.getElementById("debriefClose").addEventListener("click", () => {
+  document.getElementById("debriefOverlay").style.display = "none";
+});
+document.getElementById("debriefOverlay").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("debriefOverlay")) document.getElementById("debriefOverlay").style.display = "none";
+});
+document.getElementById("debriefNext").addEventListener("click", () => {
+  document.getElementById("debriefOverlay").style.display = "none";
+  const i = MISSIONS.indexOf(S.mission);
+  loadMission(MISSIONS[(i + 1) % MISSIONS.length]);
+});
+
+/* ---------------- mission load / UI wiring ---------------- */
+function renderTabs() {
+  const nav = document.getElementById("missionTabs");
+  nav.innerHTML = "";
+  for (const m of MISSIONS) {
+    const b = document.createElement("button");
+    b.setAttribute("aria-pressed", String(S.mission === m));
+    b.innerHTML = m.tab + (bestGrades[m.id] ? `<span class="grade-chip">${bestGrades[m.id].grade}</span>` : "");
+    b.addEventListener("click", () => loadMission(m));
+    nav.appendChild(b);
+  }
+}
+
+function renderBrief(m) {
+  const spec = m.spec, plat = PLATFORMS[m.platform];
+  document.getElementById("briefTitle").textContent = m.title;
+  const tag = document.getElementById("platformTag");
+  tag.textContent = (m.platform === "fixed" ? "✈ " : "✚ ") + plat.name + (m.id === "m5" ? " VTOL" : "");
+  tag.className = "platform-tag " + (m.platform === "multi" ? "multi" : "");
+  document.getElementById("briefObjective").innerHTML = m.objective;
+  const rows = [
+    ["Platform (assigned)", plat.name + ` · base ${plat.baseEndur} min`],
+    spec.gsdMaxCm ? ["GSD", `≤ ${spec.gsdMaxCm} cm`] : ["Point density", `≥ ${spec.densityMin} pts/m²`],
+    ["Accuracy (H / V)", `${spec.hAccCm} cm / ${spec.vAccCm} cm`],
+    ["Wind (forecast)", `${m.wind.speedMs} m/s from ${pad3(m.wind.dirDeg)}° ${cardinal(m.wind.dirDeg)}`],
+    ["Survey block", `${spec.areaMinKm2}–${spec.areaMaxKm2} km² inside the demand zone`],
+    m.platform === "multi"
+      ? ["Batteries", `${spec.batteries} carried · ≥ ${spec.reservePct}% reserve per sortie`]
+      : ["Battery reserve", `single flight · ≥ ${spec.reservePct}% on landing`],
+    ["Buffers", `${OBST_H_BUFFER} m stand-off · +${OBST_V_BUFFER} m overfly · ${plat.transClearNote}`]
+  ];
+  document.getElementById("specTable").innerHTML =
+    rows.map(r2 => `<tr><td>${r2[0]}</td><td>${r2[1]}</td></tr>`).join("");
+}
+
+function applyPlatformRanges(m) {
+  const plat = PLATFORMS[m.platform];
+  const alt = document.getElementById("altRange");
+  alt.max = plat.altMax;
+  alt.min = m.platform === "fixed" ? 80 : 40;
+  document.getElementById("altMin").textContent = alt.min + " m";
+  document.getElementById("altMax").textContent = plat.altMax + " m" + (m.platform === "fixed" ? " (survey auth.)" : " (DGCA ceiling)");
+  const spd = document.getElementById("speedRange");
+  spd.min = plat.spdMin; spd.max = plat.spdMax;
+  S.speed = plat.spdDef; spd.value = plat.spdDef;
+  S.alt = m.platform === "fixed" ? 160 : 80;
+  alt.value = S.alt;
+  syncSliderOuts();
+}
+
+function syncSliderOuts() {
+  document.getElementById("altOut").textContent = S.alt + " m";
+  document.getElementById("frontOut").textContent = S.front + "%";
+  document.getElementById("sideOut").textContent = S.side + "%";
+  document.getElementById("speedOut").textContent = S.speed + " m/s";
+}
+
+function setPayload(p) {
+  S.payload = p;
+  for (const b of document.querySelectorAll("#payloadSeg button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.payload === p));
+  }
+  const isL = p === "lidar";
+  document.getElementById("ctlFront").classList.toggle("disabled", isL);
+  document.getElementById("sideLabel").textContent = isL ? "Swath overlap" : "Side overlap";
+  const note = document.getElementById("payloadNote");
+  if (p) {
+    const e = SENSORS[p].endur;
+    note.style.display = "";
+    note.innerHTML = `<b>${SENSORS[p].name}</b> mounted — endurance factor ×${e.toFixed(2)}${isL ? " (heaviest payload)" : p === "oblique" ? " (5-lens rig)" : " (lightest payload)"}.`;
+  } else note.style.display = "none";
+  recalc();
+}
+
+function clearDigitized() {
+  S.aoi = null; S.takeoff = null; S.startwp = null;
+  S.elevTakeoff = null; S.elevGrid = null;
+  aoiCornerA = null;
+  layers.aoi.clearLayers(); layers.points.clearLayers();
+  layers.lines.clearLayers(); layers.preview.clearLayers();
+  updateDigitizeStatus(); updateTerrainNote(); recalc();
+}
+
+function loadMission(m) {
+  S.mission = m;
+  clearDigitized();
+  setPayload(null);
+  setMode(null);
+  S.takeoffHdg = 0; S.legHdg = 90;
+  renderTabs();
+  renderBrief(m);
+  applyPlatformRanges(m);
+  renderDials();
+  document.getElementById("windChip").innerHTML =
+    `<span class="arr" style="transform:rotate(${(m.wind.dirDeg + 180) % 360}deg)">↑</span>Wind ${m.wind.speedMs} m/s from ${cardinal(m.wind.dirDeg)}`;
+  map.setView([m.center.lat, m.center.lng], m.zoom);
+  if (m.base === "hillshadeBase") { map.removeLayer(baseImagery); baseHillshade.addTo(map); }
+  else if (!map.hasLayer(baseImagery)) { map.removeLayer(baseHillshade); baseImagery.addTo(map); }
+  if (m.hillshade) { if (!map.hasLayer(overlayHillshade)) overlayHillshade.addTo(map); }
+  else if (map.hasLayer(overlayHillshade)) map.removeLayer(overlayHillshade);
+  layers.zone.clearLayers();
+  L.circle([m.center.lat, m.center.lng], {
+    radius: m.zoneRadM, color: "#1565c0", weight: 1.4, dashArray: "8 6", fillColor: "#1565c0", fillOpacity: 0.03
+  }).addTo(layers.zone).bindTooltip("Demand zone — digitize the survey block in here", { direction: "top" });
+  loadObstacles(m);
+  recalc();
+}
+
+/* ---------------- compass dials ---------------- */
+function dialSvg(valDeg, windFrom, axis) {
+  let s = `<circle cx="50" cy="50" r="47" fill="var(--panel-2)" stroke="var(--line)" stroke-width="1.5"/>`;
+  for (let d = 0; d < 360; d += 30) {
+    const a = d * DEG, len = d % 90 === 0 ? 7 : 4;
+    s += `<line x1="${50 + (46 - len) * Math.sin(a)}" y1="${50 - (46 - len) * Math.cos(a)}" x2="${50 + 46 * Math.sin(a)}" y2="${50 - 46 * Math.cos(a)}" stroke="var(--line)" stroke-width="1.5"/>`;
+  }
+  for (const [t, d] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]) {
+    const a = d * DEG;
+    s += `<text x="${50 + 33 * Math.sin(a)}" y="${50 - 33 * Math.cos(a) + 3.5}" text-anchor="middle" font-size="9.5" fill="var(--text-faint)">${t}</text>`;
+  }
+  // wind: blue arrow blowing in from the FROM side
+  const wa = windFrom * DEG;
+  const x1 = 50 + 44 * Math.sin(wa), y1 = 50 - 44 * Math.cos(wa);
+  const x2 = 50 + 17 * Math.sin(wa), y2 = 50 - 17 * Math.cos(wa);
+  const ux = (50 - x2) / 17 * 1, uy = (50 - y2) / 17 * 1;   // inward unit (approx)
+  s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#1565c0" stroke-width="2.4" opacity=".85"/>`;
+  s += `<polygon points="${x2 + ux * 7},${y2 + uy * 7} ${x2 - uy * 4},${y2 + ux * 4} ${x2 + uy * 4},${y2 - ux * 4}" fill="#1565c0" opacity=".85"/>`;
+  // green needle: single-ended for take-off, through-centre for legs
+  const na = valDeg * DEG, nx = 50 + 39 * Math.sin(na), ny = 50 - 39 * Math.cos(na);
+  if (axis) {
+    s += `<line x1="${100 - nx}" y1="${100 - ny}" x2="${nx}" y2="${ny}" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>`;
+  } else {
+    s += `<line x1="50" y1="50" x2="${nx}" y2="${ny}" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>`;
+    s += `<polygon points="${nx + 8 * Math.sin(na)},${ny - 8 * Math.cos(na)} ${nx - 4 * Math.cos(na)},${ny - 4 * Math.sin(na)} ${nx + 4 * Math.cos(na)},${ny + 4 * Math.sin(na)}" fill="var(--accent)"/>`;
+  }
+  s += `<circle cx="50" cy="50" r="3.4" fill="var(--accent)"/>`;
+  return s;
+}
+function renderDials() {
+  const wf = S.mission ? S.mission.wind.dirDeg : 0;
+  document.getElementById("dialTO").innerHTML = dialSvg(S.takeoffHdg, wf, false);
+  document.getElementById("dialLeg").innerHTML = dialSvg(S.legHdg, wf, true);
+  document.getElementById("toHdgOut").textContent = `${pad3(S.takeoffHdg)}° ${cardinal(S.takeoffHdg)}`;
+  document.getElementById("legHdgOut").textContent = `${pad3(S.legHdg)}°–${pad3((S.legHdg + 180) % 360)}°`;
+  if (S.mission) {
+    const w = S.mission.wind;
+    document.getElementById("windNote").textContent =
+      `Forecast wind ${w.speedMs} m/s from ${pad3(w.dirDeg)}° (${cardinal(w.dirDeg)}). Take off into the wind; crosswind legs keep ground speed steady.`;
+  }
+}
+function bindDial(id, key, axis) {
+  const el = document.getElementById(id);
+  const onPt = (ev) => {
+    const rc = el.getBoundingClientRect();
+    const dx = ev.clientX - (rc.left + rc.width / 2);
+    const dy = ev.clientY - (rc.top + rc.height / 2);
+    let deg = Math.round(((Math.atan2(dx, -dy) / DEG + 360) % 360) / 5) * 5 % 360;
+    if (axis) deg %= 180;
+    S[key] = deg;
+    renderDials(); recalc();
+  };
+  el.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    el.setPointerCapture(ev.pointerId);
+    onPt(ev);
+    const mv = (e2) => onPt(e2);
+    el.addEventListener("pointermove", mv);
+    el.addEventListener("pointerup", () => el.removeEventListener("pointermove", mv), { once: true });
+  });
+}
+bindDial("dialTO", "takeoffHdg", false);
+bindDial("dialLeg", "legHdg", true);
+
+/* toolbar */
+document.getElementById("toolAoi").addEventListener("click", () => setMode("aoi"));
+document.getElementById("toolTakeoff").addEventListener("click", () => setMode("takeoff"));
+document.getElementById("toolStart").addEventListener("click", () => setMode("start"));
+document.getElementById("clearBtn").addEventListener("click", clearDigitized);
+for (const b of document.querySelectorAll("#payloadSeg button")) {
+  b.addEventListener("click", () => setPayload(b.dataset.payload));
+}
+for (const [id, key] of [["altRange", "alt"], ["frontRange", "front"], ["sideRange", "side"], ["speedRange", "speed"]]) {
+  document.getElementById(id).addEventListener("input", (e) => {
+    S[key] = +e.target.value;
+    syncSliderOuts();
+    recalc();
+  });
+}
+
+/* debug hook for automated smoke tests */
+window.__smd = { S, MISSIONS, loadMission, setPayload, evaluate, computePlan, recalc, map, L };
+
+loadMission(MISSIONS[0]);
+</script>
+</body>
+</html>

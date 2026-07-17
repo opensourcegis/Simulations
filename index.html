@@ -256,6 +256,86 @@
       </div>
     </a>
 
+    <!-- ============ Survey mission designer ============ -->
+    <a class="card" href="games/survey-mission-designer/">
+      <div class="thumb">
+        <svg viewBox="0 0 320 180" aria-hidden="true">
+          <defs>
+            <linearGradient id="relief" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#e8e2d6"/>
+              <stop offset="1" stop-color="#d5cfc0"/>
+            </linearGradient>
+          </defs>
+          <rect width="320" height="180" fill="url(#relief)"/>
+          <!-- hillshade ridges -->
+          <g fill="none" stroke="#b9b09c" stroke-width="1.1" opacity=".8">
+            <path d="M-10 40 Q 60 18 120 44 T 250 40 T 340 52"/>
+            <path d="M-10 74 Q 70 50 140 78 T 270 72 T 340 84"/>
+            <path d="M-10 112 Q 50 92 130 114 T 260 108 T 340 118"/>
+            <path d="M-10 148 Q 80 128 150 150 T 280 142 T 340 154"/>
+          </g>
+          <g fill="none" stroke="#8f8672" stroke-width="2.4" opacity=".45">
+            <path d="M-10 46 Q 60 24 120 50 T 250 46"/>
+            <path d="M-10 118 Q 50 98 130 120 T 260 114"/>
+          </g>
+          <!-- demand zone -->
+          <circle cx="165" cy="90" r="72" fill="rgba(21,101,192,.05)" stroke="#1565c0"
+                  stroke-width="1.2" stroke-dasharray="6 5"/>
+          <!-- survey block -->
+          <rect x="112" y="56" width="112" height="70" fill="rgba(15,138,77,.10)"
+                stroke="#0f8a4d" stroke-width="1.8"/>
+          <!-- flight lines -->
+          <g fill="none" stroke="#0b7a43" stroke-width="1.4" opacity=".9">
+            <path d="M116 66 H220 M220 78 H116 M116 90 H220 M220 102 H116 M116 114 H220"/>
+            <path d="M220 66 V78 M116 78 V90 M220 90 V102 M116 102 V114" opacity=".55"/>
+          </g>
+          <!-- obstruction buffers -->
+          <circle cx="196" cy="46" r="11" fill="rgba(198,40,40,.10)" stroke="#c62828"
+                  stroke-width="1.1" stroke-dasharray="3 3"/>
+          <circle cx="196" cy="46" r="3" fill="#c62828" stroke="#fff" stroke-width="1"/>
+          <circle cx="132" cy="136" r="11" fill="rgba(198,40,40,.10)" stroke="#c62828"
+                  stroke-width="1.1" stroke-dasharray="3 3"/>
+          <circle cx="132" cy="136" r="3" fill="#c62828" stroke="#fff" stroke-width="1"/>
+          <!-- takeoff -->
+          <circle cx="92" cy="132" r="9" fill="#e37400" stroke="#fff" stroke-width="1.6"/>
+          <text x="92" y="136" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">T</text>
+          <path d="M100 126 L114 116" stroke="#e37400" stroke-width="1.6" stroke-dasharray="4 3"/>
+          <!-- payload chips -->
+          <g font-size="8.5" font-family="system-ui" font-weight="600">
+            <rect x="16" y="14" width="46" height="15" rx="7.5" fill="rgba(255,255,255,.92)" stroke="#0f8a4d"/>
+            <text x="39" y="24.5" text-anchor="middle" fill="#0f8a4d">NADIR</text>
+            <rect x="66" y="14" width="52" height="15" rx="7.5" fill="rgba(255,255,255,.85)" stroke="#c3cfdb"/>
+            <text x="92" y="24.5" text-anchor="middle" fill="#56677a">OBLIQUE</text>
+            <rect x="122" y="14" width="44" height="15" rx="7.5" fill="rgba(255,255,255,.85)" stroke="#c3cfdb"/>
+            <text x="144" y="24.5" text-anchor="middle" fill="#56677a">LiDAR</text>
+          </g>
+          <!-- battery -->
+          <g>
+            <rect x="262" y="146" width="40" height="16" rx="4" fill="rgba(255,255,255,.9)" stroke="#c3cfdb"/>
+            <rect x="265" y="149" width="22" height="10" rx="2" fill="#0f8a4d"/>
+            <rect x="302" y="150" width="3" height="8" rx="1" fill="#c3cfdb"/>
+          </g>
+        </svg>
+        <span class="pill live">● Playable</span>
+      </div>
+      <div class="card-body">
+        <h3>Survey Mission Designer</h3>
+        <p>
+          Five taskings, five terrains, one review board. Digitize a 2–3 km² block on live
+          imagery, match the payload — nadir, oblique or LiDAR — to the deliverable, and plan
+          around real OSM obstructions and real SRTM terrain. Fixed-wing gets one flight;
+          multirotor gets a battery budget; the hills tax everyone.
+        </p>
+        <div class="tags">
+          <span class="tag">Payload selection</span>
+          <span class="tag">Real terrain</span>
+          <span class="tag">OSM obstructions</span>
+          <span class="tag">5 missions</span>
+        </div>
+        <span class="go">Open simulator <span class="arrow">→</span></span>
+      </div>
+    </a>
+
     <!-- ============ Placeholder ============ -->
     <div class="card soon">
       <div class="thumb">
