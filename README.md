@@ -1,7 +1,12 @@
-# Simulator Arcade
+# NIGST P&RS — Simulation-based Training
 
-Browser-based training simulators. Each one is a single self-contained HTML page — no build
-step, no dependencies, no accounts.
+Browser-based training simulators from the Photogrammetry & Remote Sensing division,
+National Institute for Geo-informatics Science & Technology (NIGST), Survey of India.
+Each simulator is a single HTML page — no build step, no dependencies, no accounts.
+
+Basemap tiles stream at runtime from OpenStreetMap and Esri World Imagery (attribution
+shown on the map). The imagery layers need an internet connection; the Plain layer
+works offline.
 
 **Live site:** https://opensourcegis.github.io/Simulations/
 

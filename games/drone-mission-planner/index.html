@@ -179,6 +179,24 @@
     box-shadow: 0 2px 8px rgba(22, 32, 44, .1);
   }
 
+  .base-seg {
+    display: flex; gap: 3px;
+    background: rgba(255, 255, 255, .9);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 2px 8px rgba(22, 32, 44, .1);
+  }
+  .base-seg button {
+    border: 0; background: transparent;
+    font-size: 12px; padding: 4px 9px; border-radius: 6px;
+    color: var(--text-dim);
+  }
+  .base-seg button[aria-pressed="true"] {
+    background: var(--accent-wash); color: var(--accent); font-weight: 600;
+  }
+
   .site-hit { cursor: pointer; }
   .site-hit:hover .site-plate { stroke: var(--text); stroke-width: 2.4; }
 
@@ -317,30 +335,7 @@
   }
   .dial-readout .delta { font-size: 11.5px; }
 
-  /* ---------- Checks ---------- */
-  .checks { display: flex; flex-direction: column; gap: 6px; }
-  .check {
-    display: flex; align-items: flex-start; gap: 9px;
-    font-size: 13px;
-    padding: 7px 9px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--line-soft);
-    background: var(--panel-2);
-  }
-  .check .mark {
-    width: 17px; height: 17px; flex: 0 0 17px; margin-top: 1px;
-    border-radius: 50%;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
-  }
-  .check.pass { border-color: var(--accent-dim); background: var(--accent-wash); }
-  .check.pass .mark { background: rgba(15, 138, 77, .16); color: var(--accent); }
-  .check.fail { border-color: #f0c4c4; background: rgba(198, 40, 40, .05); }
-  .check.fail .mark { background: rgba(198, 40, 40, .12); color: var(--bad); }
-  .check .body { display: flex; flex-direction: column; min-width: 0; }
-  .check .why { font-size: 12px; color: var(--text-faint); }
-
-  /* ---------- Score ---------- */
+  /* ---------- Score bars (debrief only — nothing scores live) ---------- */
   .score-rows { display: flex; flex-direction: column; gap: 9px; }
   .score-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
   .score-row .name { font-size: 12.5px; color: var(--text-dim); display: flex; align-items: center; gap: 5px; }
@@ -351,15 +346,6 @@
     background: var(--line-soft); overflow: hidden;
   }
   .bar > i { display: block; height: 100%; border-radius: 999px; transition: width .35s ease, background .35s ease; }
-
-  .total-line {
-    display: flex; align-items: baseline; gap: 10px;
-    padding-top: 12px; margin-top: 2px;
-    border-top: 1px solid var(--line-soft);
-  }
-  .total-line .big { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .total-line .of { color: var(--text-faint); font-size: 13px; }
-  .total-line .grade { margin-left: auto; font-size: 13px; }
 
   .primary-btn {
     width: 100%;
@@ -386,6 +372,21 @@
     color: #24435f;
   }
   .coach b { color: var(--text); }
+
+  .coach.alert {
+    background: rgba(198, 40, 40, .07);
+    border-color: rgba(198, 40, 40, .35);
+    border-left-color: var(--bad);
+    color: #6e2020;
+  }
+  .coach.alert b { color: var(--bad); }
+
+  .badge.bad { border-color: rgba(198, 40, 40, .4); background: rgba(198, 40, 40, .08); color: var(--bad); }
+
+  .review-note { margin: 0 0 4px; font-size: 13px; color: var(--text-dim); }
+
+  /* The one number on a slider scale that is law, not advice. */
+  .range-scale .limit { color: var(--bad); font-weight: 600; text-align: center; flex: 1; }
 
   /* ---------- Mobile tabs ---------- */
   .tabs { display: none; }
@@ -541,7 +542,7 @@
   <div class="tabs" role="tablist" aria-label="Sections">
     <button role="tab" id="tab-map" aria-controls="pane-map" aria-selected="true" type="button">Map</button>
     <button role="tab" id="tab-plan" aria-controls="pane-plan" aria-selected="false" type="button">Plan</button>
-    <button role="tab" id="tab-score" aria-controls="pane-score" aria-selected="false" type="button">Score</button>
+    <button role="tab" id="tab-score" aria-controls="pane-score" aria-selected="false" type="button">Submit</button>
   </div>
 
   <!-- ============ Layout ============ -->
@@ -574,6 +575,11 @@
               <marker id="arrowW" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#1565c0"></path>
               </marker>
+              <!-- Fixed-wing drone clipart. The artwork's nose points north-east,
+                   so aim it at heading H with rotate(H - 45). -->
+              <symbol id="droneIcon" viewBox="0 0 24 24">
+                <path d="M15.612 11.842l1.452-2.622a1.954 1.954 0 0 0 .247-.95 1.572 1.572 0 0 0-.029-.28l2.364 2.364.707-.707-6-6-.707.707 2.365 2.364a1.572 1.572 0 0 0-.28-.029 1.958 1.958 0 0 0-.95.246l-2.623 1.453-7.092-7.092a1.019 1.019 0 0 0-1.435 0l-1.097 1.1a1.875 1.875 0 0 0-.295 2.264 30.92 30.92 0 0 0 5.349 6.612l.852.852-3.155 3.959-1.834-.936a1.06 1.06 0 0 0-1.295.162l-.851.851a1.032 1.032 0 0 0-.158 1.265l1.771 2.95-.772.772a.5.5 0 1 0 .707.707l.772-.771 2.951 1.77a1.03 1.03 0 0 0 1.264-.156l.851-.851a1.047 1.047 0 0 0 .178-1.267l-.951-1.863 3.959-3.155.845.844a30.966 30.966 0 0 0 6.619 5.357 1.876 1.876 0 0 0 2.266-.296l1.094-1.095a1.015 1.015 0 0 0 .001-1.437zm-.345-4.033a.956.956 0 0 1 .463-.12.58.58 0 0 1 .58.58.953.953 0 0 1-.12.465l-1.314 2.373-1.983-1.984zm5.632 12.95a.873.873 0 0 1-1.056.137 29.953 29.953 0 0 1-6.406-5.19l-1.484-1.484-5.297 4.22 1.323 2.591-.002.09.008.014-.895.858-2.736-1.642.5-.5a.5.5 0 0 0-.707-.706l-.497.496-1.64-2.776.853-.852 2.696 1.329 4.22-5.297-1.492-1.491a29.906 29.906 0 0 1-5.183-6.399.874.874 0 0 1 .137-1.055l1.12-1.098 17.634 17.658z"/>
+              </symbol>
               <marker id="arrowLeg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#0b7a43"></path>
               </marker>
@@ -581,8 +587,9 @@
 
             <rect id="groundFill" width="860" height="640" fill="#e4e8d6"></rect>
             <rect width="860" height="640" fill="url(#field)"></rect>
+            <g id="baseLayer"></g>
             <rect width="860" height="640" fill="url(#grid)"></rect>
-            <rect width="860" height="640" fill="rgba(255,255,255,.18)"></rect>
+            <rect width="860" height="640" fill="rgba(255,255,255,.14)"></rect>
 
             <defs id="terrainDefs"></defs>
             <g id="terrainLayer"></g>
@@ -596,6 +603,9 @@
             <g id="windLayer"></g>
             <g id="droneLayer"></g>
             <g id="scaleLayer"></g>
+            <text id="attrib" x="852" y="616" text-anchor="end" font-size="9.5"
+                  fill="rgba(22,32,44,.6)" paint-order="stroke" stroke="rgba(255,255,255,.75)"
+                  stroke-width="2" font-family="system-ui"></text>
           </svg>
 
           <div class="map-hud">
@@ -608,6 +618,11 @@
           </div>
 
           <div class="map-toolbar">
+            <div class="base-seg" role="group" aria-label="Base map">
+              <button type="button" data-base="sat" aria-pressed="true">Imagery</button>
+              <button type="button" data-base="osm" aria-pressed="false">OSM</button>
+              <button type="button" data-base="plain" aria-pressed="false">Plain</button>
+            </div>
             <button class="ghost-btn" id="flyBtn" type="button">▶ Fly route</button>
           </div>
         </div>
@@ -642,13 +657,13 @@
               <span class="value" id="vGsd">—</span>
               <span class="note" id="vGsdNote">—</span>
             </div>
-            <div class="metric" id="mTrigger">
+            <div class="metric" id="mCond">
               <span class="label">
-                Trigger
-                <button class="tip" type="button" data-tip="trigger" aria-label="What is trigger interval?">?</button>
+                Conditions
+                <button class="tip" type="button" data-tip="conditions" aria-label="How do conditions affect endurance?">?</button>
               </span>
-              <span class="value" id="vTrigger">—</span>
-              <span class="note" id="vTriggerNote">—</span>
+              <span class="value" id="vCond">—</span>
+              <span class="note" id="vCondNote">—</span>
             </div>
             <div class="metric" id="mClimb">
               <span class="label">
@@ -714,10 +729,10 @@
             <span class="label">
               Altitude AGL
               <span class="spacer"></span>
-              <span class="readout" id="altReadout">40 m</span>
+              <span class="readout" id="altReadout">60 m</span>
             </span>
-            <input type="range" id="altRange" min="40" max="180" step="5" value="40" aria-label="Altitude above ground in metres">
-            <div class="range-scale"><span>40 m</span><span class="aim" id="altAim">—</span><span>180 m</span></div>
+            <input type="range" id="altRange" min="60" max="140" step="5" value="60" aria-label="Altitude above ground in metres">
+            <div class="range-scale"><span>60 m</span><span class="limit">120 m legal ceiling</span><span>140 m</span></div>
           </div>
 
           <div class="control">
@@ -747,32 +762,25 @@
               Cruise speed
               <button class="tip" type="button" data-tip="speed" aria-label="How does speed affect the plan?">?</button>
               <span class="spacer"></span>
-              <span class="readout" id="speedReadout">5 m/s</span>
+              <span class="readout" id="speedReadout">10 m/s</span>
             </span>
-            <input type="range" id="speedRange" min="5" max="20" step="1" value="5" aria-label="Cruise speed in metres per second">
-            <div class="range-scale"><span>5 m/s</span><span class="aim" id="speedAim">—</span><span>20 m/s</span></div>
+            <input type="range" id="speedRange" min="10" max="18" step="1" value="10" aria-label="Cruise speed in metres per second">
+            <div class="range-scale"><span>10 m/s</span><span>18 m/s</span></div>
           </div>
 
           <div class="btn-row">
             <button class="ghost-btn" id="resetBtn" type="button">Reset plan</button>
-            <button class="ghost-btn" id="autoBtn" type="button">Suggest</button>
           </div>
         </div>
       </div>
 
       <div class="card pane" id="pane-score" role="tabpanel" aria-labelledby="tab-score">
-        <div class="card-head"><h2>Pre-flight checks</h2></div>
+        <div class="card-head"><h2>Flight review</h2></div>
         <div class="card-body">
-          <div class="checks" id="checks"></div>
-
-          <div class="score-rows" id="scoreRows"></div>
-
-          <div class="total-line">
-            <span class="big" id="totalScore">20</span>
-            <span class="of" id="scoreOf">/ 90</span>
-            <span class="grade" id="gradeText">—</span>
-          </div>
-
+          <p class="review-note">
+            No marks are shown while you plan. Commit the flight and the review board comes
+            back with a verdict — and if the plan cannot fly, you will watch it fail.
+          </p>
           <button class="primary-btn" id="submitBtn" type="button">Submit flight plan</button>
           <div class="btn-row">
             <button class="ghost-btn" id="prevBtn" type="button">‹ Previous</button>
@@ -818,21 +826,21 @@
           <span class="n">3</span>
           <div>
             <strong>Fly the altitude the brief asks for</strong>
-            <span>The survey is commissioned at <b>2.5–3.0 cm/px</b>, which puts you between <b>100 m and 120 m</b>. Lower is not better — it is just a longer flight for detail nobody ordered. Watch the towers, though: you clear everything you fly over by 20 m, and the tall masts push that floor up towards the top of the window.</span>
+            <span>The survey is commissioned at <b>2.5–3.0 cm/px</b> — where that puts your height is yours to work out. Two hard rules bound you: never plan above the <b>120 m ceiling</b>, and whatever you overfly needs clear air beneath you. Plan into a mast and you will watch the aircraft go in.</span>
           </div>
         </li>
         <li>
           <span class="n">4</span>
           <div>
             <strong>Find the overlap that works</strong>
-            <span>Side and forward overlap both start at zero and nobody is going to tell you where to put them. Move one, watch the score, put it back. Too little tears the model apart; too much costs flight time and photos and buys nothing.</span>
+            <span>Side and forward overlap both start at zero and nobody will tell you where to put them. Too little tears the model apart; too much stretches the route until the battery cannot carry it home. The review board's verdict is your only feedback.</span>
           </div>
         </li>
         <li>
           <span class="n">5</span>
           <div>
-            <strong>Mind the ground, then submit</strong>
-            <span>The drone holds height above <em>ground</em>, so it climbs over every hill on the block and the battery pays for it. Watch the contour rings and the climb readout. The camera also needs <b>2 seconds</b> between RAW frames, and you must land with 30% in hand.</span>
+            <strong>Mind the ground and the weather, then commit</strong>
+            <span>The airframe is rated for <b>50 minutes</b> and roughly <b>2 km²</b> per battery in calm, 20 °C air — heat, cold and wind all tax it before takeoff, and every hill under the route is a climb the pack pays for. In rolling country, launch from the lowest ground you can. Land with 25% in hand.</span>
           </div>
         </li>
       </ol>
@@ -841,13 +849,13 @@
         <h3>The five terms that matter</h3>
         <dl>
           <dt>GSD — ground sample distance</dt>
-          <dd>How much ground one pixel covers. 3 cm/px means each pixel is 3 cm across. On this camera it is simply altitude ÷ 40: 120 m gives you 3 cm, 100 m gives you 2.5 cm.</dd>
+          <dd>How much ground one pixel covers. 3 cm/px means each pixel is 3 cm across. It is set almost entirely by how high you fly — lower is sharper, higher is coarser.</dd>
           <dt>Side overlap</dt>
           <dd>How much neighbouring strips overlap side-to-side. Higher overlap packs lanes closer together, so the flight gets longer and you cross the hills more often.</dd>
           <dt>Forward overlap</dt>
-          <dd>How much consecutive photos along a lane overlap. Higher overlap means photos are taken closer together, so the camera has to fire faster.</dd>
-          <dt>Trigger interval</dt>
-          <dd>Seconds between shots. Shooting RAW, the camera needs about two seconds to clear its buffer. Below that you drop frames and the survey has holes in it.</dd>
+          <dd>How much consecutive photos along a lane overlap. Higher overlap means photos taken closer together — more frames to carry home and stitch.</dd>
+          <dt>Usable endurance</dt>
+          <dd>The airframe is rated 50 minutes in calm, 20 °C air. Wind and temperature tax it before you leave the ground — the conditions tile shows what today actually gives you.</dd>
           <dt>Terrain climb</dt>
           <dd>The vertical the route flies because the ground underneath it rises and falls. It never shows up in the route length, but it comes straight out of the battery.</dd>
         </dl>
@@ -882,6 +890,7 @@
           <span id="debriefBlurb">—</span>
         </div>
       </div>
+      <div class="score-rows" id="debriefScores"></div>
       <div class="debrief-list" id="debriefList"></div>
     </div>
     <footer>
@@ -897,9 +906,9 @@
 
   const SVGNS = "http://www.w3.org/2000/svg";
   const $ = (id) => document.getElementById(id);
-  /* v2: scores moved from a 0-100 scale to 20-90, so previously saved bests
-     are not comparable and must not be carried across. */
-  const STORE_KEY = "drone-mission-planner:v2";
+  /* v3: the scoring model changed again (crash floor, ceiling cap, no trigger
+     pillar), so previously saved bests are not comparable. */
+  const STORE_KEY = "drone-mission-planner:v3";
 
   /* Every colour drawn into SVG lives here. The CSS variables cover the DOM;
      these cover the canvas, which cannot read them. Keep the two in step. */
@@ -960,13 +969,16 @@
      ===================================================================== */
   const CAMERA = { focalMm: 8.8, sensorWidthMm: 13.2, imageWidthPx: 6000, imageHeightPx: 4000 };
 
-  /* The survey is commissioned at 2.5-3.0 cm/px, which with this camera is
-     an exactly 100-120 m altitude window. */
+  /* The survey is commissioned at 2.5-3.0 cm/px. The altitude window that
+     lands it is deliberately never printed anywhere the trainee can read. */
   const GSD_BAND = { lo: 2.5, hi: 3.0 };
 
-  /* Vertical separation the drone holds over anything it flies across.
-     With the band topping out at 120 m, this is what makes a 100 m tower
-     the binding constraint it is. */
+  /* Legal AGL ceiling. Planning above it is red-zone airspace — warned about
+     immediately, because it is regulation, not technique. */
+  const CEILING_M = 120;
+
+  /* Vertical separation the debrief expects over anything overflown. Below
+     the obstacle's actual height the aircraft simply hits it. */
   const CLEARANCE_M = 20;
 
   /* The overlap pair the processing pipeline is happiest with. Deliberately
@@ -977,31 +989,52 @@
      and there is always something left to sharpen. */
   const SCORE = { min: 20, max: 90 };
 
-  /* Shooting full-resolution RAW, the camera needs two seconds to clear the
-     buffer. Fire faster and frames are silently dropped. */
-  const MIN_TRIGGER_SEC = 2;
+  /* The airframe: rated 50 minutes and roughly 2 km2 per battery in calm,
+     20 C air. Wind makes it work for every kilometre, temperature taxes the
+     chemistry, and drag rises so steeply with speed that the last few m/s
+     are the most expensive the pack ever buys — somewhere between the two
+     ends of the speed slider, kilometres-per-battery peaks. */
+  const DRONE = {
+    nominalMin: 50,
+    tempRefC: 20,
+    coldPerC: 0.008,    // chemistry hates cold more than heat
+    heatPerC: 0.004,
+    windPerKt: 0.009,
+    cruiseRefMs: 13,    // drag-curve reference speed
+    idlePerMin: 0.12    // avionics drain, % of pack per minute aloft
+  };
 
-  /* Vertical work, priced in minutes of level cruise per metre climbed.
-     Terrain following on a rolling block is what quietly eats the reserve. */
-  const CLIMB_COST_MIN_PER_M = 0.008;
+  /* Terrain following, priced in % of the pack per metre climbed. */
+  const CLIMB_COST_PCT_PER_M = 0.02;
   const CONTOUR_INTERVAL_M = 10;
+
+  /* The clipart's nose points north-east; aim it at heading H with rotate(H - 45). */
+  const DRONE_ART_HEADING = 45;
 
   /* Every control starts at zero or at the bottom of its range. Nothing is
      pre-set, so the trainee builds the plan rather than nudging someone
      else's. These bounds are pushed onto the inputs at boot, so the markup
      cannot drift away from the model. */
   const LIMITS = {
-    altitude: { el: "altRange", min: 40, max: 180, step: 5 },
+    altitude: { el: "altRange", min: 60, max: 140, step: 5 },
     side:     { el: "sideRange", min: 0,  max: 90,  step: 5 },
     forward:  { el: "fwdRange", min: 0,  max: 92,  step: 1 },
-    speed:    { el: "speedRange", min: 5,  max: 20,  step: 1 }
+    speed:    { el: "speedRange", min: 10, max: 18,  step: 1 }
   };
 
-  /* The slider window that actually lands inside the commissioned GSD band.
-     Declared here because the tips and the briefing quote it. */
-  const ALT_WINDOW = {
-    lo: altForGsd(GSD_BAND.lo, Math.ceil),
-    hi: altForGsd(GSD_BAND.hi, Math.floor)
+  /* Web-mercator tile sources for the basemap. Google's imagery needs a
+     licensed API key, so Esri World Imagery stands in as the satellite
+     layer; both fall back to the plain field pattern when offline. */
+  const TILE_SOURCES = {
+    sat: {
+      url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
+      attrib: "Imagery © Esri — Maxar, Earthstar Geographics"
+    },
+    osm: {
+      url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+      attrib: "© OpenStreetMap contributors"
+    },
+    plain: null
   };
 
   /* Terrain is a base elevation plus a handful of gaussian hills and basins.
@@ -1014,8 +1047,8 @@
       id: 1,
       name: "Kondapur East Block",
       terrain: "Open farmland, level ground",
-      areaHa: 30,
-      enduranceMin: 26,
+      anchor: { lat: 17.560, lon: 78.020, zoom: 16 },   // Telangana farmland
+      tempC: 34,
       windFromDeg: 125,
       windKts: 9,
       polygon: [[222,118],[592,86],[704,204],[656,488],[332,548],[170,384],[184,184]],
@@ -1043,8 +1076,8 @@
       id: 2,
       name: "Quarry Rim Survey",
       terrain: "Rolling quarry edge, turbulent air",
-      areaHa: 40,
-      enduranceMin: 32,
+      anchor: { lat: 17.245, lon: 77.585, zoom: 16 },   // Tandur limestone country
+      tempC: 26,
       windFromDeg: 180,
       windKts: 14,
       polygon: [[290,108],[622,154],[710,314],[588,526],[266,542],[166,324],[210,158]],
@@ -1063,18 +1096,18 @@
         { x: 424, y: 330, r: 28, height: 90, label: "Radio tower", kind: "tower" }
       ],
       sites: {
-        A: { x: 230, y: 438, safety: 9, note: "Sheltered pad, away from the rim" },
-        B: { x: 600, y: 210, safety: 4, note: "Near the edge — downdraft risk" },
-        C: { x: 356, y: 112, safety: 7, note: "High ground, wind exposed" }
+        A: { x: 356, y: 112, safety: 7, note: "High bench above the workings" },
+        B: { x: 600, y: 210, safety: 4, note: "On the rim — downdraft risk" },
+        C: { x: 296, y: 508, safety: 9, note: "Wide bench on the lowest ground" }
       },
-      lesson: "Rolling ground and a stiff breeze. Watch what the climb does to your reserve."
+      lesson: "Rolling ground and a stiff breeze. Launch low, and watch what the climb does to your reserve."
     },
     {
       id: 3,
       name: "Valley Corridor Block",
       terrain: "Steep valley corridor, mixed ground",
-      areaHa: 38,
-      enduranceMin: 30,
+      anchor: { lat: 18.335, lon: 82.875, zoom: 16 },   // Araku valley, Eastern Ghats
+      tempC: 15,
       windFromDeg: 70,
       windKts: 11,
       polygon: [[182,164],[522,96],[706,224],[640,454],[350,534],[150,406],[132,246]],
@@ -1093,24 +1126,24 @@
       ],
       sites: {
         A: { x: 214, y: 436, safety: 8, note: "Camp site on higher ground" },
-        B: { x: 126, y: 286, safety: 6, note: "Adequate, tighter recovery cone" },
-        C: { x: 632, y: 276, safety: 5, note: "Clear field, poor home distance" }
+        B: { x: 396, y: 540, safety: 7, note: "Valley-floor pasture, lowest ground" },
+        C: { x: 632, y: 276, safety: 5, note: "Clear field, high on the far ridge" }
       },
-      lesson: "The relief here is the whole lesson. Every lane you add is another trip over the ridge."
+      lesson: "The relief here is the whole lesson. Launch from the valley floor — every lane you add is another trip over the ridge."
     }
   ];
 
   const TIPS = {
-    gsd: `<b>Ground sample distance.</b> How much ground fits in one pixel. It scales directly with altitude — halve your height and you halve the number. This survey is commissioned at <b>${GSD_BAND.lo}–${GSD_BAND.hi} cm/px</b>, which puts you between ${ALT_WINDOW.lo} m and ${ALT_WINDOW.hi} m. Below the band you are burning battery on detail nobody ordered; above it, the deliverable fails.`,
-    trigger: `<b>Trigger interval.</b> Seconds between photos. Shooting full-resolution RAW, the camera needs about <b>${MIN_TRIGGER_SEC} seconds</b> to clear its buffer — fire faster and frames are dropped silently, leaving holes you only find back at the office. Fix it by slowing down, climbing, or cutting forward overlap.`,
-    battery: "<b>Battery reserve.</b> What is left when you land. Aim to keep at least 30% — wind, a go-around, or a diverted landing all eat into it. Reserve falls as your route gets longer, your speed drops, or the ground underneath you rises and falls.",
-    climb: "<b>Terrain climb.</b> The drone holds a fixed height above <em>ground</em>, so it flies over every hill instead of through it. All that vertical adds up: each metre climbed costs roughly as much battery as a few seconds of level cruise. Fewer, wider-spaced lanes cross the relief fewer times.",
-    side: "<b>Side overlap.</b> How much each strip overlaps its neighbour. Too little and the model tears along the seams between strips. Too much and the lanes crowd together, so the flight time and the climb both go up for no extra quality. There is a value in between that the processing is happiest with — the score will tell you when you are near it.",
-    forward: "<b>Forward overlap.</b> How much consecutive photos along a lane share. It does not change your route length at all — it changes how fast the shutter has to fire and how many photos you carry home. Too little and there is not enough shared detail to tie the run together; too much and you are paying for frames that add nothing.",
-    speed: `<b>Cruise speed.</b> The lever most pilots forget. Flying slower stretches the trigger interval back above ${MIN_TRIGGER_SEC} seconds, but it also keeps you airborne longer and burns reserve. It is the trade at the heart of every survey.`,
+    gsd: `<b>Ground sample distance.</b> How much ground fits in one pixel. It scales directly with altitude — halve your height and you halve the number. This survey is commissioned at <b>${GSD_BAND.lo}–${GSD_BAND.hi} cm/px</b>; where that puts your height is yours to work out, and the ${CEILING_M} m ceiling is the law either way.`,
+    battery: `<b>Battery reserve.</b> What is left when you land — keep at least 25%. The pack is rated ${DRONE.nominalMin} minutes in calm 20 °C air; wind, temperature, climbing and drag all tax it. A route the pack cannot finish ends in a field, not at your feet.`,
+    conditions: "<b>Today's conditions.</b> Cold saps the battery chemistry, heat thins the air, and wind makes the airframe work for every kilometre. The nominal 50 minutes shrinks before you even take off — plan against the usable figure, not the brochure.",
+    climb: "<b>Terrain climb.</b> The drone holds a fixed height above <em>ground</em>, so it flies over every hill instead of through it. All that vertical adds up, and it comes straight out of the battery. Fewer, wider-spaced lanes cross the relief fewer times.",
+    side: "<b>Side overlap.</b> How much each strip overlaps its neighbour. Too little and the model tears along the seams between strips. Too much and the lanes crowd together, so the flight time and the climb both go up for no extra quality. There is a value in between that the processing is happiest with — the review board will tell you when you are near it.",
+    forward: "<b>Forward overlap.</b> How much consecutive photos along a lane share. It does not change your route length at all — it changes how many frames you carry home, and whether the reconstruction holds together along the track.",
+    speed: "<b>Cruise speed.</b> Drag rises steeply with speed, so the last few m/s are the most expensive the pack ever buys — but crawling keeps you aloft longer and the avionics never stop drinking. Somewhere in between, kilometres-per-battery peaks.",
     takeoff: "<b>Take off into the wind.</b> Air moving over the wings gives you lift and control at the slowest groundspeed. Wind reported as 'from 125°' means you launch on heading 125°, straight at it.",
     legs: "<b>Fly legs across the wind.</b> Set your survey lines perpendicular to the wind so the long passes hold a straight track. A leg heading is an axis — 35° and 215° are the same set of lines.",
-    site: "<b>Takeoff site.</b> The ring of trees around each pad is the clearing you actually have. A wide clearing gives you room to abort a launch and somewhere to put the aircraft down if the link drops. A tight one gives you neither. Sitting closer to the block also saves the transit out and back."
+    site: "<b>Takeoff site.</b> The ring of trees around each pad is the clearing you actually have — room to abort, and somewhere to put down if the link drops. In flat country pick clear and close. In rolling country the lowest pad is kindest: survey height is measured above the ground, and launching from a hilltop buys nothing back."
   };
 
   /* =====================================================================
@@ -1214,7 +1247,8 @@
     plan: null,
     best: {},
     submitted: false,
-    flying: false
+    flying: false,
+    basemap: "sat"
   };
 
   function loadProgress() {
@@ -1248,7 +1282,6 @@
       node.max = lim.max;
       node.step = lim.step;
     });
-    $("scoreOf").textContent = `/ ${SCORE.max}`;
   }
 
   function defaultPlan() {
@@ -1263,75 +1296,28 @@
     };
   }
 
-  /**
-   * Altitude that lands a given GSD, snapped to the slider's step.
-   *
-   * The rounding matters at the edges of the band: the exact window is
-   * 91.2-109.4 m, and rounding those to the nearest 5 would advertise
-   * 90-110 m — two altitudes that are both out of spec. Round inward
-   * instead, so every altitude the trainee is told to fly actually passes.
-   */
-  function altForGsd(g, round = Math.round) {
-    const step = LIMITS.altitude.step;
-    // Snap off the float dust before rounding. The band edges land on exact
-    // multiples of the step (2.5 cm at 100 m, 3.0 cm at 120 m), but 2.5/0.025
-    // evaluates a hair either side of 100 in binary — enough for an unguarded
-    // ceil to advertise 105 as the floor of a window that starts at 100.
-    const exact = Number((g / gsdCm(1)).toPrecision(12));
-    return round(exact / step) * step;
-  }
-
-  /** Lowest altitude that clears every obstacle on the block, snapped to the step. */
-  function clearanceFloor(m) {
-    const tallest = m.obstacles.reduce((h, o) => Math.max(h, o.height), 0);
-    const step = LIMITS.altitude.step;
-    return Math.ceil((tallest + CLEARANCE_M) / step) * step;
-  }
-
-  function suggestedPlan() {
-    const m = mission();
-    // The towers set a floor and the GSD band sets a ceiling. On a block with a
-    // 100 m mast those two meet at exactly 120 m and there is only one altitude
-    // left to fly — which is the point of putting the mast there.
-    const altitude = clamp(
-      Math.max(ALT_WINDOW.lo, clearanceFloor(m)),
-      ALT_WINDOW.lo, ALT_WINDOW.hi
-    );
-    return {
-      site: bestSiteKey(),
-      takeoffDir: m.windFromDeg,                 // into wind
-      legDir: wrap360(m.windFromDeg + 90),       // across wind
-      altitude,
-      side: SWEET.side,
-      forward: SWEET.forward,
-      speed: goodSpeedFor(altitude, SWEET.forward)
-    };
-  }
-
-  function bestSiteKey() {
-    const m = mission();
-    let bestKey = "A", bestVal = -Infinity;
-    const c = polygonCentroid(m.polygon);
-    Object.entries(m.sites).forEach(([k, s]) => {
-      const val = s.safety * 10 - (dist(s, c) / 40);
-      if (val > bestVal) { bestVal = val; bestKey = k; }
-    });
-    return bestKey;
-  }
-
-  /** Fastest speed that still leaves the camera a little room above its floor. */
-  function goodSpeedFor(altitude, forward) {
-    const footprintH = (gsdCm(altitude) / 100) * CAMERA.imageHeightPx;
-    const shotSpacing = footprintH * (1 - forward / 100);
-    return clamp(
-      Math.floor(shotSpacing / (MIN_TRIGGER_SEC * 1.02)),
-      LIMITS.speed.min, LIMITS.speed.max
-    );
-  }
-
   /* =====================================================================
-     Photogrammetry
+     Photogrammetry & the airframe
      ===================================================================== */
+
+  /** Metres per map unit, fixed by the basemap tile scale at this latitude. */
+  function metresPerUnit(m) {
+    return (156543.03392 * Math.cos((m.anchor.lat * Math.PI) / 180)) / 2 ** m.anchor.zoom;
+  }
+
+  /** How much harder than nominal the pack works in this mission's weather. */
+  function condFactor(m) {
+    const dt = m.tempC - DRONE.tempRefC;
+    const tempTax = dt < 0 ? -dt * DRONE.coldPerC : dt * DRONE.heatPerC;
+    return 1 + m.windKts * DRONE.windPerKt + tempTax;
+  }
+
+  /** Level-cruise burn multiplier along the drag curve. Efficiency peaks around
+      11-12 m/s; the constants are calibrated so a disciplined plan on the
+      flat block lands with roughly a third of the pack in hand. */
+  function speedBurn(v) {
+    return 0.47 + 0.38 * Math.pow(v / DRONE.cruiseRefMs, 3);
+  }
 
   /**
    * Ground sample distance in cm/px.
@@ -1403,6 +1389,63 @@
     return relief;
   }
 
+  /**
+   * Where the flight dies, if it does: the first mast the route flies into,
+   * or the point where the battery runs dry — whichever comes first along
+   * the route. Null when the plan makes it home.
+   */
+  function findCrash(m, p, route, batteryUseRaw) {
+    let total = 0;
+    let hit = null;
+
+    for (let i = 1; i < route.length && !hit; i++) {
+      const a = route[i - 1], b = route[i], d = dist(a, b);
+      for (const o of m.obstacles) {
+        if (p.altitude >= o.height) continue;
+        // march the segment — plenty accurate for a training map
+        const steps = Math.max(1, Math.ceil(d / 3));
+        for (let k = 0; k <= steps; k++) {
+          const f = k / steps;
+          const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
+          if (Math.hypot(x - o.x, y - o.y) <= o.r) {
+            hit = {
+              type: "obstacle", atUnits: total + d * f, point: { x, y }, obstacle: o,
+              why: `Flew into the ${o.label.toLowerCase()} — it stands ${o.height} m and the plan cruised at ${p.altitude} m.`
+            };
+            break;
+          }
+        }
+        if (hit) break;
+      }
+      total += d;
+    }
+    // finish accumulating the full route length for the battery case
+    let full = 0;
+    for (let i = 1; i < route.length; i++) full += dist(route[i - 1], route[i]);
+
+    if (batteryUseRaw > 100) {
+      const atUnits = full * (100 / batteryUseRaw);
+      if (!hit || atUnits < hit.atUnits) {
+        let acc = 0, pt = route[route.length - 1];
+        for (let i = 1; i < route.length; i++) {
+          const d = dist(route[i - 1], route[i]);
+          if (acc + d >= atUnits) {
+            const f = (atUnits - acc) / d;
+            pt = { x: route[i - 1].x + (route[i].x - route[i - 1].x) * f,
+                   y: route[i - 1].y + (route[i].y - route[i - 1].y) * f };
+            break;
+          }
+          acc += d;
+        }
+        hit = {
+          type: "battery", atUnits, point: pt,
+          why: `The pack hit zero ${Math.round(100 - (atUnits / full) * 100)}% of the route short of home.`
+        };
+      }
+    }
+    return hit;
+  }
+
   /* =====================================================================
      Plan evaluation — the single source of truth for every readout
      ===================================================================== */
@@ -1411,9 +1454,9 @@
     const p = state.plan;
     const site = m.sites[p.site];
 
-    // Map units -> metres, derived from the stated block area.
-    const areaUnits = polygonArea(m.polygon);
-    const mPerUnit = Math.sqrt((m.areaHa * 10000) / areaUnits);
+    // Map units -> metres, fixed by the basemap tile scale.
+    const mPerUnit = metresPerUnit(m);
+    const areaHa = (polygonArea(m.polygon) * mPerUnit * mPerUnit) / 10000;
 
     // Camera footprint on the ground
     const gsd = gsdCm(p.altitude);
@@ -1421,12 +1464,9 @@
     const footprintH = (gsd / 100) * CAMERA.imageHeightPx;  // metres along track
 
     // Distance outside the commissioned GSD band, in cm/px. Zero means on spec.
-    //
-    // The edges are compared with a tolerance because they land exactly on the
-    // band: 100 m is 2.5 cm/px and 120 m is 3.0. Neither 13.2 nor 8.8 is exactly
-    // representable in binary, so those come out a hair either side, and a bare
-    // comparison would fail a trainee sitting precisely on spec while telling
-    // them to fly to the altitude they are already at.
+    // The edges are compared with a tolerance: neither 13.2 nor 8.8 is exactly
+    // representable in binary, so a plan sitting precisely on the band edge
+    // would otherwise read as out of spec.
     const EDGE_EPS = 1e-9;
     const gsdOff = gsd < GSD_BAND.lo - EDGE_EPS ? GSD_BAND.lo - gsd
                  : gsd > GSD_BAND.hi + EDGE_EPS ? gsd - GSD_BAND.hi
@@ -1435,9 +1475,6 @@
 
     const laneSpacingM = Math.max(4, footprintW * (1 - p.side / 100));
     const shotSpacingM = Math.max(1, footprintH * (1 - p.forward / 100));
-    const triggerSec = shotSpacingM / p.speed;
-    // A hair of tolerance: landing exactly on the floor should not read as a failure.
-    const triggerOk = triggerSec >= MIN_TRIGGER_SEC - 0.005;
 
     // Lanes, clipped to the actual block outline
     const lanes = sliceLanes(m.polygon, p.legDir, laneSpacingM / mPerUnit);
@@ -1467,38 +1504,54 @@
     // Terrain following: the vertical the route actually flies
     const profile = terrainProfile(m.terrainModel, route, mPerUnit);
 
-    // Time and battery
+    // Time aloft. Fighting the wind off-axis stretches every leg a little.
     const climbMin = p.altitude / 3 / 60;                                // 3 m/s climb to height
-    const cruiseMin = routeM / p.speed / 60;
     const windDrag = 1 + 0.12 * (legGap / 90) + 0.05 * (takeoffGap / 180);
-    const timeMin = (climbMin + cruiseMin) * windDrag;
+    const cruiseMin = (routeM / p.speed / 60) * windDrag;
+    const timeMin = climbMin + cruiseMin;
 
-    // Vertical work is charged on top of time: a minute spent climbing costs
-    // more than a minute spent cruising, and descending is not free either.
-    const terrainMin = profile.ascent * CLIMB_COST_MIN_PER_M
-                     + profile.descent * CLIMB_COST_MIN_PER_M * 0.15;
-    const energyMin = timeMin + terrainMin;
-    const batteryUse = clamp((energyMin / m.enduranceMin) * 100, 0, 100);
+    // Battery. Level cruise burns along the drag curve, today's wind and
+    // temperature tax the whole pack, the avionics drink for every minute
+    // aloft, and terrain following is charged per metre climbed.
+    const cond = condFactor(m);
+    const usableMin = DRONE.nominalMin / cond;
+    const cruisePct = ((cruiseMin * speedBurn(p.speed) + climbMin * 1.6) * cond / DRONE.nominalMin) * 100;
+    const idlePct = timeMin * DRONE.idlePerMin;
+    const terrainPct = profile.ascent * CLIMB_COST_PCT_PER_M
+                     + profile.descent * CLIMB_COST_PCT_PER_M * 0.15;
+    const batteryUseRaw = cruisePct + idlePct + terrainPct;
+    const batteryUse = clamp(batteryUseRaw, 0, 100);
     const reserve = 100 - batteryUse;
-    const terrainPct = clamp((terrainMin / m.enduranceMin) * 100, 0, 100);
 
-    // Hazard clearance. Obstacles sit inside the block, so the route will cross them —
-    // what matters is whether you are high enough to pass over safely.
+    // Hazards. Obstacles sit inside the block, so the route will cross them —
+    // what matters is whether you pass over with air to spare, clip the
+    // clearance margin, or simply hit the thing.
     const overflown = m.obstacles.filter((o) =>
       route.some((_, i) => i > 0 && pointSegDist(o, route[i - 1], route[i]) < o.r)
     );
     const tallest = overflown.reduce((h, o) => Math.max(h, o.height), 0);
-    const needAlt = tallest + CLEARANCE_M;
-    const clears = p.altitude >= needAlt;
+    const clears = p.altitude >= tallest + CLEARANCE_M;
     const snagged = overflown.filter((o) => p.altitude < o.height + CLEARANCE_M);
+
+    const redZone = p.altitude > CEILING_M;
+    const crash = findCrash(m, p, route, batteryUseRaw);
 
     // ---- Scores ----
     const centroid = polygonCentroid(m.polygon);
     const transitUnits = dist(site, centroid);
+
+    // In rolling country the launch elevation matters: the lowest pad is
+    // doctrine, and picking a hilltop camp costs real marks.
+    const hilly = blockRelief(m) >= 40;
+    const siteElev = (s) => elevAt(m.terrainModel, s.x, s.y);
+    const lowestKey = Object.keys(m.sites).reduce((b, k) =>
+      siteElev(m.sites[k]) < siteElev(m.sites[b]) ? k : b);
+    const elevAbove = siteElev(site) - siteElev(m.sites[lowestKey]);
     const siteScore = clamp(
-      site.safety * 10 - (transitUnits - 150) * 0.06 - snagged.length * 30,
+      site.safety * 10 - (transitUnits - 150) * 0.06 - (hilly ? elevAbove * 0.8 : 0),
       0, 100
     );
+
     const takeoffScore = clamp(100 - takeoffGap * (100 / 180), 0, 100);
     const legScore = clamp(100 - legGap * (100 / 90), 0, 100);
     const windScore = (takeoffScore + legScore) / 2;
@@ -1509,25 +1562,31 @@
       100 - Math.abs(p.side - SWEET.side) * 3.2 - Math.abs(p.forward - SWEET.forward) * 2.6,
       0, 100
     );
-    const triggerScore = triggerOk
-      ? clamp(100 - Math.max(0, triggerSec - MIN_TRIGGER_SEC * 1.6) * 14, 0, 100)   // dawdling wastes battery
-      : clamp(70 - (MIN_TRIGGER_SEC - triggerSec) * 70, 0, 100);
-    const photoScore = (gsdScore + overlapScore + triggerScore) / 3;
+    const photoScore = (gsdScore + overlapScore) / 2;
 
-    const enduranceScore = reserve >= 30
+    const enduranceScore = reserve >= 25
       ? clamp(100 - Math.max(0, reserve - 45) * 1.1, 0, 100)             // hoarding battery = wasted coverage
-      : clamp(60 - (30 - reserve) * 3.2, 0, 100);
+      : clamp(60 - (25 - reserve) * 3.2, 0, 100);
 
     // The four pillars are each 0-100, weighted into one raw figure, then
-    // stretched onto the reported 20-90 scale.
+    // stretched onto the reported 20-90 scale. Illegal airspace caps the
+    // grade at "do not fly" territory; a lost airframe is the floor.
     const raw = siteScore * 0.20 + windScore * 0.26 + photoScore * 0.34 + enduranceScore * 0.20;
-    const total = Math.round(SCORE.min + (raw / 100) * (SCORE.max - SCORE.min));
+    let total = Math.round(SCORE.min + (raw / 100) * (SCORE.max - SCORE.min));
+    if (redZone) total = Math.min(total, 45);
+    if (crash) total = SCORE.min;
 
     const checks = [
       {
-        key: "site", pass: site.safety >= 6,
+        key: "site", pass: site.safety >= 6 && (!hilly || elevAbove < 12),
         label: "Takeoff site is sound",
-        why: site.safety >= 6 ? site.note : `${site.note} — pick somewhere with more room.`
+        why: site.safety < 6
+          ? `${site.note} — pick somewhere with more room.`
+          : hilly && elevAbove >= 12
+            ? `${site.note}. In this terrain launch from the lowest ground — Site ${lowestKey} sits ${Math.round(elevAbove)} m below you.`
+            : hilly
+              ? `${site.note} — the lowest launch on the block.`
+              : site.note
       },
       {
         key: "clearance", pass: clears,
@@ -1536,7 +1595,7 @@
           ? (overflown.length
               ? `${p.altitude} m over the ${overflown[0].label.toLowerCase()} (${tallest} m tall).`
               : "The route keeps clear of every marked hazard.")
-          : `${snagged[0].label} stands ${snagged[0].height} m. Climb to at least ${needAlt} m or route around it.`
+          : `${snagged[0].label} stands ${snagged[0].height} m — the plan crossed it at ${p.altitude} m.`
       },
       {
         key: "takeoff", pass: takeoffGap <= 25,
@@ -1553,36 +1612,36 @@
           : `Lanes are ${Math.round(legGap)}° off. Aim for ${wrap360(m.windFromDeg + 90)}° or ${wrap360(m.windFromDeg + 270)}°.`
       },
       {
-        key: "trigger", pass: triggerOk,
-        label: `Trigger interval above ${MIN_TRIGGER_SEC} s`,
-        why: triggerOk
-          ? `Firing every ${triggerSec.toFixed(1)} s — the camera can keep up.`
-          : `Firing every ${triggerSec.toFixed(2)} s. Slow to ${Math.max(LIMITS.speed.min, Math.floor(shotSpacingM / MIN_TRIGGER_SEC))} m/s, climb, or cut forward overlap.`
+        key: "ceiling", pass: !redZone,
+        label: `Below the ${CEILING_M} m ceiling`,
+        why: redZone
+          ? `${p.altitude} m AGL is red-zone airspace. ${CEILING_M} m is the law.`
+          : `${p.altitude} m AGL — inside legal airspace.`
       },
       {
-        key: "battery", pass: reserve >= 30,
-        label: "Lands with 30% reserve",
-        why: reserve >= 30
-          ? `${Math.round(reserve)}% left after a ${timeMin.toFixed(0)} min flight.`
+        key: "battery", pass: reserve >= 25,
+        label: "Lands with 25% reserve",
+        why: reserve >= 25
+          ? `${Math.round(reserve)}% left after a ${timeMin.toFixed(0)} min flight — conditions gave you ${Math.round(usableMin)} usable minutes.`
           : terrainPct >= 12
-            ? `Only ${Math.round(reserve)}% left, and ${Math.round(terrainPct)}% of it went on climbing. Cut side overlap so you cross the relief fewer times.`
-            : `Only ${Math.round(reserve)}% left. Speed up, cut side overlap, or move closer to the block.`
+            ? `Only ${Math.round(reserve)}% left, and ${Math.round(terrainPct)}% of the pack went on climbing. Cut side overlap so you cross the relief fewer times.`
+            : `Only ${Math.round(reserve)}% left of a pack that today is worth ${Math.round(usableMin)} minutes. Trim the route or rethink the speed.`
       },
       {
         key: "gsd", pass: inBand,
         label: `GSD inside ${GSD_BAND.lo}–${GSD_BAND.hi} cm/px`,
         why: inBand
           ? `${gsd.toFixed(2)} cm/px — on spec at ${p.altitude} m.`
-          : `${gsd.toFixed(2)} cm/px. The brief wants ${GSD_BAND.lo}–${GSD_BAND.hi}, so fly between ${ALT_WINDOW.lo} m and ${ALT_WINDOW.hi} m.`
+          : `${gsd.toFixed(2)} cm/px, outside the ${GSD_BAND.lo}–${GSD_BAND.hi} brief. Fly ${gsd > GSD_BAND.hi ? "lower" : "higher"}.`
       },
     ];
 
     return {
-      mPerUnit, gsd, gsdOff, inBand, footprintW, footprintH,
-      laneSpacingM, shotSpacingM, triggerSec, triggerOk,
-      lanes, route, routeKm, photos, timeMin, batteryUse, reserve,
-      profile, terrainMin, terrainPct,
-      snagged, overflown, needAlt, clears,
+      mPerUnit, areaHa, gsd, gsdOff, inBand, footprintW, footprintH,
+      laneSpacingM, shotSpacingM,
+      lanes, route, routeKm, photos, timeMin, batteryUse, batteryUseRaw, reserve,
+      usableMin, profile, terrainPct,
+      snagged, overflown, clears, redZone, crash,
       takeoffGap, legGap,
       siteScore, windScore, photoScore, enduranceScore, total,
       checks
@@ -1915,6 +1974,9 @@
 
     OBSTACLE_ART[o.kind]?.(o, g, { at, u, v, snag });
 
+    // Name only — how tall it is stays off the map. Judging what can be
+    // safely overflown is part of the exercise, and getting it wrong is
+    // answered by the crash, not by a warning label.
     const label = el("text", {
       x: o.x, y: o.y + o.r + 14, "text-anchor": "middle",
       fill: snag ? PAINT.hazard : PAINT.inkSoft,
@@ -1922,7 +1984,7 @@
       "font-family": "var(--font)", "paint-order": "stroke",
       stroke: "rgba(255,255,255,.85)", "stroke-width": 2.6, "stroke-linejoin": "round"
     }, g);
-    label.textContent = `${o.label} · ${o.height} m`;
+    label.textContent = o.label;
     return g;
   }
 
@@ -2040,20 +2102,53 @@
      Map rendering
      ===================================================================== */
   const layers = {
+    base: $("baseLayer"),
     terrainDefs: $("terrainDefs"), terrain: $("terrainLayer"), scenery: $("sceneryLayer"),
     block: $("blockLayer"), lane: $("laneLayer"), route: $("routeLayer"),
     trigger: $("triggerLayer"), obstacle: $("obstacleLayer"), site: $("siteLayer"),
     wind: $("windLayer"), drone: $("droneLayer"), scale: $("scaleLayer")
   };
 
-  /* Rebuilt only when the mission changes, not on every slider tick. */
-  const STATIC_LAYERS = ["terrainDefs", "terrain", "scenery"];
+  /* Rebuilt only when the mission or basemap changes, not on every slider tick. */
+  const STATIC_LAYERS = ["base", "terrainDefs", "terrain", "scenery"];
 
-  /** Terrain and scenery only change with the mission, so they are drawn once. */
+  /**
+   * Web-mercator tiles under the synthetic exercise. The mission anchor fixes
+   * where in the world the block pretends to be; the same maths fixes the
+   * metres-per-unit scale everything else is measured in, so the imagery and
+   * the flight arithmetic can never disagree about distance.
+   */
+  function renderBasemap(m) {
+    clear(layers.base);
+    const src = TILE_SOURCES[state.basemap];
+    $("attrib").textContent = src ? src.attrib : "";
+    if (!src) return;
+
+    const z = m.anchor.zoom, n = 2 ** z;
+    const latRad = (m.anchor.lat * Math.PI) / 180;
+    const worldX = ((m.anchor.lon + 180) / 360) * n * 256;
+    const worldY = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n * 256;
+    const left = worldX - 430, top = worldY - 320;
+
+    for (let tx = Math.floor(left / 256); tx * 256 < left + 860; tx++) {
+      for (let ty = Math.floor(top / 256); ty * 256 < top + 640; ty++) {
+        if (tx < 0 || ty < 0 || tx >= n || ty >= n) continue;
+        // A hair over 256 so adjacent tiles cannot open seam lines.
+        el("image", {
+          x: (tx * 256 - left).toFixed(1), y: (ty * 256 - top).toFixed(1),
+          width: 256.5, height: 256.5,
+          href: src.url(z, tx, ty), preserveAspectRatio: "none"
+        }, layers.base);
+      }
+    }
+  }
+
+  /** Basemap, terrain and scenery only change with the mission, so they are drawn once. */
   function renderScene() {
     const m = mission();
     clear(layers.terrainDefs);
     clear(layers.scenery);
+    renderBasemap(m);
     renderTerrain(m);
     Object.entries(m.sites).forEach(([key, s]) => drawClearing(key, s, layers.scenery));
     $("map").querySelector("#groundFill").setAttribute("fill", m.ground.fill);
@@ -2119,9 +2214,10 @@
       });
     }
 
-    // --- Obstacles: red only when you are too low to clear them ---
+    // --- Obstacles: neutral while planning. The one the plan actually hit
+    //     turns red only once the flight has been committed. ---
     m.obstacles.forEach((o) => {
-      drawObstacle(o, ev.snagged.includes(o), layers.obstacle);
+      drawObstacle(o, state.submitted && ev.crash?.obstacle === o, layers.obstacle);
     });
 
     // --- Takeoff sites (clickable) ---
@@ -2131,19 +2227,30 @@
       g.setAttribute("aria-label", `Takeoff site ${key}: ${s.note}`);
       el("circle", { cx: s.x, cy: s.y, r: 26, fill: "transparent" }, g);   // generous touch target
       if (active) {
+        // The aircraft sits on the pad pointed along the planned takeoff
+        // heading, so the dial and the map always tell the same story.
         el("circle", { cx: s.x, cy: s.y, r: 22, fill: "rgba(245,158,11,.2)", stroke: "rgba(245,158,11,.55)", "stroke-width": 1 }, g);
+        el("circle", { cx: s.x, cy: s.y, r: 15, fill: "rgba(255,255,255,.92)", stroke: PAINT.pad, "stroke-width": 1.8 }, g);
+        el("use", {
+          href: "#droneIcon", width: 22, height: 22, x: -11, y: -11, fill: PAINT.ink,
+          transform: `translate(${s.x} ${s.y}) rotate(${p.takeoffDir - DRONE_ART_HEADING})`
+        }, g);
+        el("text", {
+          x: s.x + 17, y: s.y - 14, "text-anchor": "middle",
+          fill: PAINT.inkSoft, "font-size": 11, "font-weight": 700, "font-family": "var(--font)",
+          "paint-order": "stroke", stroke: "rgba(255,255,255,.85)", "stroke-width": 2.4
+        }, g).textContent = key;
+      } else {
+        el("rect", {
+          class: "site-plate",
+          x: s.x - 15, y: s.y - 13, width: 30, height: 26, rx: 7,
+          fill: PAINT.padIdle, stroke: PAINT.padIdleEdge, "stroke-width": 1.3
+        }, g);
+        el("text", {
+          x: s.x, y: s.y + 5, "text-anchor": "middle",
+          fill: PAINT.inkSoft, "font-size": 14, "font-weight": 700, "font-family": "var(--font)"
+        }, g).textContent = key;
       }
-      el("rect", {
-        class: "site-plate",
-        x: s.x - 15, y: s.y - 13, width: 30, height: 26, rx: 7,
-        fill: active ? PAINT.pad : PAINT.padIdle,
-        stroke: active ? PAINT.padInk : PAINT.padIdleEdge, "stroke-width": active ? 2 : 1.3
-      }, g);
-      el("text", {
-        x: s.x, y: s.y + 5, "text-anchor": "middle",
-        fill: active ? PAINT.padInk : PAINT.inkSoft,
-        "font-size": 14, "font-weight": 700, "font-family": "var(--font)"
-      }, g).textContent = key;
 
       const pick = () => { state.plan.site = key; state.submitted = false; render(); };
       g.addEventListener("click", pick);
@@ -2200,10 +2307,15 @@
      ===================================================================== */
   let flightRAF = null;
 
-  function flyRoute(ev) {
-    if (state.flying) return;
+  /**
+   * Animate the plan. The aircraft is the clipart, nose along each leg; a
+   * doomed plan flies only as far as its crash point and then goes in —
+   * spiralling down over an expanding burst — before `onDone` fires.
+   */
+  function flyRoute(ev, onDone) {
+    if (state.flying) stopFlight();
     const pts = ev.route;
-    if (pts.length < 3) return;
+    if (pts.length < 3) { onDone?.(); return; }
 
     state.flying = true;
     $("flyBtn").textContent = "■ Stop";
@@ -2215,34 +2327,74 @@
       segs.push({ a: pts[i - 1], b: pts[i], d, at: total });
       total += d;
     }
+    const cutoff = ev.crash ? Math.min(ev.crash.atUnits, total) : total;
 
     clear(layers.drone);
     const trail = el("path", { fill: "none", stroke: PAINT.trail, "stroke-width": 2.5, opacity: .95 }, layers.drone);
-    const halo = el("circle", { r: 13, fill: "rgba(21,101,192,.18)" }, layers.drone);
-    const body = el("circle", { r: 6, fill: "#fff", stroke: PAINT.trail, "stroke-width": 2.5 }, layers.drone);
+    const droneG = el("g", {}, layers.drone);
+    el("circle", { r: 13, fill: "rgba(255,255,255,.7)" }, droneG);
+    el("use", { href: "#droneIcon", width: 26, height: 26, x: -13, y: -13, fill: PAINT.ink }, droneG);
 
-    const DURATION = 9000;
+    const DURATION = 9000 * (total ? cutoff / total : 1);
     const started = performance.now();
     let trailD = "";
 
     const step = (now) => {
-      if (!state.flying) return stopFlight();
-      const t = clamp((now - started) / DURATION, 0, 1);
-      const travelled = t * total;
+      if (!state.flying) return;
+      const t = clamp((now - started) / Math.max(DURATION, 400), 0, 1);
+      const travelled = t * cutoff;
       const seg = segs.find((s) => travelled <= s.at + s.d) || segs[segs.length - 1];
       const f = seg.d === 0 ? 0 : clamp((travelled - seg.at) / seg.d, 0, 1);
       const x = seg.a.x + (seg.b.x - seg.a.x) * f;
       const y = seg.a.y + (seg.b.y - seg.a.y) * f;
+      const bearing = (Math.atan2(seg.b.x - seg.a.x, -(seg.b.y - seg.a.y)) * 180) / Math.PI;
 
-      body.setAttribute("cx", x); body.setAttribute("cy", y);
-      halo.setAttribute("cx", x); halo.setAttribute("cy", y);
+      droneG.setAttribute("transform",
+        `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(bearing - DRONE_ART_HEADING).toFixed(1)})`);
       trailD += `${trailD ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)} `;
       trail.setAttribute("d", trailD);
 
-      if (t >= 1) return stopFlight();
+      if (t >= 1) {
+        if (ev.crash) return crashSequence(droneG, { x, y }, ev.crash, onDone);
+        stopFlight();
+        onDone?.();
+        return;
+      }
       flightRAF = requestAnimationFrame(step);
     };
     flightRAF = requestAnimationFrame(step);
+  }
+
+  /** The aircraft spirals in: spin, shrink, red burst, and a plain statement of cause. */
+  function crashSequence(droneG, pt, crash, onDone) {
+    const ring = el("circle", { cx: pt.x, cy: pt.y, r: 4, fill: "none", stroke: PAINT.hazard, "stroke-width": 2.5 }, layers.drone);
+    const flash = el("circle", { cx: pt.x, cy: pt.y, r: 6, fill: "rgba(217,48,37,.5)" }, layers.drone);
+    const label = el("text", {
+      x: pt.x, y: pt.y - 28, "text-anchor": "middle",
+      fill: PAINT.hazard, "font-size": 13, "font-weight": 700, "font-family": "var(--font)",
+      "paint-order": "stroke", stroke: "rgba(255,255,255,.9)", "stroke-width": 3
+    }, layers.drone);
+    label.textContent = crash.type === "obstacle"
+      ? `✕ Struck the ${crash.obstacle.label.toLowerCase()}`
+      : "✕ Battery exhausted";
+
+    const started = performance.now();
+    const spin = (now) => {
+      const t = clamp((now - started) / 1500, 0, 1);
+      droneG.setAttribute("transform",
+        `translate(${pt.x} ${(pt.y + t * 10).toFixed(1)}) rotate(${(t * 540).toFixed(0)}) scale(${(1 - t * 0.8).toFixed(2)})`);
+      ring.setAttribute("r", 4 + t * 30);
+      ring.setAttribute("opacity", (1 - t).toFixed(2));
+      flash.setAttribute("r", 6 + t * 15);
+      flash.setAttribute("opacity", (0.5 * (1 - t)).toFixed(2));
+      if (t < 1) { flightRAF = requestAnimationFrame(spin); return; }
+      // Leave the wreck on the map; the next render sweeps it away.
+      state.flying = false;
+      flightRAF = null;
+      $("flyBtn").textContent = "▶ Fly route";
+      onDone?.();
+    };
+    flightRAF = requestAnimationFrame(spin);
   }
 
   function stopFlight() {
@@ -2260,12 +2412,6 @@
     return pass ? "good" : near ? "warn" : "bad";
   }
 
-  function setAim(id, text, hit) {
-    const node = $(id);
-    node.textContent = text;
-    node.className = "aim" + (hit ? " hit" : "");
-  }
-
   function renderPanels(ev) {
     const m = mission();
     const p = state.plan;
@@ -2273,7 +2419,7 @@
     // --- Header ---
     $("missionName").textContent = m.name;
     $("missionSub").textContent =
-      `${m.terrain} · ${m.areaHa} ha · ${blockRelief(m)} m relief · ${m.enduranceMin} min endurance`;
+      `${m.terrain} · ${Math.round(ev.areaHa)} ha · ${blockRelief(m)} m relief`;
     $("missionBadge").innerHTML = `Mission <b>${state.index + 1}</b> / ${MISSIONS.length}`;
     const best = state.best[m.id];
     $("bestBadge").innerHTML = `Best <b>${best == null ? "—" : best}</b>`;
@@ -2319,81 +2465,45 @@
     $("fwdReadout").textContent = `${p.forward}%`;
     $("speedReadout").textContent = `${p.speed} m/s`;
 
-    // The altitude window and the trigger floor are published specs — the brief
-    // states them, so the panel may too. The overlap pair is not: finding it is
-    // the exercise, so those two sliders get no target marker.
-    setAim("altAim", `${ALT_WINDOW.lo}–${ALT_WINDOW.hi} m for ${GSD_BAND.lo}–${GSD_BAND.hi} cm`, ev.inBand);
-    setAim("speedAim", `${MIN_TRIGGER_SEC} s minimum interval`, ev.triggerOk);
+    // Planning above the ceiling is called out instantly — it is regulation,
+    // not technique, so warning early gives nothing away.
+    $("altReadout").style.color = ev.redZone ? "var(--bad)" : "";
 
-    // --- Metrics ---
+    // --- Metrics. Estimates, not verdicts: the flight computer on a real GCS
+    //     shows all of these before takeoff too. ---
     $("vRoute").textContent = `${ev.routeKm.toFixed(1)} km`;
     $("vRouteNote").textContent = `${ev.timeMin.toFixed(0)} min · ${ev.lanes.length} lanes`;
 
     $("vBattery").textContent = `${Math.round(ev.reserve)}%`;
-    $("vBatteryNote").textContent = `reserve · ${Math.round(ev.batteryUse)}% used`;
-    $("mBattery").className = "metric " + (ev.reserve >= 30 ? "is-good" : ev.reserve >= 20 ? "is-warn" : "is-bad");
+    $("vBatteryNote").textContent = ev.batteryUseRaw > 100
+      ? `dies ${Math.round(100 - (100 / ev.batteryUseRaw) * 100)}% of the route short`
+      : `reserve · ${Math.round(ev.batteryUse)}% used`;
+    $("mBattery").className = "metric " + (ev.reserve >= 25 ? "is-good" : ev.reserve > 0 ? "is-warn" : "is-bad");
 
     $("vGsd").textContent = `${ev.gsd.toFixed(2)}`;
     $("vGsdNote").textContent = `cm/px · brief ${GSD_BAND.lo}–${GSD_BAND.hi}`;
     $("mGsd").className = "metric " + (ev.inBand ? "is-good" : ev.gsdOff <= 0.4 ? "is-warn" : "is-bad");
 
-    $("vTrigger").textContent = `${ev.triggerSec.toFixed(1)} s`;
-    $("vTriggerNote").textContent = `every ${ev.shotSpacingM.toFixed(0)} m`;
-    $("mTrigger").className = "metric " + (ev.triggerOk ? "is-good" : "is-bad");
+    $("vCond").textContent = `${m.tempC} °C · ${m.windKts} kt`;
+    $("vCondNote").textContent = `endurance ${DRONE.nominalMin} → ${Math.round(ev.usableMin)} min`;
 
     $("vClimb").textContent = `${Math.round(ev.profile.ascent)} m`;
     $("vClimbNote").textContent = ev.terrainPct < 1
       ? "terrain · flat, costs nothing"
       : `terrain · ${Math.round(ev.terrainPct)}% of the battery`;
-    $("mClimb").className = "metric " + (ev.terrainPct < 8 ? "is-good" : ev.terrainPct < 16 ? "is-warn" : "is-bad");
 
     $("vPhotos").textContent = ev.photos.toLocaleString();
-    $("vPhotosNote").textContent = `${Math.round(ev.footprintW)} m strip width`;
+    $("vPhotosNote").textContent = `${Math.round(ev.footprintW)} m strip · every ${Math.round(ev.shotSpacingM)} m`;
 
-    // --- Checks ---
-    const checks = $("checks");
-    clear(checks);
-    ev.checks.forEach((c) => {
-      const row = document.createElement("div");
-      row.className = `check ${c.pass ? "pass" : "fail"}`;
-      row.innerHTML =
-        `<span class="mark">${c.pass ? "✓" : "!"}</span>` +
-        `<span class="body"><span>${c.label}</span><span class="why">${c.why}</span></span>`;
-      checks.appendChild(row);
-    });
+    // --- Status. No verdicts before submission — the only pre-flight callout
+    //     is the red zone, because that is law rather than technique. ---
+    $("planStatus").textContent = ev.redZone ? "RED ZONE" : state.submitted ? "Submitted" : "Planning";
+    $("planStatus").className = "badge" + (ev.redZone ? " bad" : state.submitted ? " ok" : "");
 
-    // --- Score bars ---
-    const rows = [
-      { name: "Launch safety", v: ev.siteScore },
-      { name: "Wind logic", v: ev.windScore },
-      { name: "Photo geometry", v: ev.photoScore },
-      { name: "Endurance", v: ev.enduranceScore }
-    ];
-    const box = $("scoreRows");
-    clear(box);
-    rows.forEach((r) => {
-      const div = document.createElement("div");
-      div.className = "score-row";
-      const color = r.v >= 75 ? "var(--accent)" : r.v >= 50 ? "var(--warn)" : "var(--bad)";
-      div.innerHTML =
-        `<span class="name">${r.name}</span><span class="num">${Math.round(r.v)}</span>` +
-        `<span class="bar"><i style="width:${Math.round(r.v)}%;background:${color}"></i></span>`;
-      box.appendChild(div);
-    });
-
-    const grade = gradeFor(ev.total);
-    $("totalScore").textContent = ev.total;
-    $("gradeText").textContent = grade.name;
-    $("gradeText").style.color = TONE_VAR[grade.tone];
-
-    // --- Status + coaching ---
-    const failing = ev.checks.filter((c) => !c.pass);
-    $("planStatus").textContent = failing.length ? `${failing.length} to fix` : "Cleared for flight";
-    $("planStatus").className = "badge " + (failing.length ? "warn" : "ok");
-
-    $("coach").innerHTML = failing.length
-      ? `<b>Next fix:</b> ${failing[0].why}`
-      : `<b>Everything checks out.</b> ${m.lesson} Submit when you are happy with the score.`;
+    $("coach").className = "coach" + (ev.redZone ? " alert" : "");
+    $("coach").innerHTML = ev.redZone
+      ? `<b>Red zone.</b> ${p.altitude} m AGL is above the ${CEILING_M} m ceiling. Come down before you submit.`
+      : `<b>Estimates are live; the verdict is not.</b> Submit the plan and the review board scores it — a plan that cannot fly is flown to its conclusion.`;
   }
 
   /* Bands on the reported 20-90 scale. `at` is the floor of each band, and the
@@ -2419,15 +2529,19 @@
      ===================================================================== */
   function showDebrief(ev) {
     const m = mission();
-    const grade = gradeFor(ev.total);
-    $("debriefSub").textContent = `${m.name} — plan submitted.`;
+    const grade = ev.crash ? { name: "Aircraft lost", tone: "bad" } : gradeFor(ev.total);
+    $("debriefSub").textContent = ev.crash
+      ? `${m.name} — the aircraft did not come home.`
+      : `${m.name} — ${m.lesson}`;
     $("debriefGrade").textContent = grade.name;
 
     const prevBest = state.best[m.id];
     const improved = prevBest == null || ev.total > prevBest;
-    $("debriefBlurb").textContent = improved
-      ? (prevBest == null ? "First run logged." : `New best — up from ${prevBest}.`)
-      : `Your best on this block is still ${prevBest}.`;
+    $("debriefBlurb").textContent = ev.crash
+      ? ev.crash.why
+      : improved
+        ? (prevBest == null ? "First run logged." : `New best — up from ${prevBest}.`)
+        : `Your best on this block is still ${prevBest}.`;
 
     // The ring fills across the reported range, not from zero: 20 is the floor
     // of the scale, so an empty ring should mean 20 rather than an impossible 0.
@@ -2439,9 +2553,32 @@
     fill.setAttribute("stroke", TONE_PAINT[grade.tone]);
     $("ringText").textContent = ev.total;
 
+    // The four pillars, revealed only here — this is the score the live
+    // panel deliberately withholds.
+    const rows = [
+      { name: "Launch safety", v: ev.siteScore },
+      { name: "Wind logic", v: ev.windScore },
+      { name: "Photo geometry", v: ev.photoScore },
+      { name: "Endurance", v: ev.enduranceScore }
+    ];
+    const box = $("debriefScores");
+    clear(box);
+    rows.forEach((r) => {
+      const div = document.createElement("div");
+      div.className = "score-row";
+      const color = r.v >= 75 ? "var(--accent)" : r.v >= 50 ? "var(--warn)" : "var(--bad)";
+      div.innerHTML =
+        `<span class="name">${r.name}</span><span class="num">${Math.round(r.v)}</span>` +
+        `<span class="bar"><i style="width:${Math.round(r.v)}%;background:${color}"></i></span>`;
+      box.appendChild(div);
+    });
+
     const list = $("debriefList");
     clear(list);
-    ev.checks.forEach((c) => {
+    const items = ev.crash
+      ? [{ pass: false, label: "Aircraft lost", why: ev.crash.why }, ...ev.checks]
+      : ev.checks;
+    items.forEach((c) => {
       const div = document.createElement("div");
       div.className = `debrief-item ${c.pass ? "good" : "bad"}`;
       div.innerHTML = `<span class="ic">${c.pass ? "✓" : "→"}</span>` +
@@ -2452,7 +2589,9 @@
     $("debriefNext").textContent =
       state.index < MISSIONS.length - 1 ? "Next mission" : "Back to mission 1";
 
-    openModal($("debriefModal"), $("debriefNext"));
+    // After a crash the default action is to fix the plan, not to move on —
+    // a stray Enter should never skip the lesson.
+    openModal($("debriefModal"), ev.crash ? $("debriefRetry") : $("debriefNext"));
   }
 
   /* =====================================================================
@@ -2585,12 +2724,13 @@
     render();
   });
 
-  $("autoBtn").addEventListener("click", () => {
-    stopFlight();
-    state.plan = suggestedPlan();
-    state.submitted = false;
-    render();
-    $("coach").innerHTML = "<b>Textbook plan loaded.</b> Compare it against what you had — the differences are the lesson.";
+  document.querySelectorAll(".base-seg button").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.basemap = b.dataset.base;
+      document.querySelectorAll(".base-seg button").forEach((x) =>
+        x.setAttribute("aria-pressed", String(x === b)));
+      renderScene();
+    });
   });
 
   $("flyBtn").addEventListener("click", () => {
@@ -2608,7 +2748,13 @@
     }
     state.submitted = true;
     render();
-    showDebrief(ev);
+    // A doomed plan is flown to its end on the map before the verdict lands.
+    if (ev.crash) {
+      if (isMobile()) applyTabs("tab-map");
+      flyRoute(ev, () => showDebrief(ev));
+    } else {
+      showDebrief(ev);
+    }
   });
 
   function goto(index) {
