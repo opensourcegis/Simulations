@@ -31,9 +31,3 @@ python -m http.server 8000
 ```
 
 Then open http://localhost:8000/.
-
-## Golang/
-
-A separate Windows desktop project (a Zoom popup-notification helper, plus a WebView2
-launcher for the mission simulator). It is not part of the published site — see
-[`Golang/README.md`](Golang/README.md).
