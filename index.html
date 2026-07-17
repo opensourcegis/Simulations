@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulator Arcade — Browser Training Sims</title>
+<meta name="description" content="A small collection of browser-based training simulators. No installs, no accounts — everything runs in the page.">
+<style>
+  :root {
+    --bg: #eef2f6;
+    --bg-tint-a: rgba(16, 137, 79, .09);
+    --bg-tint-b: rgba(21, 101, 192, .07);
+    --panel: #ffffff;
+    --panel-2: #f7f9fb;
+    --line: #dde4ec;
+    --line-strong: #c3cfdb;
+    --text: #16202c;
+    --text-dim: #56677a;
+    --text-faint: #8496a8;
+    --accent: #0f8a4d;
+    --accent-2: #1565c0;
+    --radius: 14px;
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 500px at 12% -8%, var(--bg-tint-a), transparent 60%),
+      radial-gradient(800px 500px at 88% 0%, var(--bg-tint-b), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; }
+  a:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; border-radius: 6px; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; }
+
+  /* ---------- Hero ---------- */
+  .hero { margin-bottom: 44px; max-width: 640px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid rgba(15, 138, 77, .28);
+    background: rgba(15, 138, 77, .08);
+    border-radius: 999px;
+    padding: 5px 13px;
+    margin: 0 0 18px;
+  }
+  .hero h1 {
+    margin: 0 0 14px;
+    font-size: clamp(30px, 5.5vw, 46px);
+    line-height: 1.1;
+    letter-spacing: -.8px;
+    font-weight: 700;
+  }
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(96deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero p { margin: 0; color: var(--text-dim); font-size: 17px; }
+
+  /* ---------- Grid ---------- */
+  .section-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 16px; }
+  .section-head h2 {
+    margin: 0; font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-faint);
+  }
+  .section-head .rule { flex: 1; height: 1px; background: var(--line-strong); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 18px;
+  }
+
+  .card {
+    position: relative;
+    display: flex; flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(22, 32, 44, .05);
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: var(--line-strong);
+    box-shadow: 0 14px 30px rgba(22, 32, 44, .13);
+  }
+  .card.soon { opacity: .7; pointer-events: none; box-shadow: none; background: var(--panel-2); }
+
+  .thumb { position: relative; aspect-ratio: 16 / 9; background: #eaeee6; border-bottom: 1px solid var(--line); }
+  .thumb svg { width: 100%; height: 100%; display: block; }
+
+  .pill {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 11px; letter-spacing: .7px; text-transform: uppercase;
+    background: rgba(255, 255, 255, .92);
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: var(--text-dim);
+    backdrop-filter: blur(4px);
+  }
+  .pill.live { color: var(--accent); border-color: rgba(15, 138, 77, .4); }
+
+  .card-body { padding: 16px 17px 18px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .card-body h3 { margin: 0; font-size: 17.5px; font-weight: 650; }
+  .card-body p { margin: 0; font-size: 14px; color: var(--text-dim); flex: 1; }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .tag {
+    font-size: 11.5px; color: var(--text-dim);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 2px 7px;
+  }
+
+  .go {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13.5px; font-weight: 600; color: var(--accent);
+    margin-top: 8px;
+  }
+  .card:hover .go .arrow { transform: translateX(3px); }
+  .go .arrow { transition: transform .18s ease; }
+
+  footer {
+    margin-top: 56px; padding-top: 22px;
+    border-top: 1px solid var(--line-strong);
+    color: var(--text-faint); font-size: 13.5px;
+    display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center;
+  }
+  footer a { color: var(--text-dim); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+  footer .spacer { margin-left: auto; }
+
+  @media (max-width: 640px) {
+    .wrap { padding: 34px 16px 52px; }
+    .hero { margin-bottom: 32px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">▲ Simulator Arcade</p>
+    <h1>Training sims that run <em>straight in the browser</em>.</h1>
+    <p>
+      Small, self-contained simulators built for teaching. Every one loads as a single page —
+      nothing to install, no account, and your progress stays on your own device.
+    </p>
+  </header>
+
+  <div class="section-head">
+    <h2>Simulators</h2>
+    <span class="rule"></span>
+  </div>
+
+  <div class="grid">
+
+    <!-- ============ Drone mission planner ============ -->
+    <a class="card" href="games/drone-mission-planner/">
+      <div class="thumb">
+        <svg viewBox="0 0 320 180" aria-hidden="true">
+          <defs>
+            <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#e9ecdf"/>
+              <stop offset="1" stop-color="#dfe3d2"/>
+            </linearGradient>
+          </defs>
+          <rect width="320" height="180" fill="url(#ground)"/>
+          <!-- parcels -->
+          <g opacity=".7">
+            <rect x="14" y="16" width="66" height="48" fill="#dde2cb"/>
+            <rect x="228" y="24" width="74" height="52" fill="#d8dfc6"/>
+            <rect x="24" y="108" width="58" height="46" fill="#e2e5d5"/>
+            <rect x="238" y="112" width="64" height="44" fill="#dbe0c9"/>
+            <path d="M0 92H320" stroke="#cfc3ac" stroke-width="5"/>
+            <path d="M96 0V180" stroke="#d3c7b1" stroke-width="4"/>
+          </g>
+          <g stroke="rgba(22,32,44,.05)" stroke-width="1">
+            <path d="M40 0V180M80 0V180M120 0V180M160 0V180M200 0V180M240 0V180M280 0V180"/>
+            <path d="M0 36H320M0 72H320M0 108H320M0 144H320"/>
+          </g>
+          <!-- survey block -->
+          <path d="M74 42 L214 32 L256 74 L238 138 L118 152 L62 108 Z"
+                fill="rgba(15,138,77,.10)" stroke="#0f8a4d" stroke-width="1.8"/>
+          <!-- lanes -->
+          <g fill="none" stroke="#fff" stroke-width="3" opacity=".85">
+            <path d="M84 54 L232 45 M240 62 L88 71 M92 88 L244 79 M238 96 L96 105 M100 122 L228 113 M222 130 L110 139"/>
+          </g>
+          <g fill="none" stroke="#0b7a43" stroke-width="1.5">
+            <path d="M84 54 L232 45 M240 62 L88 71 M92 88 L244 79 M238 96 L96 105 M100 122 L228 113 M222 130 L110 139"/>
+            <path d="M232 45 L240 62 M88 71 L92 88 M244 79 L238 96 M96 105 L100 122 M228 113 L222 130" opacity=".55"/>
+          </g>
+          <!-- triggers -->
+          <g fill="rgba(15,40,26,.55)">
+            <circle cx="110" cy="52" r="1.5"/><circle cx="150" cy="50" r="1.5"/><circle cx="190" cy="48" r="1.5"/>
+            <circle cx="120" cy="86" r="1.5"/><circle cx="160" cy="84" r="1.5"/><circle cx="200" cy="82" r="1.5"/>
+            <circle cx="130" cy="120" r="1.5"/><circle cx="170" cy="118" r="1.5"/><circle cx="210" cy="116" r="1.5"/>
+          </g>
+          <!-- hazard -->
+          <circle cx="240" cy="52" r="13" fill="rgba(217,48,37,.10)" stroke="#d93025"
+                  stroke-width="1.2" stroke-dasharray="4 3"/>
+          <!-- takeoff pad -->
+          <rect x="58" y="126" width="22" height="18" rx="5" fill="#f59e0b" stroke="#fff" stroke-width="1.4"/>
+          <text x="69" y="139" text-anchor="middle" font-size="10" font-weight="700" fill="#3d2600">A</text>
+          <!-- wind -->
+          <g>
+            <circle cx="284" cy="150" r="17" fill="rgba(255,255,255,.9)" stroke="#c3cfdb"/>
+            <path d="M284 162 L284 138" stroke="#1565c0" stroke-width="1.8"/>
+            <path d="M284 138 l-4 6 h8 z" fill="#1565c0"/>
+          </g>
+          <!-- drone -->
+          <circle cx="160" cy="84" r="9" fill="rgba(15,138,77,.16)"/>
+          <circle cx="160" cy="84" r="4.4" fill="#fff" stroke="#0b7a43" stroke-width="1.8"/>
+        </svg>
+        <span class="pill live">● Playable</span>
+      </div>
+      <div class="card-body">
+        <h3>Drone Mission Planner</h3>
+        <p>
+          Plan a photogrammetry survey that actually flies. Pick a takeoff site, set your headings
+          against the wind, then trade altitude, overlap and speed against a battery that will not wait.
+          Six pre-flight checks decide whether you launch.
+        </p>
+        <div class="tags">
+          <span class="tag">Photogrammetry</span>
+          <span class="tag">3 missions</span>
+          <span class="tag">Scored</span>
+        </div>
+        <span class="go">Open simulator <span class="arrow">→</span></span>
+      </div>
+    </a>
+
+    <!-- ============ Placeholder ============ -->
+    <div class="card soon">
+      <div class="thumb">
+        <svg viewBox="0 0 320 180" aria-hidden="true">
+          <rect width="320" height="180" fill="#f2f4f7"/>
+          <g stroke="#c3cfdb" stroke-width="1.5" fill="none">
+            <circle cx="160" cy="86" r="30" stroke-dasharray="6 6"/>
+            <path d="M160 71v30M145 86h30"/>
+          </g>
+          <text x="160" y="140" text-anchor="middle" font-size="11"
+                fill="#8496a8" font-family="system-ui">Next build</text>
+        </svg>
+        <span class="pill">In progress</span>
+      </div>
+      <div class="card-body">
+        <h3>Something new</h3>
+        <p>Another simulator is on the bench. This slot is where it lands.</p>
+        <div class="tags"><span class="tag">Coming soon</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>Built by Tobi.</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/itachitobi/Faculty_Management">Source on GitHub →</a>
+  </footer>
+
+</div>
+</body>
+</html>
