@@ -179,83 +179,6 @@
 
   <div class="grid">
 
-    <!-- ============ Drone mission planner ============ -->
-    <a class="card" href="games/drone-mission-planner/">
-      <div class="thumb">
-        <svg viewBox="0 0 320 180" aria-hidden="true">
-          <defs>
-            <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#e9ecdf"/>
-              <stop offset="1" stop-color="#dfe3d2"/>
-            </linearGradient>
-          </defs>
-          <rect width="320" height="180" fill="url(#ground)"/>
-          <!-- parcels -->
-          <g opacity=".7">
-            <rect x="14" y="16" width="66" height="48" fill="#dde2cb"/>
-            <rect x="228" y="24" width="74" height="52" fill="#d8dfc6"/>
-            <rect x="24" y="108" width="58" height="46" fill="#e2e5d5"/>
-            <rect x="238" y="112" width="64" height="44" fill="#dbe0c9"/>
-            <path d="M0 92H320" stroke="#cfc3ac" stroke-width="5"/>
-            <path d="M96 0V180" stroke="#d3c7b1" stroke-width="4"/>
-          </g>
-          <g stroke="rgba(22,32,44,.05)" stroke-width="1">
-            <path d="M40 0V180M80 0V180M120 0V180M160 0V180M200 0V180M240 0V180M280 0V180"/>
-            <path d="M0 36H320M0 72H320M0 108H320M0 144H320"/>
-          </g>
-          <!-- survey block -->
-          <path d="M74 42 L214 32 L256 74 L238 138 L118 152 L62 108 Z"
-                fill="rgba(15,138,77,.10)" stroke="#0f8a4d" stroke-width="1.8"/>
-          <!-- lanes -->
-          <g fill="none" stroke="#fff" stroke-width="3" opacity=".85">
-            <path d="M84 54 L232 45 M240 62 L88 71 M92 88 L244 79 M238 96 L96 105 M100 122 L228 113 M222 130 L110 139"/>
-          </g>
-          <g fill="none" stroke="#0b7a43" stroke-width="1.5">
-            <path d="M84 54 L232 45 M240 62 L88 71 M92 88 L244 79 M238 96 L96 105 M100 122 L228 113 M222 130 L110 139"/>
-            <path d="M232 45 L240 62 M88 71 L92 88 M244 79 L238 96 M96 105 L100 122 M228 113 L222 130" opacity=".55"/>
-          </g>
-          <!-- triggers -->
-          <g fill="rgba(15,40,26,.55)">
-            <circle cx="110" cy="52" r="1.5"/><circle cx="150" cy="50" r="1.5"/><circle cx="190" cy="48" r="1.5"/>
-            <circle cx="120" cy="86" r="1.5"/><circle cx="160" cy="84" r="1.5"/><circle cx="200" cy="82" r="1.5"/>
-            <circle cx="130" cy="120" r="1.5"/><circle cx="170" cy="118" r="1.5"/><circle cx="210" cy="116" r="1.5"/>
-          </g>
-          <!-- hazard -->
-          <circle cx="240" cy="52" r="13" fill="rgba(217,48,37,.10)" stroke="#d93025"
-                  stroke-width="1.2" stroke-dasharray="4 3"/>
-          <!-- takeoff pad -->
-          <rect x="58" y="126" width="22" height="18" rx="5" fill="#f59e0b" stroke="#fff" stroke-width="1.4"/>
-          <text x="69" y="139" text-anchor="middle" font-size="10" font-weight="700" fill="#3d2600">A</text>
-          <!-- wind -->
-          <g>
-            <circle cx="284" cy="150" r="17" fill="rgba(255,255,255,.9)" stroke="#c3cfdb"/>
-            <path d="M284 162 L284 138" stroke="#1565c0" stroke-width="1.8"/>
-            <path d="M284 138 l-4 6 h8 z" fill="#1565c0"/>
-          </g>
-          <!-- drone -->
-          <circle cx="160" cy="84" r="9" fill="rgba(15,138,77,.16)"/>
-          <circle cx="160" cy="84" r="4.4" fill="#fff" stroke="#0b7a43" stroke-width="1.8"/>
-        </svg>
-        <span class="pill live">● Playable</span>
-      </div>
-      <div class="card-body">
-        <h3>Drone Mission Planner</h3>
-        <p>
-          Plan a photogrammetry survey over live map imagery. Every control starts at zero —
-          pick a launch site, fight the wind, mind the masts and the 120 m ceiling, and land
-          with battery to spare. The review board only scores a committed plan, and a bad one
-          is flown to its conclusion.
-        </p>
-        <div class="tags">
-          <span class="tag">Photogrammetry</span>
-          <span class="tag">Terrain</span>
-          <span class="tag">Live imagery</span>
-          <span class="tag">3 missions</span>
-        </div>
-        <span class="go">Open simulator <span class="arrow">→</span></span>
-      </div>
-    </a>
-
     <!-- ============ Survey mission designer ============ -->
     <a class="card" href="games/survey-mission-designer/">
       <div class="thumb">
@@ -321,10 +244,10 @@
       <div class="card-body">
         <h3>Survey Mission Designer</h3>
         <p>
-          Five taskings, five terrains, one review board. Digitize a 2–3 km² block on live
+          Five taskings, five terrains, one review board. Plan a fixed 2 km² block on live
           imagery, match the payload — nadir, oblique or LiDAR — to the deliverable, and plan
-          around real OSM obstructions and real SRTM terrain. Fixed-wing gets one flight;
-          multirotor gets a battery budget; the hills tax everyone.
+          around real OSM obstructions, real SRTM terrain and the forecast wind. One battery
+          per mission; the hills and the headwind tax everyone.
         </p>
         <div class="tags">
           <span class="tag">Payload selection</span>

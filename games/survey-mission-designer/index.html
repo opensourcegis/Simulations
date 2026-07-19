@@ -183,6 +183,23 @@
     white-space: nowrap;
   }
 
+  /* wind streamlines — dashes flow downwind */
+  path.windflow { stroke-linecap: round; animation: windDash linear infinite; }
+  @keyframes windDash { to { stroke-dashoffset: -120; } }
+
+  /* the aircraft flying the plan */
+  .drone-marker {
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    filter: drop-shadow(0 1px 2.5px rgba(0, 0, 0, .55));
+  }
+  .drone-marker .halo {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .72);
+  }
+  .drone-marker svg { position: relative; display: block; }
+
   /* ---------- Brief ---------- */
   .brief-obj {
     font-size: 13.5px;
@@ -209,7 +226,7 @@
   .platform-tag.multi { background: var(--info-wash); color: var(--info); border-color: rgba(21,101,192,.3); }
 
   /* ---------- Digitize toolbar ---------- */
-  .tool-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+  .tool-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
   .tool-btn {
     background: var(--panel-2);
     border: 1px solid var(--line);
@@ -459,13 +476,10 @@
         <div class="card-head">
           <h2>1 · Digitize</h2>
           <span class="spacer"></span>
-          <button class="ghost-btn" id="clearBtn" style="padding:4px 10px;font-size:12px;">Clear all</button>
+          <button class="ghost-btn" id="clearBtn" style="padding:4px 10px;font-size:12px;">Reset points</button>
         </div>
         <div class="card-body">
           <div class="tool-row">
-            <button class="tool-btn" id="toolAoi" aria-pressed="false">
-              ▭ Survey block <span class="st" id="stAoi">not drawn</span>
-            </button>
             <button class="tool-btn" id="toolTakeoff" aria-pressed="false">
               ▲ Take-off <span class="st" id="stTakeoff">not placed</span>
             </button>
@@ -473,7 +487,7 @@
               ⦿ Start WP <span class="st" id="stStart">not placed</span>
             </button>
           </div>
-          <div class="footnote">Survey block: click one corner, then the opposite corner. Obstructions (red) are live from OpenStreetMap where available, plus site-recce reports — plan around them.</div>
+          <div class="footnote">The 2 km² survey block (green) is fixed by the tasking. Place take-off and the start waypoint. Obstructions (red) are live from OpenStreetMap where available, plus site-recce reports — plan around them.</div>
         </div>
       </div>
 
@@ -482,8 +496,8 @@
         <div class="card-head"><h2>2 · Payload</h2></div>
         <div class="card-body">
           <div class="seg" id="payloadSeg">
-            <button data-payload="nadir" aria-pressed="false">Nadir RGB<span class="hint">20 MP mapping cam · full endurance</span></button>
-            <button data-payload="oblique" aria-pressed="false">Oblique 5-cam<span class="hint">for 3D façades · −15% endurance</span></button>
+            <button data-payload="nadir" aria-pressed="false">Nadir RGB<span class="hint">wide-swath mapping cam · full endurance</span></button>
+            <button data-payload="oblique" aria-pressed="false">Oblique 5-cam<span class="hint">for 3D façades · −12% endurance</span></button>
             <button data-payload="lidar" aria-pressed="false">LiDAR<span class="hint">sees through canopy · −32% endurance</span></button>
           </div>
           <div class="coach warn2" id="payloadNote" style="display:none;"></div>
@@ -500,12 +514,12 @@
             <div class="range-scale"><span id="altMin">40 m</span><span id="altMax">120 m</span></div>
           </div>
           <div class="control" id="ctlFront">
-            <div class="label">Forward overlap <span class="spacer"></span><span class="readout" id="frontOut">75%</span></div>
-            <input type="range" id="frontRange" min="50" max="95" step="5" value="75">
+            <div class="label">Forward overlap <span class="spacer"></span><span class="readout" id="frontOut">10%</span></div>
+            <input type="range" id="frontRange" min="10" max="95" step="5" value="10">
           </div>
           <div class="control" id="ctlSide">
-            <div class="label"><span id="sideLabel">Side overlap</span> <span class="spacer"></span><span class="readout" id="sideOut">65%</span></div>
-            <input type="range" id="sideRange" min="20" max="90" step="5" value="65">
+            <div class="label"><span id="sideLabel">Side overlap</span> <span class="spacer"></span><span class="readout" id="sideOut">10%</span></div>
+            <input type="range" id="sideRange" min="10" max="90" step="5" value="10">
           </div>
           <div class="control" id="ctlSpeed">
             <div class="label">Airspeed <span class="spacer"></span><span class="readout" id="speedOut">8 m/s</span></div>
@@ -613,10 +627,12 @@ function rng(seed) {
 }
 
 /* ---------------- sensor models ---------------- */
+/* Calibration anchor: multirotor + nadir = 50 min pack, and one pack
+   realistically covers the fixed 2 km² block at 80/80 overlaps. */
 const SENSORS = {
-  nadir:   { name: "Nadir RGB (20 MP)",  pxUm: 2.41, focalMm: 8.8, imgW: 5472, imgH: 3648, gsdFactor: 1.0,  endur: 1.00 },
-  oblique: { name: "Oblique 5-cam",      pxUm: 2.41, focalMm: 8.8, imgW: 5472, imgH: 3648, gsdFactor: 1.25, endur: 0.85 },
-  lidar:   { name: "LiDAR",              fovDeg: 75, usableHz: 60000,                              endur: 0.68 }
+  nadir:   { name: "Nadir RGB (wide-swath 48 MP)", pxUm: 2.5, focalMm: 6.0, imgW: 8000, imgH: 6000, gsdFactor: 1.0,  endur: 1.00 },
+  oblique: { name: "Oblique 5-cam",                pxUm: 2.5, focalMm: 6.0, imgW: 8000, imgH: 6000, gsdFactor: 1.15, endur: 0.88 },
+  lidar:   { name: "LiDAR",                        fovDeg: 75, usableHz: 60000,                             endur: 0.68 }
 };
 function gsdCm(payload, altM) {              // effective ground sample distance
   const s = SENSORS[payload];
@@ -632,9 +648,12 @@ function lidarDensity(altM, spdMs) {         // pts/m² single pass
 
 /* ---------------- platforms ---------------- */
 const PLATFORMS = {
-  multi: { name: "Multirotor", baseEndur: 32, climbPenMinPer100m: 0.5, turnSec: 7,  spdMin: 4,  spdMax: 12, spdDef: 8,  altMax: 120, transClearM: 30,  transClearNote: "30 m clear pad" },
-  fixed: { name: "Fixed-wing", baseEndur: 60, climbPenMinPer100m: 0.3, turnRadM: 70, spdMin: 14, spdMax: 24, spdDef: 17, altMax: 300, transClearM: 160, transClearNote: "160 m transition corridor" }
+  multi: { name: "Multirotor", baseEndur: 50, climbPenMinPer100m: 0.5, turnSec: 6,  spdMin: 5,  spdMax: 15, spdDef: 12, altMax: 300, ceilM: 120, transClearM: 30,  transClearNote: "30 m clear pad" },
+  fixed: { name: "Fixed-wing", baseEndur: 60, climbPenMinPer100m: 0.3, turnRadM: 70, spdMin: 14, spdMax: 24, spdDef: 17, altMax: 300, ceilM: 300, transClearM: 160, transClearNote: "160 m transition corridor" }
 };
+
+/* fixed survey block, identical tasking every mission */
+const AOI_W = 1600, AOI_H = 1250;              // metres → 2.0 km²
 
 /* ---------------- missions ---------------- */
 const MISSIONS = [
@@ -648,13 +667,14 @@ const MISSIONS = [
     deliverable: "Orthophoto + DSM",
     objective: `<b>Objective:</b> Large-scale <b>orthophoto and DSM</b> of a dense city block in Dehradun
       for a municipal property-tax base map. Platform assigned: <b>multirotor</b> (tight airspace,
-      vertical take-off between buildings). Digitize a 2–3 km² survey block inside the demand zone,
-      fix a safe take-off point and the entry waypoint, and design the block flight.`,
+      vertical take-off between buildings). The 2 km² survey block is fixed on the map —
+      fix a safe take-off point and the entry waypoint, and design a block flight that
+      lands on one battery.`,
     concept: `<b>Concept taught:</b> GSD is set by flying height — every metre up coarsens the pixel.
       In town, masts and high-rise blocks force you up; the spec pulls you down. Find the band that
       satisfies both, and keep 30 m of vertical clearance over the tallest obstruction in the block.`,
     spec: { gsdMaxCm: 5.0, densityMin: null, frontMin: 75, sideMin: 65,
-            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 5, vAccCm: 10, reservePct: 15, batteries: 4 },
+            hAccCm: 5, vAccCm: 10, reservePct: 15 },
     zoneRadM: 1500,
     obstacles: { n: 9, types: ["mast", "hirise", "watertank", "mast", "chimney"] }
   },
@@ -669,12 +689,12 @@ const MISSIONS = [
     objective: `<b>Objective:</b> A <b>textured 3D model</b> of the Golconda fort precinct and the
       settlement at its base, for heritage conservation and tourism. Platform assigned:
       <b>multirotor</b>. A nadir camera looks straight down and never images a wall — pick the
-      payload that captures façades. Block of 2–3 km² over the demand zone.`,
+      payload that captures façades. The 2 km² block is fixed over the fort precinct.`,
     concept: `<b>Concept taught:</b> Deliverable drives payload. 3D reconstruction needs oblique
       views of every vertical surface, higher overlaps (80/75) for the mesh, and the extra lens
       rig costs ~15% endurance — your area budget shrinks accordingly.`,
     spec: { gsdMaxCm: 5.0, densityMin: null, frontMin: 80, sideMin: 75,
-            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 8, vAccCm: 12, reservePct: 15, batteries: 7 },
+            hAccCm: 8, vAccCm: 12, reservePct: 15 },
     zoneRadM: 1500,
     obstacles: { n: 8, types: ["wall", "watertank", "mast", "tree"] }
   },
@@ -694,7 +714,7 @@ const MISSIONS = [
       ground between leaves. The price is the heaviest payload — roughly a third of your battery.
       Watch point density (spec ≥ 16 pts/m²): slower and lower means denser.`,
     spec: { gsdMaxCm: null, densityMin: 16, frontMin: null, sideMin: 30,
-            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 15, vAccCm: 10, reservePct: 15, batteries: 4 },
+            hAccCm: 15, vAccCm: 10, reservePct: 15 },
     zoneRadM: 1600,
     obstacles: { n: 7, types: ["tree", "mast", "tree", "pylon"] }
   },
@@ -705,7 +725,7 @@ const MISSIONS = [
     wind: { dirDeg: 270, speedMs: 6 },
     base: "imagery", hillshade: false,
     platform: "fixed", requiredPayload: "nadir",
-    deliverable: "Orthophoto (5 cm) over 3 km²",
+    deliverable: "Orthophoto (5 cm), single flight",
     objective: `<b>Objective:</b> <b>Orthophoto at 5 cm GSD</b> across a canal command area for an
       irrigation department crop census — flat farmland, big area, no ground detail smaller than a
       bund. Platform assigned: <b>fixed-wing</b> for its endurance. Fixed-wing needs a
@@ -715,7 +735,7 @@ const MISSIONS = [
       spec allows ~180 m), widen the footprint, cut the line count, and 3 km² fits in one flight.
       But every turn burns a wide arc, and launch/recovery needs open ground.`,
     spec: { gsdMaxCm: 5.0, densityMin: null, frontMin: 70, sideMin: 60,
-            areaMinKm2: 2.4, areaMaxKm2: 3.2, hAccCm: 10, vAccCm: 20, reservePct: 15, batteries: 1 },
+            hAccCm: 10, vAccCm: 20, reservePct: 15 },
     zoneRadM: 1800,
     obstacles: { n: 8, types: ["pylon", "mast", "tree", "pylon", "chimney"] }
   },
@@ -737,7 +757,7 @@ const MISSIONS = [
       and point density — swings valley to crest. The review board samples real elevation under
       your block and takes it out of your battery.`,
     spec: { gsdMaxCm: null, densityMin: 8, frontMin: null, sideMin: 40,
-            areaMinKm2: 2.0, areaMaxKm2: 3.0, hAccCm: 20, vAccCm: 15, reservePct: 20, batteries: 1 },
+            hAccCm: 20, vAccCm: 15, reservePct: 20 },
     zoneRadM: 1700,
     obstacles: { n: 7, types: ["mast", "tree", "watertank", "mast"] }
   }
@@ -759,12 +779,13 @@ const OBST_V_BUFFER = 30;   // m vertical clearance over obstruction top
 const S = {
   mission: null,
   payload: null,
-  alt: 80, front: 75, side: 65, speed: 8,
+  alt: 80, front: 10, side: 10, speed: 12,
   takeoffHdg: 0, legHdg: 90,
   aoi: null,            // L.LatLngBounds
   takeoff: null,        // {lat,lng}
   startwp: null,
   obstacles: [],        // {lat,lng,h,label,src}
+  trees: [],            // {lat,lng,h}
   elevTakeoff: null,    // m AMSL
   elevGrid: null,       // {mean,min,max} over AOI
   mode: null            // 'aoi' | 'takeoff' | 'start'
@@ -794,12 +815,13 @@ L.control.layers(
 L.control.scale({ imperial: false }).addTo(map);
 
 const layers = {
-  zone: L.layerGroup().addTo(map),
+  windflow: L.layerGroup().addTo(map),
+  trees: L.layerGroup().addTo(map),
   obstacles: L.layerGroup().addTo(map),
   aoi: L.layerGroup().addTo(map),
   lines: L.layerGroup().addTo(map),
   points: L.layerGroup().addTo(map),
-  preview: L.layerGroup().addTo(map)
+  drone: L.layerGroup().addTo(map)
 };
 
 /* ---------------- elevation (AWS Terrarium tiles) ---------------- */
@@ -870,17 +892,48 @@ function synthObstacles(m) {
   for (let i = 0; i < m.obstacles.n; i++) {
     const type = m.obstacles.types[i % m.obstacles.types.length];
     const t = OBST_TYPES[type];
-    const ang = r() * Math.PI * 2;
-    const rad = 180 + r() * (m.zoneRadM - 260);
-    const p = offsetM(m.center, Math.cos(ang) * rad, Math.sin(ang) * rad);
+    let p, hMax = t.hMax;
+    if (i < 3) {                               // guarantee obstructions inside the fixed block,
+      p = offsetM(m.center, (r() * 2 - 1) * (AOI_W / 2 - 90), (r() * 2 - 1) * (AOI_H / 2 - 90));
+      hMax = Math.min(t.hMax, 48);             // …but keep them overflyable within the ceiling
+    } else {
+      const ang = r() * Math.PI * 2;
+      const rad = 180 + r() * (m.zoneRadM - 260);
+      p = offsetM(m.center, Math.cos(ang) * rad, Math.sin(ang) * rad);
+    }
     out.push({
       lat: p.lat, lng: p.lng,
-      h: Math.round(t.hMin + r() * (t.hMax - t.hMin)),
+      h: Math.round(t.hMin + r() * (hMax - t.hMin)),
       label: t.label, src: "recce"
     });
   }
   return out;
 }
+/* scattered trees — they matter for take-off clearance */
+const TREE_SVG = `<svg viewBox="0 0 20 22" width="17" height="19"><path d="M10 0 L16 9 H13 L18 16 H2 L7 9 H4 Z" fill="#2e7d32" stroke="#1b5e20" stroke-width=".6"/><rect x="8.9" y="16" width="2.2" height="5.4" rx="1" fill="#6d4c41"/></svg>`;
+function synthTrees(m) {
+  const r = rng(m.seed * 523 + 91);
+  const out = [];
+  const n = 16 + Math.floor(r() * 6);
+  for (let i = 0; i < n; i++) {
+    const ang = r() * Math.PI * 2;
+    const rad = 120 + r() * 1900;
+    const p = offsetM(m.center, Math.cos(ang) * rad, Math.sin(ang) * rad);
+    out.push({ lat: p.lat, lng: p.lng, h: Math.round(8 + r() * 17) });
+  }
+  return out;
+}
+function renderTrees() {
+  layers.trees.clearLayers();
+  for (const t of S.trees) {
+    L.marker([t.lat, t.lng], {
+      icon: L.divIcon({ className: "", html: TREE_SVG, iconSize: [17, 19], iconAnchor: [8, 19] }),
+      interactive: true
+    }).addTo(layers.trees)
+      .bindTooltip(`Tree · ~${t.h} m`, { direction: "top", className: "obst-label", offset: [0, -18] });
+  }
+}
+
 async function osmObstacles(m) {
   const rad = m.zoneRadM + 300;
   const q = `[out:json][timeout:8];(
@@ -927,6 +980,7 @@ async function loadObstacles(m) {
   if (S.mission !== m) return;              // user switched missions mid-fetch
   const merged = [...S.obstacles];
   for (const o of osm) {
+    if (S.aoi && pointInBounds(o, S.aoi) && o.h > 48) continue;   // block site pre-cleared of tall structures
     if (merged.every(x => distM(x, o) > 120)) merged.push(o);
   }
   S.obstacles = merged.slice(0, 14);
@@ -934,25 +988,21 @@ async function loadObstacles(m) {
   recalc();
 }
 
-/* ---------------- digitize tools ---------------- */
-let aoiCornerA = null;
+/* ---------------- placement tools (the block itself is fixed) ---------------- */
 const noteEl = document.getElementById("mapNote");
 const noteTxt = document.getElementById("mapNoteText");
 
 function setMode(mode) {
   S.mode = (S.mode === mode) ? null : mode;
-  aoiCornerA = null;
-  layers.preview.clearLayers();
-  for (const [id, m] of [["toolAoi", "aoi"], ["toolTakeoff", "takeoff"], ["toolStart", "start"]]) {
+  for (const [id, m] of [["toolTakeoff", "takeoff"], ["toolStart", "start"]]) {
     document.getElementById(id).setAttribute("aria-pressed", String(S.mode === m));
   }
   document.getElementById("map").classList.toggle("digitizing", !!S.mode);
   noteEl.classList.toggle("mode-on", !!S.mode);
   noteTxt.textContent =
-    S.mode === "aoi" ? "Survey block: click the FIRST corner of the rectangle…" :
     S.mode === "takeoff" ? "Click the take-off / launch point (open ground, clear of red buffers)." :
     S.mode === "start" ? "Click the first waypoint — where the block flight should begin (inside the block, on the edge facing take-off)." :
-    "Adjust parameters, then submit the plan for review.";
+    "The green block is your tasking. Place take-off and start waypoint, then tune the plan.";
 }
 
 map.on("click", (e) => {
@@ -963,28 +1013,6 @@ map.on("click", (e) => {
   } else if (S.mode === "start") {
     S.startwp = { lat: e.latlng.lat, lng: e.latlng.lng };
     setMode(null); drawPoints(); recalc();
-  } else if (S.mode === "aoi") {
-    if (!aoiCornerA) {
-      aoiCornerA = e.latlng;
-      noteTxt.textContent = "…now click the OPPOSITE corner. Aim for 2–3 km².";
-    } else {
-      S.aoi = L.latLngBounds(aoiCornerA, e.latlng);
-      aoiCornerA = null;
-      const d2 = aoiDims(S.aoi);                 // start legs on the long axis; trainee re-aims for wind
-      S.legHdg = d2.w >= d2.h ? 90 : 0;
-      renderDials();
-      setMode(null); drawAoi(); refreshAoiElev(); recalc();
-    }
-  }
-});
-map.on("mousemove", (e) => {
-  if (S.mode === "aoi" && aoiCornerA) {
-    layers.preview.clearLayers();
-    const b = L.latLngBounds(aoiCornerA, e.latlng);
-    L.rectangle(b, { color: "#1565c0", weight: 1.5, dashArray: "6 5", fillOpacity: 0.05 }).addTo(layers.preview);
-    const a = aoiAreaKm2(b);
-    L.tooltip({ permanent: true, direction: "top", className: "obst-label" })
-      .setLatLng(b.getCenter()).setContent(`${a.toFixed(2)} km²`).addTo(layers.preview);
   }
 });
 
@@ -1059,7 +1087,6 @@ function updateDigitizeStatus() {
     el.textContent = txt;
     el.classList.toggle("done", ok);
   };
-  st("stAoi", !!S.aoi, S.aoi ? `${aoiAreaKm2(S.aoi).toFixed(2)} km² ✓` : "not drawn");
   st("stTakeoff", !!S.takeoff, S.takeoff ? "placed ✓" : "not placed");
   st("stStart", !!S.startwp, S.startwp ? "placed ✓" : "not placed");
 }
@@ -1136,12 +1163,89 @@ function planLines() {
 
 function drawPlan(plan) {
   layers.lines.clearLayers();
-  if (!plan) return;
+  if (!plan) { stopDroneAnim(); return; }
   L.polyline(plan.path.map(p => [p.lat, p.lng]),
     { color: "#0f8a4d", weight: 2, opacity: 0.9 }).addTo(layers.lines);
   if (S.takeoff) {
     L.polyline([[S.takeoff.lat, S.takeoff.lng], [plan.path[0].lat, plan.path[0].lng]],
       { color: "#e37400", weight: 1.6, dashArray: "6 5" }).addTo(layers.lines);
+  }
+  startDroneAnim(plan);
+}
+
+/* ---------------- the aircraft (clipart from the original planner; nose points NE,
+   so aim it at heading H with rotate(H − 45)) ---------------- */
+const DRONE_ART_HEADING = 45;
+const DRONE_SVG = `<svg viewBox="0 0 24 24" width="21" height="21"><path fill="#16202c" d="M15.612 11.842l1.452-2.622a1.954 1.954 0 0 0 .247-.95 1.572 1.572 0 0 0-.029-.28l2.364 2.364.707-.707-6-6-.707.707 2.365 2.364a1.572 1.572 0 0 0-.28-.029 1.958 1.958 0 0 0-.95.246l-2.623 1.453-7.092-7.092a1.019 1.019 0 0 0-1.435 0l-1.097 1.1a1.875 1.875 0 0 0-.295 2.264 30.92 30.92 0 0 0 5.349 6.612l.852.852-3.155 3.959-1.834-.936a1.06 1.06 0 0 0-1.295.162l-.851.851a1.032 1.032 0 0 0-.158 1.265l1.771 2.95-.772.772a.5.5 0 1 0 .707.707l.772-.771 2.951 1.77a1.03 1.03 0 0 0 1.264-.156l.851-.851a1.047 1.047 0 0 0 .178-1.267l-.951-1.863 3.959-3.155.845.844a30.966 30.966 0 0 0 6.619 5.357 1.876 1.876 0 0 0 2.266-.296l1.094-1.095a1.015 1.015 0 0 0 .001-1.437zm-.345-4.033a.956.956 0 0 1 .463-.12.58.58 0 0 1 .58.58.953.953 0 0 1-.12.465l-1.314 2.373-1.983-1.984zm5.632 12.95a.873.873 0 0 1-1.056.137 29.953 29.953 0 0 1-6.406-5.19l-1.484-1.484-5.297 4.22 1.323 2.591-.002.09.008.014-.895.858-2.736-1.642.5-.5a.5.5 0 0 0-.707-.706l-.497.496-1.64-2.776.853-.852 2.696 1.329 4.22-5.297-1.492-1.491a29.906 29.906 0 0 1-5.183-6.399.874.874 0 0 1 .137-1.055l1.12-1.098 17.634 17.658z"/></svg>`;
+
+const droneAnim = { raf: null, marker: null };
+function stopDroneAnim() {
+  if (droneAnim.raf) cancelAnimationFrame(droneAnim.raf);
+  droneAnim.raf = null;
+  layers.drone.clearLayers();
+  droneAnim.marker = null;
+}
+function startDroneAnim(plan) {
+  stopDroneAnim();
+  const pts = S.takeoff ? [S.takeoff, ...plan.path] : plan.path;
+  if (pts.length < 2) return;
+  const segs = [];
+  let total = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const d = distM(pts[i], pts[i + 1]);
+    if (d < 0.5) continue;
+    segs.push({ a: pts[i], b: pts[i + 1], d, c0: total });
+    total += d;
+  }
+  if (!segs.length) return;
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="drone-marker"><span class="halo"></span>${DRONE_SVG}</div>`,
+    iconSize: [30, 30], iconAnchor: [15, 15]
+  });
+  droneAnim.marker = L.marker([pts[0].lat, pts[0].lng], { icon, interactive: false, zIndexOffset: 900 }).addTo(layers.drone);
+  const paceMs = Math.max(6, S.speed) * 20;      // time-lapse ground speed
+  const t0 = performance.now();
+  const step = (now) => {
+    if (!droneAnim.marker) return;
+    const dist = ((now - t0) / 1000 * paceMs) % total;
+    let sIdx = 0;
+    while (sIdx < segs.length - 1 && dist > segs[sIdx].c0 + segs[sIdx].d) sIdx++;
+    const s = segs[sIdx];
+    const f = Math.min(1, Math.max(0, (dist - s.c0) / s.d));
+    const lat = s.a.lat + (s.b.lat - s.a.lat) * f;
+    const lng = s.a.lng + (s.b.lng - s.a.lng) * f;
+    droneAnim.marker.setLatLng([lat, lng]);
+    const brg = Math.atan2((s.b.lng - s.a.lng) * Math.cos(lat * DEG), s.b.lat - s.a.lat) / DEG;
+    const el = droneAnim.marker.getElement();
+    const svg = el && el.querySelector("svg");
+    if (svg) svg.style.transform = `rotate(${brg - DRONE_ART_HEADING}deg)`;
+    droneAnim.raf = requestAnimationFrame(step);
+  };
+  droneAnim.raf = requestAnimationFrame(step);
+}
+
+/* ---------------- animated wind streamlines ---------------- */
+function genWindFlow(m) {
+  layers.windflow.clearLayers();
+  const r = rng(m.seed * 131 + 5);
+  const to = (m.wind.dirDeg + 180) % 360;
+  const ux = Math.sin(to * DEG), uy = Math.cos(to * DEG);
+  const dur = Math.max(1.4, 26 / m.wind.speedMs);          // stronger wind → faster dashes
+  for (let i = 0; i < 16; i++) {
+    const ang = r() * Math.PI * 2, rad = r() * 2000;
+    const len = 380 + r() * 340;
+    const p0 = offsetM(m.center, Math.cos(ang) * rad - ux * len / 2, Math.sin(ang) * rad - uy * len / 2);
+    const p1 = offsetM(p0, ux * len, uy * len);
+    const pl = L.polyline([[p0.lat, p0.lng], [p1.lat, p1.lng]], {
+      className: "windflow", color: "#2b7bd3", weight: 1.8, opacity: 0.5,
+      dashArray: "16 104", interactive: false
+    }).addTo(layers.windflow);
+    const el = pl.getElement();
+    if (el) {
+      el.style.animationDuration = dur + "s";
+      el.style.animationDelay = (-r() * dur).toFixed(2) + "s";
+    }
   }
 }
 
@@ -1198,19 +1302,6 @@ function computePlan() {
     }
   }
 
-  // sortie split: multirotor swaps batteries; fixed-wing must do it in one flight
-  const usable = endur * (1 - m.spec.reservePct / 100);
-  let sorties = null;
-  if (flightMin != null) {
-    if (m.platform === "multi") {
-      sorties = Math.max(1, Math.ceil(flightMin / usable));
-      if (sorties > 1 && transit > 0) {          // each swap ferries home and back out
-        flightMin += (sorties - 1) * 2 * (transit / S.speed) / 60;
-        sorties = Math.max(1, Math.ceil(flightMin / usable));
-      }
-    } else sorties = 1;
-  }
-
   const g = gsdCm(S.payload, S.alt);
   const gsFast = gsA != null ? Math.max(gsA, gsB) : S.speed;   // tailwind leg drives the camera
   const dens = S.payload === "lidar" ? lidarDensity(S.alt, S.speed) : null;
@@ -1219,7 +1310,7 @@ function computePlan() {
     : null;
 
   return { plan, endur, elevDerate, flightMin, transit, relief, gsd: g, dens, photoInt,
-           usable, sorties, wind, gsA, gsB, crossComp, headComp, windBlocked,
+           wind, gsA, gsB, crossComp, headComp, windBlocked,
            margin: (plan && flightMin != null) ? (endur - flightMin) / endur : null };
 }
 
@@ -1252,13 +1343,10 @@ function recalc() {
 
   if (r.plan) {
     cells.push(metricCell("Flight lines", fmt(r.plan.n), `spacing ${fmt(r.plan.spacing)} m`));
-    cells.push(metricCell("Block", `${aoiAreaKm2(S.aoi).toFixed(2)} km²`,
-      `spec ${spec.areaMinKm2}–${spec.areaMaxKm2} km²`,
-      (aoiAreaKm2(S.aoi) >= spec.areaMinKm2 && aoiAreaKm2(S.aoi) <= spec.areaMaxKm2) ? "is-good" : "is-warn"));
   } else {
-    cells.push(metricCell("Flight lines", "—", "draw block + payload"));
-    cells.push(metricCell("Block", S.aoi ? `${aoiAreaKm2(S.aoi).toFixed(2)} km²` : "—", `spec ${spec.areaMinKm2}–${spec.areaMaxKm2} km²`));
+    cells.push(metricCell("Flight lines", "—", "choose a payload"));
   }
+  cells.push(metricCell("Block", "2.00 km²", `fixed tasking · ${(AOI_W / 1000).toFixed(1)} × ${(AOI_H / 1000).toFixed(2)} km`));
 
   cells.push(metricCell("Wind", `${r.wind.speedMs} m/s`,
     `from ${pad3(r.wind.dirDeg)}° ${cardinal(r.wind.dirDeg)}`));
@@ -1272,19 +1360,13 @@ function recalc() {
     cells.push(metricCell("Ground speed", "—", "incomplete plan"));
   }
 
-  cells.push(metricCell("Endurance / battery", `${mins(r.endur)} min`,
-    r.elevDerate ? `−${(r.elevDerate * 100).toFixed(0)}% altitude derate` : `${PLATFORMS[m.platform].name.toLowerCase()} · ${S.payload ? SENSORS[S.payload].name.split(" ")[0].toLowerCase() : "no"} payload`));
+  cells.push(metricCell("Endurance", `${mins(r.endur)} min`,
+    r.elevDerate ? `−${(r.elevDerate * 100).toFixed(0)}% altitude derate` : `single battery · ${S.payload ? SENSORS[S.payload].name.split(" ")[0].toLowerCase() : "no"} payload`));
   if (r.flightMin != null) {
-    if (m.platform === "multi") {
-      cells.push(metricCell("Flight time", `${mins(r.flightMin)} min`,
-        `${r.sorties} sortie${r.sorties > 1 ? "s" : ""} · budget ${spec.batteries} batteries`,
-        r.sorties <= spec.batteries ? "is-good" : "is-bad"));
-    } else {
-      const mg = r.margin * 100;
-      cells.push(metricCell("Flight time", `${mins(r.flightMin)} min`,
-        `one flight · reserve ${mg.toFixed(0)}% (need ≥ ${spec.reservePct}%)`,
-        mg >= spec.reservePct ? "is-good" : mg >= 0 ? "is-warn" : "is-bad"));
-    }
+    const mg = r.margin * 100;
+    cells.push(metricCell("Flight time", `${mins(r.flightMin)} min`,
+      `one battery · reserve ${mg.toFixed(0)}% (need ≥ ${spec.reservePct}%)`,
+      mg >= spec.reservePct ? "is-good" : mg >= 0 ? "is-warn" : "is-bad"));
   } else {
     cells.push(metricCell("Flight time", "—", "incomplete plan"));
   }
@@ -1297,14 +1379,16 @@ function recalc() {
   if (r.plan && r.windBlocked) {
     msg = `<b>Wind beats the aircraft.</b> ${r.wind.speedMs} m/s wind vs ${S.speed} m/s airspeed on a ${pad3(S.legHdg)}° leg heading — the drone cannot hold the line. Speed up or change the leg heading.`;
     cls = "coach alert";
+  } else if (S.alt > PLATFORMS[m.platform].ceilM) {
+    msg = `<b>Above the ${PLATFORMS[m.platform].ceilM} m ceiling.</b> The slider lets you climb; the law does not. The review board will dock the plan.`;
+    cls = "coach alert";
   } else if (r.photoInt != null && r.photoInt < 1.6) {
     msg = `<b>Camera can’t keep up:</b> trigger interval ${r.photoInt.toFixed(1)} s. Slow down, fly higher, or drop forward overlap.`;
     cls = "coach alert";
-  } else if (r.flightMin != null && m.platform === "multi" && r.sorties > spec.batteries) {
-    msg = `<b>Over the battery budget:</b> ${r.sorties} sorties needed, ${spec.batteries} batteries carried. Fly higher (wider strip), trim side-lap toward spec, speed up, or shrink the block.`;
-    cls = "coach alert";
-  } else if (r.flightMin != null && m.platform === "fixed" && r.margin < 0) {
-    msg = `<b>Over endurance.</b> Fixed-wing gets one flight — no battery swaps mid-block. Fly higher, widen spacing (less side-lap), speed up, or shrink the block.`;
+  } else if (r.flightMin != null && r.margin * 100 < spec.reservePct) {
+    msg = r.margin < 0
+      ? `<b>Over endurance.</b> One battery is all you get — fly higher (wider strip), trim side-lap toward spec, speed up, or shorten transit.`
+      : `<b>Reserve thin:</b> ${(r.margin * 100).toFixed(0)}% left vs the ${spec.reservePct}% policy. Fly higher, trim side-lap, or speed up.`;
     cls = "coach alert";
   } else if (r.transit > 600) {
     msg = `<b>Long transit:</b> ${fmt(r.transit)} m from take-off to the first line — battery burnt before survey starts. Move take-off closer.`;
@@ -1383,7 +1467,7 @@ function evaluate() {
       const fOk = spec.frontMin == null || S.front >= spec.frontMin;
       const sOk = spec.sideMin == null || S.side >= spec.sideMin;
       pts = (fOk ? 5 : 2) + (sOk ? 5 : 2);
-      if (spec.frontMin != null && spec.sideMin != null && S.front >= 88 && S.side >= 85) { pts = 8; parts.push("overlaps far beyond spec — doubling flight time for nothing"); }
+      if (spec.frontMin != null && spec.sideMin != null && S.front >= 90 && S.side >= 88) { pts = 8; parts.push("overlaps far beyond spec — burning battery for nothing"); }
       parts.push(`forward ${S.front}%${spec.frontMin ? ` (spec ≥ ${spec.frontMin}%)` : ""} ${fOk ? "✓" : "✗"}`);
       parts.push(`side ${S.side}%${spec.sideMin ? ` (spec ≥ ${spec.sideMin}%)` : ""} ${sOk ? "✓" : "✗"}`);
       if (!fOk || !sOk) tips.push(`<div class="coach warn2"><b>Overlap short.</b> This mission needs ${spec.frontMin}/${spec.sideMin}. Thin overlap means weak tie-points, holes in the ${m.requiredPayload === "oblique" ? "mesh" : "orthomosaic"}, and a re-fly.</div>`);
@@ -1391,19 +1475,26 @@ function evaluate() {
     rows.push({ name: "Overlap design", pts: Math.min(10, pts), max: 10, why: parts.join(" · ") });
   }
 
-  /* 4 · block geometry — 10 */
+  /* 3b · leg heading vs wind — 5 */
   {
-    const a = aoiAreaKm2(S.aoi);
-    const inZone = distM(S.aoi.getCenter(), m.center) <= m.zoneRadM * 1.15;
-    let pts, why;
-    if (!inZone) { pts = 0; why = "The block is outside the demand zone (blue circle) — surveying the wrong ground."; }
-    else if (a >= spec.areaMinKm2 && a <= spec.areaMaxKm2) { pts = 10; why = `${a.toFixed(2)} km² inside the ${spec.areaMinKm2}–${spec.areaMaxKm2} km² tasking, over the demand zone.`; }
-    else if (a >= spec.areaMinKm2 * 0.75 && a <= spec.areaMaxKm2 * 1.25) { pts = 5; why = `${a.toFixed(2)} km² is outside the ${spec.areaMinKm2}–${spec.areaMaxKm2} km² tasking.`; }
-    else { pts = 0; why = `${a.toFixed(2)} km² — nowhere near the ${spec.areaMinKm2}–${spec.areaMaxKm2} km² tasking.`; }
-    rows.push({ name: "Survey block", pts, max: 10, why });
+    let pts = 0, why;
+    const wsp = m.wind.speedMs;
+    if (!r.plan) { why = "No flight lines to judge."; }
+    else if (r.windBlocked) { why = "The wind defeats this leg heading outright."; }
+    else if (wsp < 3) { pts = 5; why = `Wind is light (${wsp} m/s) — any leg heading works today.`; }
+    else {
+      const ax = axisDiff(S.legHdg, m.wind.dirDeg);   // 0° = legs run along the wind
+      if (ax >= 60) { pts = 5; why = `Legs ${ax.toFixed(0)}° off the wind axis — near-crosswind, steady ${r.gsA.toFixed(1)}/${r.gsB.toFixed(1)} m/s over the ground.`; }
+      else if (ax >= 35) { pts = 3; why = `Legs ${ax.toFixed(0)}° off the wind axis — partly up-and-down the wind; ground speed swings ${r.gsA.toFixed(1)}/${r.gsB.toFixed(1)} m/s.`; }
+      else {
+        pts = 1; why = `Legs run along the ${wsp} m/s wind — half the lines fight a ${r.headComp.toFixed(1)} m/s headwind (${Math.min(r.gsA, r.gsB).toFixed(1)} m/s over the ground).`;
+        tips.push(`<div class="coach warn2"><b>Turn the legs across the wind.</b> Crosswind legs hold a steady ground speed for the camera and burn the battery evenly, at the price of a ${r.crossComp.toFixed(1)} m/s crab. Drag the leg-heading dial toward ${pad3((m.wind.dirDeg + 90) % 180)}°.</div>`);
+      }
+    }
+    rows.push({ name: "Leg heading vs wind", pts, max: 5, why });
   }
 
-  /* 5 · endurance — 20 */
+  /* 4 · endurance — 20 (one battery, both platforms) */
   {
     let pts = 0, why;
     const derateNote = r.elevDerate ? ` (incl. ${(r.elevDerate * 100).toFixed(0)}% thin-air derate at ${fmt(S.elevTakeoff)} m AMSL)` : "";
@@ -1412,22 +1503,14 @@ function evaluate() {
       tips.push(`<div class="coach alert"><b>Wind beats the aircraft.</b> Ground speed goes to zero (or the crosswind exceeds what the drone can crab against). Raise airspeed or swing the leg heading away from the wind axis.</div>`);
     }
     else if (r.flightMin == null) { why = "No complete plan to time."; }
-    else if (m.platform === "multi") {
-      const over = r.sorties - spec.batteries;
-      if (over <= 0) { pts = 20; why = `${mins(r.flightMin)} min of flying → ${r.sorties} sortie${r.sorties > 1 ? "s" : ""} of ${mins(r.usable)} min usable each${derateNote} — inside the ${spec.batteries}-battery budget.`; }
-      else {
-        pts = Math.max(0, 20 - 7 * over);
-        why = `${mins(r.flightMin)} min needs ${r.sorties} sorties but only ${spec.batteries} batteries are carried${derateNote}.`;
-        tips.push(`<div class="coach alert"><b>Battery budget bust.</b> Levers, in order: fly higher (wider strip, spec permitting), trim side-lap toward the spec minimum, fly faster, move take-off closer (each swap ferries the transit twice), or shrink the block.</div>`);
-      }
-    } else {
+    else {
       const mg = r.margin * 100;
-      if (mg >= spec.reservePct) { pts = 20; why = `${mins(r.flightMin)} min flown of ${mins(r.endur)} min aboard${derateNote} — ${mg.toFixed(0)}% reserve in one flight.`; }
+      if (mg >= spec.reservePct) { pts = 20; why = `${mins(r.flightMin)} min flown of ${mins(r.endur)} min aboard${derateNote} — ${mg.toFixed(0)}% reserve on one battery.`; }
       else if (mg >= spec.reservePct / 2) { pts = 14; why = `Reserve ${mg.toFixed(0)}% is under the ${spec.reservePct}% policy — one headwind from a forced landing.`; }
       else if (mg >= 0) { pts = 7; why = `Reserve ${mg.toFixed(0)}% — the plan lands on fumes.`; }
       else {
         pts = 0; why = `Needs ${mins(r.flightMin)} min but only ${mins(r.endur)} min aboard${derateNote} — the aircraft comes down inside the block.`;
-        tips.push(`<div class="coach alert"><b>Endurance bust.</b> A fixed-wing gets one flight. Levers, in order: fly higher (wider strip), reduce side-lap toward spec minimum, fly faster, shorten transit, or shrink the block.${r.elevDerate ? ` The thin-air derate at ${fmt(S.elevTakeoff)} m AMSL is costing you ${(r.elevDerate * 100).toFixed(0)}% before wheels-off — launch altitude is part of the plan.` : ""}</div>`);
+        tips.push(`<div class="coach alert"><b>Endurance bust.</b> The mission is planned on a single battery. Levers, in order: fly higher (wider strip), reduce ${S.payload === "lidar" ? "swath" : "side"} overlap toward the spec minimum, fly faster, shorten transit.${r.elevDerate ? ` The thin-air derate at ${fmt(S.elevTakeoff)} m AMSL is costing you ${(r.elevDerate * 100).toFixed(0)}% before wheels-off — launch altitude is part of the plan.` : ""}</div>`);
       }
     }
     rows.push({ name: "Endurance & reserve", pts, max: 20, why });
@@ -1466,17 +1549,29 @@ function evaluate() {
     rows.push({ name: "Take-off & entry", pts, max: 10, why: parts.join(" · ") });
   }
 
-  /* 8 · platform ops — 5 (clearance 3 + into-wind take-off 2) */
+  /* 8 · platform ops — 5 (clearance 3 + into-wind take-off 2). Trees count. */
   {
     const R2 = plat.transClearM;
     const conflict = S.obstacles.filter(o => distM(o, S.takeoff) < R2 && o.h > (m.platform === "fixed" ? 20 : 10));
+    const treesNear = S.trees.filter(t => distM(t, S.takeoff) < R2);
+    const nearestTree = S.trees.reduce((mn, t) => Math.min(mn, distM(t, S.takeoff)), Infinity);
     let pts = 0; const parts = [];
-    if (!conflict.length) {
-      pts += 3;
-      parts.push(m.platform === "fixed" ? `transition corridor (${R2} m) clear ✓` : `launch pad clearance (${R2} m) clear ✓`);
-    } else {
+    if (conflict.length) {
       parts.push(`${conflict[0].label} (${conflict[0].h} m) sits ${fmt(distM(conflict[0], S.takeoff))} m from take-off — inside the ${R2} m ${m.platform === "fixed" ? "transition corridor" : "pad clearance"}`);
       if (m.platform === "fixed") tips.push(`<div class="coach alert"><b>Transition conflict.</b> A fixed-wing climbs shallow while it transitions to wing-borne flight — it cannot hop over a ${conflict[0].h} m ${conflict[0].label.toLowerCase()} at ${fmt(distM(conflict[0], S.takeoff))} m. Move the launch point to open ground.</div>`);
+    } else if (treesNear.length) {
+      const dNear = treesNear.reduce((mn, t) => Math.min(mn, distM(t, S.takeoff)), Infinity);
+      if (dNear < (m.platform === "fixed" ? 60 : 15)) {
+        pts += 1;
+        parts.push(`tree ${fmt(dNear)} m from take-off — ${m.platform === "fixed" ? "in the climb-out path" : "rotor-wash close"}`);
+        tips.push(`<div class="coach warn2"><b>Launching out of the trees.</b> ${treesNear.length} tree(s) inside the ${R2} m ${m.platform === "fixed" ? "transition corridor" : "pad clearance"}, nearest ${fmt(dNear)} m. Shift the launch point to open ground.</div>`);
+      } else {
+        pts += 2;
+        parts.push(`${treesNear.length} tree(s) inside the ${R2} m zone (nearest ${fmt(dNear)} m) — flyable but tight`);
+      }
+    } else {
+      pts += 3;
+      parts.push(`${m.platform === "fixed" ? `transition corridor (${R2} m)` : `launch pad (${R2} m)`} clear of towers and trees ✓${isFinite(nearestTree) ? ` (nearest tree ${fmt(nearestTree)} m)` : ""}`);
     }
     const hd = angDiff(S.takeoffHdg, m.wind.dirDeg);
     if (hd <= 30) { pts += 2; parts.push(`take-off heading ${pad3(S.takeoffHdg)}° into the ${m.wind.speedMs} m/s wind ✓`); }
@@ -1488,9 +1583,19 @@ function evaluate() {
     rows.push({ name: m.platform === "fixed" ? "Transition & take-off wind" : "Launch & take-off wind", pts, max: 5, why: parts.join(" · ") });
   }
 
-  /* wind vs leg-heading advisory (no points — it already costs flight time) */
-  if (r.gsA != null && m.wind.speedMs >= 4 && axisDiff(S.legHdg, m.wind.dirDeg) <= 25) {
-    tips.push(`<div class="coach warn2"><b>Legs run along the wind.</b> Half your lines fight a ${r.headComp.toFixed(1)} m/s headwind (ground speed ${Math.min(r.gsA, r.gsB).toFixed(1)} m/s) — that asymmetry is burning battery. Crosswind legs hold a steadier ground speed for the camera, at the price of a ${r.crossComp.toFixed(1)} m/s crab.</div>`);
+  /* 9 · airspace ceiling — 5 (no hard limit; flying high costs marks instead) */
+  {
+    const ceil = plat.ceilM;
+    let pts, why;
+    if (S.alt <= ceil) { pts = 5; why = `${S.alt} m AGL is within the ${ceil} m ${m.platform === "fixed" ? "survey authorization" : "DGCA ceiling"}.`; }
+    else if (S.alt <= ceil + 40) {
+      pts = 2; why = `${S.alt} m AGL busts the ${ceil} m ceiling — flyable only with special permission you do not hold.`;
+      tips.push(`<div class="coach warn2"><b>Above the ceiling.</b> The ${ceil} m AGL limit is law, not advice. Descend to ${ceil} m or the mission needs a fresh authorisation.</div>`);
+    } else {
+      pts = 0; why = `${S.alt} m AGL is ${S.alt - ceil} m above the ${ceil} m ceiling — the plan is unflyable as filed.`;
+      tips.push(`<div class="coach alert"><b>Deep ceiling bust.</b> ${S.alt} m AGL against a ${ceil} m limit grounds the mission and invites enforcement action. Bring the height down and win back endurance some other way.</div>`);
+    }
+    rows.push({ name: "Airspace ceiling", pts, max: 5, why });
   }
 
   const total = rows.reduce((a, x) => a + x.pts, 0);
@@ -1573,10 +1678,9 @@ function renderBrief(m) {
     spec.gsdMaxCm ? ["GSD", `≤ ${spec.gsdMaxCm} cm`] : ["Point density", `≥ ${spec.densityMin} pts/m²`],
     ["Accuracy (H / V)", `${spec.hAccCm} cm / ${spec.vAccCm} cm`],
     ["Wind (forecast)", `${m.wind.speedMs} m/s from ${pad3(m.wind.dirDeg)}° ${cardinal(m.wind.dirDeg)}`],
-    ["Survey block", `${spec.areaMinKm2}–${spec.areaMaxKm2} km² inside the demand zone`],
-    m.platform === "multi"
-      ? ["Batteries", `${spec.batteries} carried · ≥ ${spec.reservePct}% reserve per sortie`]
-      : ["Battery reserve", `single flight · ≥ ${spec.reservePct}% on landing`],
+    ["Survey block", `2.0 km² · ${(AOI_W / 1000).toFixed(1)} × ${(AOI_H / 1000).toFixed(2)} km (fixed tasking)`],
+    ["Battery", `single flight · ≥ ${spec.reservePct}% reserve on landing`],
+    ["Airspace", plat.ceilM < plat.altMax ? `DGCA ceiling ${plat.ceilM} m AGL — exceeding it costs marks` : `survey authorization to ${plat.ceilM} m AGL`],
     ["Buffers", `${OBST_H_BUFFER} m stand-off · +${OBST_V_BUFFER} m overfly · ${plat.transClearNote}`]
   ];
   document.getElementById("specTable").innerHTML =
@@ -1589,7 +1693,8 @@ function applyPlatformRanges(m) {
   alt.max = plat.altMax;
   alt.min = m.platform === "fixed" ? 80 : 40;
   document.getElementById("altMin").textContent = alt.min + " m";
-  document.getElementById("altMax").textContent = plat.altMax + " m" + (m.platform === "fixed" ? " (survey auth.)" : " (DGCA ceiling)");
+  document.getElementById("altMax").textContent = plat.altMax + " m" +
+    (plat.ceilM < plat.altMax ? ` (ceiling ${plat.ceilM} m)` : " (survey auth.)");
   const spd = document.getElementById("speedRange");
   spd.min = plat.spdMin; spd.max = plat.spdMax;
   S.speed = plat.spdDef; spd.value = plat.spdDef;
@@ -1623,17 +1728,20 @@ function setPayload(p) {
 }
 
 function clearDigitized() {
-  S.aoi = null; S.takeoff = null; S.startwp = null;
-  S.elevTakeoff = null; S.elevGrid = null;
-  aoiCornerA = null;
-  layers.aoi.clearLayers(); layers.points.clearLayers();
-  layers.lines.clearLayers(); layers.preview.clearLayers();
+  S.takeoff = null; S.startwp = null;
+  S.elevTakeoff = null;
+  layers.points.clearLayers(); layers.lines.clearLayers();
   updateDigitizeStatus(); updateTerrainNote(); recalc();
 }
 
 function loadMission(m) {
   S.mission = m;
+  // fixed 2 km² tasking block, centred on the mission site
+  S.aoi = L.latLngBounds(offsetM(m.center, -AOI_W / 2, -AOI_H / 2), offsetM(m.center, AOI_W / 2, AOI_H / 2));
+  S.elevGrid = null;
   clearDigitized();
+  drawAoi();
+  refreshAoiElev();
   setPayload(null);
   setMode(null);
   S.takeoffHdg = 0; S.legHdg = 90;
@@ -1641,6 +1749,9 @@ function loadMission(m) {
   renderBrief(m);
   applyPlatformRanges(m);
   renderDials();
+  genWindFlow(m);
+  S.trees = synthTrees(m);
+  renderTrees();
   document.getElementById("windChip").innerHTML =
     `<span class="arr" style="transform:rotate(${(m.wind.dirDeg + 180) % 360}deg)">↑</span>Wind ${m.wind.speedMs} m/s from ${cardinal(m.wind.dirDeg)}`;
   map.setView([m.center.lat, m.center.lng], m.zoom);
@@ -1648,10 +1759,6 @@ function loadMission(m) {
   else if (!map.hasLayer(baseImagery)) { map.removeLayer(baseHillshade); baseImagery.addTo(map); }
   if (m.hillshade) { if (!map.hasLayer(overlayHillshade)) overlayHillshade.addTo(map); }
   else if (map.hasLayer(overlayHillshade)) map.removeLayer(overlayHillshade);
-  layers.zone.clearLayers();
-  L.circle([m.center.lat, m.center.lng], {
-    radius: m.zoneRadM, color: "#1565c0", weight: 1.4, dashArray: "8 6", fillColor: "#1565c0", fillOpacity: 0.03
-  }).addTo(layers.zone).bindTooltip("Demand zone — digitize the survey block in here", { direction: "top" });
   loadObstacles(m);
   recalc();
 }
@@ -1721,7 +1828,6 @@ bindDial("dialTO", "takeoffHdg", false);
 bindDial("dialLeg", "legHdg", true);
 
 /* toolbar */
-document.getElementById("toolAoi").addEventListener("click", () => setMode("aoi"));
 document.getElementById("toolTakeoff").addEventListener("click", () => setMode("takeoff"));
 document.getElementById("toolStart").addEventListener("click", () => setMode("start"));
 document.getElementById("clearBtn").addEventListener("click", clearDigitized);

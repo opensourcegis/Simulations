@@ -16,7 +16,6 @@ and terrain layers need an internet connection; the Plain layer works offline.
 
 | Simulator | Path |
 | --- | --- |
-| Drone Mission Planner | [`games/drone-mission-planner/`](games/drone-mission-planner/) |
 | Survey Mission Designer | [`games/survey-mission-designer/`](games/survey-mission-designer/) |
 
 ## Publishing
