@@ -13,10 +13,9 @@ const VIEW_W = 640;
 const VIEW_H = 520;
 const LIGHT = normalize([-0.3, -0.55, 0.9]);
 
-// Unique undirected edges of the house mesh, for drawing the reconstruction.
+// Unique undirected edges of the house corners, for drawing the reconstruction.
 const EDGES = (() => {
-  const set = new Set();
-  const out = [];
+  const set = new Set(); const out = [];
   MESH.faces.forEach((f) => {
     for (let i = 0; i < f.idx.length; i += 1) {
       const a = f.idx[i]; const b = f.idx[(i + 1) % f.idx.length];
@@ -27,28 +26,22 @@ const EDGES = (() => {
   return out;
 })();
 
-function hexToRgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function shadeColor(hex, s, alpha = 1) {
-  const [r, g, b] = hexToRgb(hex);
-  return `rgba(${Math.round(r * s)},${Math.round(g * s)},${Math.round(b * s)},${alpha})`;
-}
+function hexToRgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function shadeColor(hex, s, alpha = 1) { const [r, g, b] = hexToRgb(hex); return `rgba(${Math.round(r * s)},${Math.round(g * s)},${Math.round(b * s)},${alpha})`; }
 
-// Draw the house mesh with a given projector + eye position (painter's order,
-// back-face culled, Lambert-shaded). Used for both the photos and the 3D view.
+// Draw the house (structural faces + painted door/windows), painter-ordered,
+// back-face culled, Lambert-shaded. Used for both the photos and the 3D view.
 function drawMesh(ctx, proj, eye, alpha, edgeColor) {
-  const faces = MESH.faces.map((f) => {
-    const depth = helpers.norm(sub(f.centroid, eye));
-    const front = dot(f.normal, sub(eye, f.centroid)) > 0;
-    return { f, depth, front };
-  }).sort((a, b) => b.depth - a.depth);
+  const faces = MESH.drawFaces.map((f) => ({
+    f,
+    depth: helpers.norm(sub(f.centroid, eye)),
+    front: dot(f.normal, sub(eye, f.centroid)) > 0,
+  })).sort((a, b) => b.depth - a.depth);
   faces.forEach(({ f, front }) => {
     if (!front) return;
-    const pts = f.idx.map((i) => proj(MESH.vertices[i]));
+    const pts = f.pts.map(proj);
     if (pts.some((p) => !p)) return;
-    const s = 0.35 + 0.65 * Math.max(0, dot(f.normal, LIGHT));
+    const s = 0.34 + 0.66 * Math.max(0, dot(f.normal, LIGHT));
     ctx.beginPath();
     pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
     ctx.closePath();
@@ -62,24 +55,21 @@ function drawMesh(ctx, proj, eye, alpha, edgeColor) {
 // One photograph: a rendered view of the house from a camera, with detected
 // corners overlaid and the learner's matches highlighted.
 // ---------------------------------------------------------------------------
-function renderPhoto(canvas, scene, ci, activeId, assigned, hoverId, reveal) {
+function renderPhoto(canvas, scene, ci, activeId, assigned, hoverId, reveal, focus) {
   const ctx = canvas.getContext('2d');
   const { width, height } = INTRINSICS;
   const cam = scene.cameras[ci];
   const g = ctx.createLinearGradient(0, 0, 0, height);
   g.addColorStop(0, '#243447'); g.addColorStop(1, '#151f2b');
   ctx.fillStyle = g; ctx.fillRect(0, 0, width, height);
-  // ground plane hint
   ctx.fillStyle = 'rgba(20,30,40,.55)';
   const gp = [[-9, -9, 0], [9, -9, 0], [9, 9, 0], [-9, 9, 0]].map((X) => project(cam, X));
   if (gp.every((p) => p)) { ctx.beginPath(); gp.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.fill(); }
 
-  const proj = (X) => project(cam, X);
-  drawMesh(ctx, proj, cam.t, 1, 'rgba(20,14,10,.5)');
+  drawMesh(ctx, (X) => project(cam, X), cam.t, 1, 'rgba(20,14,10,.5)');
 
   const pixels = scene.keypointPixels[ci];
   const camAssign = assigned[ci] || {};
-  // reveal: faint ring on the active feature's true corner
   if (reveal && pixels[activeId]) {
     const [u, v] = pixels[activeId];
     ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5;
@@ -89,7 +79,7 @@ function renderPhoto(canvas, scene, ci, activeId, assigned, hoverId, reveal) {
     const px = pixels[kp.id];
     if (!px) return;
     const [u, v] = px;
-    const assignedTo = camAssign[kp.id]; // featureId this corner is matched to, if any
+    const assignedTo = camAssign[kp.id];
     const isActiveMatch = assignedTo === activeId;
     if (assignedTo != null) {
       const wrong = assignedTo !== kp.id;
@@ -103,6 +93,7 @@ function renderPhoto(canvas, scene, ci, activeId, assigned, hoverId, reveal) {
       ctx.fillStyle = hoverId === kp.id ? '#fff' : 'rgba(180,200,220,.7)'; ctx.fill();
     }
   });
+  if (focus) { ctx.strokeStyle = '#ffcf3f'; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, width - 3, height - 3); }
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +113,6 @@ function makeProjector(orbit) {
   };
   return { proj, eye };
 }
-
 function frustumCorners(cam, L) {
   return [[0, 0], [INTRINSICS.width, 0], [INTRINSICS.width, INTRINSICS.height], [0, INTRINSICS.height]].map(([u, v]) => {
     const dirCam = normalize([(u - INTRINSICS.cx) / INTRINSICS.f, (v - INTRINSICS.cy) / INTRINSICS.f, 1]);
@@ -130,18 +120,20 @@ function frustumCorners(cam, L) {
   });
 }
 function line(ctx, p, q, color, w = 1) { if (!p || !q) return; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
-function drawFrustum(ctx, proj, cam, color, fill, L) {
+function drawFrustum(ctx, proj, cam, color, fill, L, emphasis) {
   const apex = proj(cam.t);
   const corners = frustumCorners(cam, L).map(proj);
   if (!apex || corners.some((c) => !c)) return;
   ctx.fillStyle = fill; ctx.beginPath();
   corners.forEach((c, i) => (i ? ctx.lineTo(c[0], c[1]) : ctx.moveTo(c[0], c[1])));
   ctx.closePath(); ctx.fill();
-  for (let i = 0; i < 4; i += 1) { line(ctx, apex, corners[i], color, 1.4); line(ctx, corners[i], corners[(i + 1) % 4], color, 1.4); }
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(apex[0], apex[1], 3.4, 0, Math.PI * 2); ctx.fill();
+  for (let i = 0; i < 4; i += 1) { line(ctx, apex, corners[i], color, emphasis ? 2.4 : 1.4); line(ctx, corners[i], corners[(i + 1) % 4], color, emphasis ? 2.4 : 1.4); }
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(apex[0], apex[1], emphasis ? 4.5 : 3.4, 0, Math.PI * 2); ctx.fill();
+  if (emphasis) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(apex[0], apex[1], 6.5, 0, Math.PI * 2); ctx.stroke(); }
 }
 
-function render3D(canvas, scene, solution, orbit, showTruth) {
+function render3D(canvas, scene, solution, orbit, opts) {
+  const { showTruth, showRays, focusCam, tracks } = opts;
   const ctx = canvas.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
   g.addColorStop(0, '#111d29'); g.addColorStop(1, '#0a1119');
@@ -149,27 +141,55 @@ function render3D(canvas, scene, solution, orbit, showTruth) {
   const { proj, eye } = makeProjector(orbit);
 
   for (let x = -12; x <= 12; x += 3) {
-    line(ctx, proj([x, -12, 0]), proj([x, 12, 0]), 'rgba(90,120,150,.14)');
-    line(ctx, proj([-12, x, 0]), proj([12, x, 0]), 'rgba(90,120,150,.14)');
+    line(ctx, proj([x, -12, 0]), proj([x, 12, 0]), 'rgba(90,120,150,.13)');
+    line(ctx, proj([-12, x, 0]), proj([12, x, 0]), 'rgba(90,120,150,.13)');
   }
-  if (showTruth) drawMesh(ctx, proj, eye, 0.5, 'rgba(30,20,14,.5)');
+  if (showTruth) drawMesh(ctx, proj, eye, 0.55, 'rgba(30,20,14,.5)');
 
-  // Reconstructed structure (edges + colored points, with error links to truth).
   EDGES.forEach(([a, b]) => {
     const pa = solution.points[a]; const pb = solution.points[b];
-    if (pa && pb) line(ctx, proj(pa), proj(pb), 'rgba(126,211,33,.6)', 1.6);
+    if (pa && pb) line(ctx, proj(pa), proj(pb), 'rgba(126,211,33,.55)', 1.5);
   });
 
-  solution.cameras.forEach((cam, i) => {
-    const gt = scene.cameras[i];
-    if (showTruth && !cam.anchored) drawFrustum(ctx, proj, gt, 'rgba(150,175,200,.32)', 'rgba(150,175,200,.04)', 2.6);
-    let color = '#2ec6a8'; let fill = 'rgba(46,198,168,.10)';
-    if (cam.anchored) { color = '#f5a623'; fill = 'rgba(245,166,35,.12)'; }
-    else if (!cam.reliable) { color = '#e6463b'; fill = 'rgba(230,70,59,.10)'; }
-    drawFrustum(ctx, proj, cam, color, fill, 2.8);
-    if (!cam.anchored && cam.reliable) line(ctx, proj(cam.t), proj(gt.t), 'rgba(46,198,168,.5)', 1);
+  // Triangulation / resection rays: camera centre -> reconstructed corner.
+  if (showRays) {
+    solution.cameras.forEach((cam, ci) => {
+      if (!cam.anchored && !cam.reliable) return;
+      const isFocus = ci === focusCam;
+      const apex = proj(cam.t);
+      if (!apex) return;
+      tracks.forEach((track) => {
+        if (!track.obs[ci]) return;
+        const X = solution.points[track.featureId];
+        if (!X) return;
+        const p = proj(X);
+        if (!p) return;
+        const col = scene.keypoints[track.featureId].color;
+        const [r, gg, bb] = hexToRgb(col);
+        line(ctx, apex, p, `rgba(${r},${gg},${bb},${isFocus ? 0.85 : (focusCam == null ? 0.16 : 0.06)})`, isFocus ? 1.5 : 0.8);
+      });
+    });
+  }
+
+  // Adjustment trails: how each solved camera's centre was calculated
+  // (initial guess -> Gauss-Newton iterates -> solved pose).
+  solution.cameras.forEach((cam, ci) => {
+    if (cam.anchored || !cam.reliable || !cam.trail || cam.trail.length < 2) return;
+    const isFocus = ci === focusCam;
+    if (focusCam != null && !isFocus) return; // only the focused camera's path, to stay legible
+    const pts = cam.trail.map(proj);
+    ctx.setLineDash([5, 4]);
+    for (let i = 0; i < pts.length - 1; i += 1) line(ctx, pts[i], pts[i + 1], isFocus ? 'rgba(255,207,63,.95)' : 'rgba(255,207,63,.5)', isFocus ? 2 : 1.2);
+    ctx.setLineDash([]);
+    pts.forEach((p, i) => { if (!p || i === pts.length - 1) return; ctx.fillStyle = 'rgba(255,207,63,.9)'; ctx.beginPath(); ctx.arc(p[0], p[1], i === 0 ? 0 : 2.2, 0, Math.PI * 2); ctx.fill(); });
+    const start = pts[0];
+    if (start) {
+      ctx.strokeStyle = '#ffcf3f'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(start[0], start[1], 5, 0, Math.PI * 2); ctx.stroke();
+      if (isFocus) { ctx.fillStyle = '#ffcf3f'; ctx.font = '600 11px system-ui'; ctx.fillText('initial guess', start[0] + 8, start[1] - 6); }
+    }
   });
 
+  // Reconstructed corners (+ error link to ground truth).
   scene.keypoints.forEach((kp) => {
     const truth = proj(kp.pos);
     if (showTruth && truth) { ctx.strokeStyle = 'rgba(180,200,220,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(truth[0], truth[1], 3.4, 0, Math.PI * 2); ctx.stroke(); }
@@ -183,6 +203,18 @@ function render3D(canvas, scene, solution, orbit, showTruth) {
       }
     }
   });
+
+  // Cameras: reference (gold) and solved (teal) only — unsolved cameras, whose
+  // positions are still unknown, are not drawn.
+  solution.cameras.forEach((cam, ci) => {
+    if (!cam.anchored && !cam.reliable) return;
+    const isFocus = ci === focusCam;
+    if (showTruth && !cam.anchored) drawFrustum(ctx, proj, scene.cameras[ci], 'rgba(150,175,200,.3)', 'rgba(150,175,200,.04)', 2.6, false);
+    let color = '#2ec6a8'; let fill = 'rgba(46,198,168,.10)';
+    if (cam.anchored) { color = '#f5a623'; fill = 'rgba(245,166,35,.12)'; }
+    drawFrustum(ctx, proj, cam, color, fill, 2.8, isFocus);
+    if (!cam.anchored) line(ctx, proj(cam.t), proj(scene.cameras[ci].t), 'rgba(46,198,168,.5)', 1);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -193,31 +225,28 @@ export default function StructureFromMotion() {
   const scene = useMemo(() => buildScene(SEED, noisePx), [noisePx]);
   const initCams = useMemo(() => initialCameras(scene), [scene]);
 
-  // matches[featureId][camIndex] = vertexId the learner clicked as the match.
   const [matches, setMatches] = useState({});
   const [activeId, setActiveId] = useState(0);
-  const [hover, setHover] = useState(null); // { ci, vertexId }
+  const [hover, setHover] = useState(null);
   const [reveal, setReveal] = useState(false);
   const [orbit, setOrbit] = useState({ az: 0.7, el: 0.5, dist: 42 });
   const [showTruth, setShowTruth] = useState(true);
+  const [showRays, setShowRays] = useState(true);
+  const [focusCam, setFocusCam] = useState(null);
 
   const view3dRef = useRef(null);
   const photoRefs = useRef([]);
   const drag = useRef(null);
 
-  // camera -> { vertexId -> featureId } assignment, derived from matches.
   const assigned = useMemo(() => {
     const out = {};
     Object.keys(matches).forEach((fid) => {
       const per = matches[fid];
-      Object.keys(per).forEach((ci) => {
-        (out[ci] = out[ci] || {})[per[ci]] = Number(fid);
-      });
+      Object.keys(per).forEach((ci) => { (out[ci] = out[ci] || {})[per[ci]] = Number(fid); });
     });
     return out;
   }, [matches]);
 
-  // Build solver tracks from the matches (pixels of the clicked corners).
   const tracks = useMemo(() => scene.keypoints.map((kp) => {
     const per = matches[kp.id];
     if (!per) return null;
@@ -228,10 +257,10 @@ export default function StructureFromMotion() {
 
   const solution = useMemo(() => solve(scene, tracks, initCams), [scene, tracks, initCams]);
 
-  useEffect(() => { render3D(view3dRef.current, scene, solution, orbit, showTruth); }, [scene, solution, orbit, showTruth]);
+  useEffect(() => { render3D(view3dRef.current, scene, solution, orbit, { showTruth, showRays, focusCam, tracks }); }, [scene, solution, orbit, showTruth, showRays, focusCam, tracks]);
   useEffect(() => {
-    scene.cameras.forEach((_, i) => renderPhoto(photoRefs.current[i], scene, i, activeId, assigned, hover && hover.ci === i ? hover.vertexId : null, reveal));
-  }, [scene, activeId, assigned, hover, reveal]);
+    scene.cameras.forEach((_, i) => renderPhoto(photoRefs.current[i], scene, i, activeId, assigned, hover && hover.ci === i ? hover.vertexId : null, reveal, focusCam === i));
+  }, [scene, activeId, assigned, hover, reveal, focusCam]);
 
   const nearestCorner = (ci, e) => {
     const canvas = photoRefs.current[ci];
@@ -243,7 +272,6 @@ export default function StructureFromMotion() {
     scene.keypoints.forEach((kp) => { const px = pixels[kp.id]; if (!px) return; const d = Math.hypot(px[0] - x, px[1] - y); if (d < bestD) { bestD = d; best = kp.id; } });
     return best;
   };
-
   const onPhotoClick = (ci) => (e) => {
     const vid = nearestCorner(ci, e);
     if (vid == null) return;
@@ -284,6 +312,18 @@ export default function StructureFromMotion() {
   const wrongMatches = Object.keys(matches).reduce((n, fid) => n + Object.keys(matches[fid]).filter((ci) => matches[fid][ci] !== Number(fid)).length, 0);
   const activeCount = matches[activeId] ? Object.keys(matches[activeId]).length : 0;
 
+  // Per-camera reprojection error, for the inspection panel.
+  const camReproj = (ci) => {
+    let s = 0; let n = 0;
+    tracks.forEach((track) => {
+      const uv = track.obs[ci]; const X = solution.points[track.featureId];
+      if (!uv || !X) return;
+      const p = project(solution.cameras[ci], X);
+      if (p) { s += Math.hypot(p[0] - uv[0], p[1] - uv[1]); n += 1; }
+    });
+    return n ? s / n : null;
+  };
+
   let quality = 'idle';
   let qualityText = 'Pick a corner below, then click that same corner in each photo. Match a handful of corners and the cameras will lock into place.';
   if (totalMatches > 0 && m.localised === 0) { quality = 'warn'; qualityText = `${totalMatches} match${totalMatches === 1 ? '' : 'es'} so far — a camera needs four or more matched corners before its pose can be solved. Keep matching.`; }
@@ -293,6 +333,23 @@ export default function StructureFromMotion() {
 
   const fmt = (v, unit) => (v == null ? '—' : `${v.toFixed(2)}${unit}`);
   const active = scene.keypoints[activeId];
+
+  // Inspection panel content for the focused camera.
+  const focus = focusCam == null ? null : solution.cameras[focusCam];
+  let calc;
+  if (!focus) calc = <span className="sfm-calc-hint">Select a camera above to see how its position was calculated by resection.</span>;
+  else if (focus.anchored) calc = <span className="sfm-calc-hint"><b>Camera #{focusCam + 1}</b> is a reference camera — its pose is known and held fixed to anchor the reconstruction.</span>;
+  else if (!focus.reliable) calc = <span className="sfm-calc-hint"><b>Camera #{focusCam + 1}</b> is not solved yet: it needs at least four matched corners that have already been triangulated. Match more corners in this photo.</span>;
+  else calc = (
+    <div className="sfm-calc-grid">
+      <div><span>correspondences</span><b>{focus.corrUsed}</b></div>
+      <div><span>resection iterations</span><b>{focus.iterations}</b></div>
+      <div><span>initial guess offset</span><b>{focus.initialOffset.toFixed(2)} m</b></div>
+      <div><span>solved offset</span><b className={focus.finalOffset > 0.8 ? 'orange' : ''}>{focus.finalOffset.toFixed(2)} m</b></div>
+      <div><span>reprojection</span><b>{fmt(camReproj(focusCam), ' px')}</b></div>
+      <div><span>status</span><b style={{ color: '#0f8a4d' }}>solved</b></div>
+    </div>
+  );
 
   return (
     <div className="sim-app">
@@ -377,11 +434,12 @@ export default function StructureFromMotion() {
             <div className="sfm-legend">
               <span><i className="sfm-bar" style={{ background: '#f5a623' }} /> reference camera</span>
               <span><i className="sfm-bar" style={{ background: '#2ec6a8' }} /> solved camera</span>
-              <span><i className="sfm-bar" style={{ background: '#e6463b' }} /> unsolved (rough guess)</span>
+              <span><i className="sfm-bar" style={{ background: '#ffcf3f' }} /> adjustment path</span>
               <span><i className="sfm-dot" style={{ background: '#7ed321' }} /> reconstructed corner</span>
               <span><i className="sfm-dot" style={{ border: '1px solid #aab', background: 'transparent' }} /> ground truth</span>
             </div>
             <div className="sfm-toolbar">
+              <label><input type="checkbox" checked={showRays} onChange={(e) => setShowRays(e.target.checked)} /> triangulation rays</label>
               <label><input type="checkbox" checked={showTruth} onChange={(e) => setShowTruth(e.target.checked)} /> show ground truth</label>
               <label>detector noise
                 <input type="range" min="0" max="2" step="0.1" value={noisePx} onChange={(e) => setNoisePx(Number(e.target.value))} />
@@ -392,22 +450,31 @@ export default function StructureFromMotion() {
           </section>
 
           <section className="sim-panel">
-            <h2><span className="stepno">4</span> Reconstruction quality</h2>
-            <div className="readouts">
+            <h2><span className="stepno">4</span> Inspect a camera&rsquo;s calculated position</h2>
+            <div className="sfm-inspect">
+              {scene.cameras.map((_, i) => {
+                const est = solution.cameras[i];
+                const st = est.anchored ? 'ref' : est.reliable ? 'solved' : 'lost';
+                return (
+                  <button key={i} className={`sfm-cambtn ${st} ${focusCam === i ? 'on' : ''}`} onClick={() => setFocusCam(focusCam === i ? null : i)}>#{i + 1}</button>
+                );
+              })}
+            </div>
+            <div className="sfm-calc">{calc}</div>
+            <div className="readouts" style={{ marginTop: 10 }}>
               <div><span>matches</span><b>{totalMatches}{wrongMatches ? <em className="orange"> ({wrongMatches}✕)</em> : ''}</b></div>
               <div><span>cameras solved</span><b>{m.localised}/{m.totalToLocalise}</b></div>
               <div><span>reproj. error</span><b className={m.reproError > 1.5 ? 'orange' : ''}>{fmt(m.reproError, ' px')}</b></div>
               <div><span>pose error</span><b className={m.poseError > 0.8 ? 'orange' : ''}>{fmt(m.poseError, ' m')}</b></div>
             </div>
             <div className="rect-summary">
-              <b>How Structure from Motion works here</b>
+              <b>How a camera&rsquo;s position is calculated</b>
               <p>
-                Every match is a ray from a camera through a corner of the object. Where rays from the two known
-                reference cameras cross, that corner is <b>triangulated</b> in 3D. Once four or more triangulated corners
-                are matched in an unknown photo, that camera&rsquo;s position and orientation are recovered by
-                <b> resection</b> — and each newly placed camera helps triangulate more corners. Repeating this bundles
-                every photo into one consistent reconstruction; a wrong match injects an inconsistent ray and pulls the
-                cameras away from the truth.
+                Rays from the two reference cameras cross to <b>triangulate</b> each matched corner in 3D (green rays and
+                dots). An unknown camera&rsquo;s pose is then found by <b>resection</b>: starting from a rough guess, it is
+                iteratively nudged (the amber <b>adjustment path</b>) until its rays pass through those 3D corners with the
+                smallest reprojection error. Each newly solved camera adds more triangulated corners, so the solution grows
+                until every photo is placed — a wrong match adds an inconsistent ray and pulls the pose away from the truth.
               </p>
             </div>
           </section>

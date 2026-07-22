@@ -161,17 +161,52 @@ export const MESH = (() => {
     { idx: [0, 3, 2, 1], color: floor }, // floor
   ];
   const center = [0, 0, (h + ridge) / 3];
+  // Structural faces (used for keypoints + occlusion): store outward normal,
+  // centroid and world-space corner points.
   faces.forEach((f) => {
     const a = vertices[f.idx[0]]; const b = vertices[f.idx[1]]; const c = vertices[f.idx[2]];
     let n = normalize(cross(sub(b, a), sub(c, a)));
     const centroid = scale(f.idx.reduce((acc, i) => add(acc, vertices[i]), [0, 0, 0]), 1 / f.idx.length);
     if (dot(n, sub(centroid, center)) < 0) n = scale(n, -1);
     f.normal = n; f.centroid = centroid;
+    f.pts = f.idx.map((i) => vertices[i]);
   });
+
+  // Painted-on details (door, windows) so each face is easy to tell apart.
+  // Each is a small quad lifted a hair off its wall along the outward normal.
+  const door = '#4a3324'; const glass = '#8fb9d6'; const frame = '#33261a'; const sill = '#9aa0a6';
+  const off = 0.03;
+  const rect = (pts, color) => ({ pts, color, decor: true });
+  const decorSpecs = [
+    // front wall (outward -Y): door + two windows
+    rect([[-0.85, -y - off, 0], [0.85, -y - off, 0], [0.85, -y - off, 2.05], [-0.85, -y - off, 2.05]], door),
+    rect([[-0.95, -y - off, 2.05], [0.95, -y - off, 2.05], [0.95, -y - off, 2.25], [-0.95, -y - off, 2.25]], frame),
+    rect([[-2.45, -y - off, 1.5], [-1.4, -y - off, 1.5], [-1.4, -y - off, 2.55], [-2.45, -y - off, 2.55]], glass),
+    rect([[1.4, -y - off, 1.5], [2.45, -y - off, 1.5], [2.45, -y - off, 2.55], [1.4, -y - off, 2.55]], glass),
+    // right wall (outward +X)
+    rect([[x + off, -1.7, 1.2], [x + off, -0.45, 1.2], [x + off, -0.45, 2.35], [x + off, -1.7, 2.35]], glass),
+    rect([[x + off, 0.45, 1.2], [x + off, 1.7, 1.2], [x + off, 1.7, 2.35], [x + off, 0.45, 2.35]], glass),
+    // left wall (outward -X)
+    rect([[-x - off, -1.7, 1.2], [-x - off, -0.45, 1.2], [-x - off, -0.45, 2.35], [-x - off, -1.7, 2.35]], glass),
+    rect([[-x - off, 0.45, 1.2], [-x - off, 1.7, 1.2], [-x - off, 1.7, 2.35], [-x - off, 0.45, 2.35]], glass),
+    // back wall (outward +Y): a wide window
+    rect([[-1.9, y + off, 1.1], [1.9, y + off, 1.1], [1.9, y + off, 2.4], [-1.9, y + off, 2.4]], glass),
+    rect([[-2.0, y + off, 1.0], [2.0, y + off, 1.0], [2.0, y + off, 1.1], [-2.0, y + off, 1.1]], sill),
+  ];
+  decorSpecs.forEach((f) => {
+    const [a, b, c] = f.pts;
+    let n = normalize(cross(sub(b, a), sub(c, a)));
+    const centroid = scale(f.pts.reduce((acc, p) => add(acc, p), [0, 0, 0]), 1 / f.pts.length);
+    if (dot(n, sub(centroid, center)) < 0) n = scale(n, -1);
+    f.normal = n; f.centroid = centroid;
+  });
+
   const labels = ['front-L base', 'front-R base', 'back-R base', 'back-L base', 'front-L eave', 'front-R eave', 'back-R eave', 'back-L eave', 'front ridge', 'back ridge'];
   const palette = ['#e6463b', '#f5a623', '#f8e71c', '#7ed321', '#2ec6a8', '#39a0ff', '#5b6bff', '#b06bff', '#ff5fa2', '#39d0d8'];
   const keypoints = vertices.map((pos, id) => ({ id, pos, label: labels[id], color: palette[id] }));
-  return { vertices, faces, keypoints, center };
+  // drawFaces = structural + decorations, all with pts/normal/centroid for the renderer.
+  const drawFaces = [...faces, ...decorSpecs];
+  return { vertices, faces, drawFaces, keypoints, center };
 })();
 
 // Triangles for occlusion tests (quads split into two triangles).
@@ -267,6 +302,7 @@ function resection(camera, correspondences) {
     return sum;
   };
   const eps = 1e-4;
+  const iterates = [t.slice()]; // camera-centre path, for visualising the adjustment
   for (let iter = 0; iter < 16; iter += 1) {
     const JtJ = Array.from({ length: 6 }, () => new Array(6).fill(0));
     const Jtr = new Array(6).fill(0);
@@ -298,10 +334,10 @@ function resection(camera, correspondences) {
     const tNew = [t[0] + delta[0], t[1] + delta[1], t[2] + delta[2]];
     const RNew = matMul(rodrigues([delta[3], delta[4], delta[5]]), R);
     const after = cost(tNew, RNew);
-    if (after < before) { t = tNew; R = RNew; lambda = Math.max(lambda * 0.5, 1e-6); if (before - after < 1e-6) break; }
+    if (after < before) { t = tNew; R = RNew; iterates.push(t.slice()); lambda = Math.max(lambda * 0.5, 1e-6); if (before - after < 1e-6) break; }
     else { lambda = Math.min(lambda * 4, 1e3); }
   }
-  return { t, R };
+  return { t, R, iterates };
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +348,9 @@ export function solve(scene, tracks, initCams) {
   const cams = initCams.map((c) => ({ t: c.t.slice(), R: c.R.map((r) => r.slice()), anchored: c.anchored }));
   const reliable = cams.map((c) => !!c.anchored);
   const estPoints = {}; // featureId -> [x,y,z]
+  // Per-camera resection record: adjustment path + final correspondence count.
+  const trails = cams.map(() => null);
+  const corrUsed = cams.map(() => 0);
 
   for (let round = 0; round < 12; round += 1) {
     // Triangulate every track from reliable cameras that observe it.
@@ -338,6 +377,11 @@ export function solve(scene, tracks, initCams) {
       const pose = resection(cam, corr);
       if (pose) {
         cam.t = pose.t; cam.R = pose.R;
+        corrUsed[ci] = corr.length;
+        // Record the camera-centre path: first solve seeds it (initial guess ->
+        // solution), later refinement rounds append their end point.
+        if (!trails[ci]) trails[ci] = pose.iterates.slice();
+        else if (pose.iterates.length) trails[ci].push(pose.iterates[pose.iterates.length - 1]);
         let err = 0; let count = 0;
         corr.forEach(({ X, uv }) => { const p = project(cam, X); if (p) { err += Math.hypot(p[0] - uv[0], p[1] - uv[1]); count += 1; } });
         if (count >= 4 && err / count < 5) reliable[ci] = true;
@@ -364,7 +408,19 @@ export function solve(scene, tracks, initCams) {
   });
 
   return {
-    cameras: cams.map((c, ci) => ({ ...c, reliable: reliable[ci] })),
+    cameras: cams.map((c, ci) => {
+      const trail = trails[ci];
+      const gt = scene.cameras[ci].t;
+      return {
+        ...c,
+        reliable: reliable[ci],
+        trail,
+        iterations: trail ? trail.length - 1 : 0,
+        corrUsed: corrUsed[ci],
+        initialOffset: trail ? norm(sub(trail[0], gt)) : null,
+        finalOffset: reliable[ci] && !c.anchored ? norm(sub(c.t, gt)) : null,
+      };
+    }),
     points: estPoints,
     metrics: {
       localised,
