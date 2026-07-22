@@ -10,3 +10,6 @@
   letter-spacing: .5px;
   vertical-align: middle;
 }
+
+.section-canvas { cursor: grab; }
+.section-canvas:active { cursor: grabbing; }
