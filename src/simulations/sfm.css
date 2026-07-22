@@ -46,3 +46,18 @@
 .sfm-quality.idle{border-left:3px solid #8496a8;background:#f5f8fa;color:#56677a}
 
 .readouts em{font-style:normal}
+
+/* camera inspection */
+.sfm-inspect{display:flex;flex-wrap:wrap;gap:6px}
+.sfm-cambtn{min-width:34px;padding:5px 8px;border:1px solid #d6dee7;border-radius:7px;background:#fff;color:#56677a;font-size:12px;font-weight:600;cursor:pointer}
+.sfm-cambtn.ref{border-color:#f5a623;color:#a56a12}
+.sfm-cambtn.solved{border-color:#0f8a4d;color:#0f8a4d}
+.sfm-cambtn.lost{color:#9aa7b3}
+.sfm-cambtn.on{box-shadow:0 0 0 2px #ffcf3f inset;background:#fff7e6}
+.sfm-calc{margin-top:9px;padding:9px 11px;border:1px solid #e5ebf1;border-radius:8px;background:#f9fbfd;min-height:44px}
+.sfm-calc-hint{font-size:12.5px;color:#56677a;line-height:1.5}
+.sfm-calc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.sfm-calc-grid div{padding:5px 8px;border:1px solid #e5ebf1;border-radius:7px;background:#fff}
+.sfm-calc-grid span{display:block;color:#7d8fa1;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px}
+.sfm-calc-grid b{font-family:monospace;font-size:13px}
+@media(max-width:560px){.sfm-calc-grid{grid-template-columns:repeat(2,1fr)}}
