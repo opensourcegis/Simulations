@@ -398,6 +398,75 @@
       </div>
     </a>
 
+    <!-- ============ LiDAR Beam & Target Interaction ============ -->
+    <a class="card" href="games/lidar-interaction/">
+      <div class="thumb">
+        <svg viewBox="0 0 320 180" aria-hidden="true">
+          <rect width="320" height="180" fill="#101b26"/>
+          <!-- target surface -->
+          <rect x="0" y="118" width="320" height="62" fill="#3a4a55"/>
+          <line x1="0" y1="118" x2="320" y2="118" stroke="#8fa3b4" stroke-width="1.6"/>
+          <!-- sensor -->
+          <g>
+            <rect x="122" y="16" width="46" height="24" rx="3" fill="#1d2a38" stroke="#5f7387" stroke-width="1.2"/>
+            <rect x="130" y="34" width="11" height="6" fill="#e4553f"/>
+            <rect x="150" y="34" width="11" height="6" fill="#3fa9f5"/>
+          </g>
+          <!-- incident beam -->
+          <line x1="145" y1="40" x2="145" y2="118" stroke="#ff5a3c" stroke-width="2.6"/>
+          <!-- diffuse hemisphere -->
+          <g stroke="#3fa9f5" stroke-width="1.3" opacity=".75">
+            <line x1="145" y1="118" x2="95" y2="86"/><line x1="145" y1="118" x2="112" y2="72"/>
+            <line x1="145" y1="118" x2="145" y2="62"/><line x1="145" y1="118" x2="178" y2="72"/>
+            <line x1="145" y1="118" x2="196" y2="86"/>
+          </g>
+          <!-- returning sliver -->
+          <line x1="145" y1="118" x2="145" y2="44" stroke="#3fa9f5" stroke-width="4"/>
+          <!-- specular -->
+          <line x1="145" y1="118" x2="232" y2="66" stroke="#c8d64a" stroke-width="2.2"/>
+          <!-- transmission -->
+          <g stroke="#9b7fd4" stroke-width="1.8" opacity=".9">
+            <line x1="145" y1="118" x2="138" y2="158"/><line x1="145" y1="118" x2="152" y2="158"/>
+          </g>
+          <!-- absorption glow -->
+          <circle cx="145" cy="122" r="17" fill="#e2574c" opacity=".28"/>
+          <!-- small tree with returns -->
+          <g>
+            <rect x="264" y="96" width="4" height="24" fill="#5a4630"/>
+            <circle cx="266" cy="86" r="15" fill="#4e7c3c" opacity=".8"/>
+            <circle cx="257" cy="94" r="10" fill="#4e7c3c" opacity=".7"/>
+            <circle cx="276" cy="94" r="10" fill="#4e7c3c" opacity=".7"/>
+            <line x1="266" y1="40" x2="266" y2="118" stroke="#ff5a3c" stroke-width="1.8" opacity=".85"/>
+            <circle cx="266" cy="73" r="3.4" fill="#5fd07a"/>
+            <circle cx="266" cy="95" r="3" fill="#c8d64a"/>
+            <circle cx="266" cy="118" r="3.4" fill="#e08a3c"/>
+          </g>
+          <!-- labels -->
+          <g font-size="8" font-family="system-ui" font-weight="600">
+            <rect x="10" y="10" width="86" height="15" rx="7.5" fill="rgba(255,255,255,.92)" stroke="#3fa9f5"/>
+            <text x="53" y="20.5" text-anchor="middle" fill="#1565c0">Eᵢ=Eᵣ+Eₐ+Eₜ+Eₛ</text>
+          </g>
+        </svg>
+        <span class="pill live">● Playable</span>
+      </div>
+      <div class="card-body">
+        <h3>Beam &amp; Target Interaction</h3>
+        <p>
+          Where does a laser pulse actually go? Watch it split into reflection, absorption,
+          transmission and scatter on water, grass, black asphalt, glass and white roofs — and see
+          how only a few parts per million ever find the receiver. Then push a pulse through a
+          small tree for first, intermediate and last returns.
+        </p>
+        <div class="tags">
+          <span class="tag">Energy balance</span>
+          <span class="tag">Signal strength</span>
+          <span class="tag">Multi-return</span>
+          <span class="tag">Quiz</span>
+        </div>
+        <span class="go">Open simulator <span class="arrow">→</span></span>
+      </div>
+    </a>
+
     <!-- ============ Placeholder ============ -->
     <div class="card soon">
       <div class="thumb">
