@@ -126,8 +126,8 @@
           <label class="sl">Camera easting <b id="camVal">200 m</b><input type="range" id="camSlider" min="120" max="280" step="5" value="200"></label>
         </div>
         <div class="ctl-row">
-          <label class="sl">Tilt ω (roll) <b id="omVal">5°</b><input type="range" id="omSlider" min="-14" max="14" step="1" value="5"></label>
-          <label class="sl">Tilt φ (pitch) <b id="phVal">-4°</b><input type="range" id="phSlider" min="-14" max="14" step="1" value="-4"></label>
+          <label class="sl">Tilt ω (roll) <b id="omVal">0°</b><input type="range" id="omSlider" min="-14" max="14" step="1" value="0"></label>
+          <label class="sl">Tilt φ (pitch) <b id="phVal">0°</b><input type="range" id="phSlider" min="-14" max="14" step="1" value="0"></label>
         </div>
         <div class="ctl-row">
           <div class="zbtns" id="srcZoom"><button data-z="out">−</button><button data-z="in">+</button><button data-z="fit">fit</button></div>
@@ -135,8 +135,7 @@
           <label class="chk"><input type="checkbox" id="chkGrid" checked> 50 m map grid</label>
           <label class="chk"><input type="checkbox" id="chkFoot" checked> footprints</label>
         </div>
-        <div class="callout"><b>Because the photo is tilted, the 50 m grid keystones and every roof images as a quadrilateral — not a rectangle.</b>
-        Roofs also shift radially from the nadir ⊕. Zoom in and <b>click any roof</b> to probe it.</div>
+        <div class="callout" id="srcNote"></div>
       </div>
 
       <div class="panel">
@@ -248,50 +247,42 @@ const BUILDINGS=[
   {x:298,y:186,w:22,d:18,h:12,roof:'#a8836a'},
   {x: 60,y:170,w:20,d:16,h: 9,roof:'#93705a'},
 ];
+// Each building sits on a FLAT pad at its centre terrain height, and that is
+// exactly how it is drawn. The DSM must agree, otherwise the rectifier samples
+// a roof plane the renderer never drew and roof edges smear by ~r·ΔZ/H.
+BUILDINGS.forEach(b=>{ b.zb=terrain(b.x+b.w/2,b.y+b.d/2); b.zt=b.zb+b.h; });
 function buildingAt(x,y){for(const b of BUILDINGS) if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.d) return b; return null;}
 const dtmAt=(x,y)=>terrain(x,y);
-const dsmAt=(x,y)=>{const b=buildingAt(x,y);return terrain(x,y)+(b?b.h:0);};
+const dsmAt=(x,y)=>{const b=buildingAt(x,y);return b?b.zt:terrain(x,y);};
 const DSMGRID=new Float32Array((WORLD+1)*(WORLD+1));
 for(let j=0;j<=WORLD;j++)for(let i=0;i<=WORLD;i++)DSMGRID[j*(WORLD+1)+i]=dsmAt(i,j);
 const dsmFast=(x,y)=>DSMGRID[clamp(Math.round(y),0,WORLD)*(WORLD+1)+clamp(Math.round(x),0,WORLD)];
-// Dilated DSM (3×3 max) used ONLY for visibility marching. Fattening the
-// silhouettes makes the occlusion test conservative, so a ray grazing a
-// building edge is treated as blocked instead of leaking façade pixels.
-const DSMDIL=new Float32Array((WORLD+1)*(WORLD+1));
-for(let j=0;j<=WORLD;j++)for(let i=0;i<=WORLD;i++){
-  let m=0;
-  for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){
-    const v=DSMGRID[clamp(j+dj,0,WORLD)*(WORLD+1)+clamp(i+di,0,WORLD)];
-    if(v>m)m=v;
+// terrain-only grid (smooth surface, 1 m lookup is plenty)
+const TERGRID=new Float32Array((WORLD+1)*(WORLD+1));
+for(let j=0;j<=WORLD;j++)for(let i=0;i<=WORLD;i++)TERGRID[j*(WORLD+1)+i]=terrain(i,j);
+const terFast=(x,y)=>TERGRID[clamp(Math.round(y),0,WORLD)*(WORLD+1)+clamp(Math.round(x),0,WORLD)];
+
+// Exact ray/axis-aligned-box overlap (slab method), returning the FULL
+// parameter interval [t0,t1] the ray spends inside the prism. Buildings are
+// prisms, so occlusion against them is solved analytically instead of marched,
+// removing the discretisation fringe at silhouettes entirely.
+// Returning the interval (not just the entry) matters: a ray starting just
+// beside a prism enters at t≈0 yet still passes right through it.
+const _rng={t0:0,t1:0};
+function boxRange(px,py,pz,dx,dy,dz,xmin,xmax,ymin,ymax,zmin,zmax){
+  let t0=-Infinity,t1=Infinity;
+  const P=[px,py,pz],D=[dx,dy,dz],MN=[xmin,ymin,zmin],MX=[xmax,ymax,zmax];
+  for(let i=0;i<3;i++){
+    if(Math.abs(D[i])<1e-12){ if(P[i]<MN[i]||P[i]>MX[i]) return null; continue; }
+    let ta=(MN[i]-P[i])/D[i], tb=(MX[i]-P[i])/D[i];
+    if(ta>tb){const s=ta;ta=tb;tb=s;}
+    if(ta>t0)t0=ta;
+    if(tb<t1)t1=tb;
+    if(t0>t1) return null;
   }
-  DSMDIL[j*(WORLD+1)+i]=m;
+  _rng.t0=t0; _rng.t1=t1; return _rng;
 }
-const dsmDil=(x,y)=>DSMDIL[clamp(Math.round(y),0,WORLD)*(WORLD+1)+clamp(Math.round(x),0,WORLD)];
-// Coarse max-height pyramid (8 m blocks, 3×3 dilated) — a strict UPPER bound on
-// the surface, so a cheap coarse scan can prove "nothing can block this ray"
-// and skip the expensive fine march. Conservative: never changes the result.
-const CB=8, NB=Math.ceil(WORLD/CB)+1;
-const DSMMAX=new Float32Array(NB*NB);
-for(let j=0;j<NB;j++)for(let i=0;i<NB;i++){
-  let m=0;
-  for(let y=j*CB;y<=Math.min(WORLD,(j+1)*CB);y++)
-    for(let x=i*CB;x<=Math.min(WORLD,(i+1)*CB);x++){
-      const v=DSMDIL[y*(WORLD+1)+x]; if(v>m)m=v;
-    }
-  DSMMAX[j*NB+i]=m;
-}
-{ // Dilate the coarse grid by one block. Needed for correctness: a straight
-  // segment between two samples can clip a third block diagonally near a corner,
-  // so per-sample block lookups alone do not cover the path.
-  const cp=DSMMAX.slice();
-  for(let j=0;j<NB;j++)for(let i=0;i<NB;i++){
-    let m=0;
-    for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++)
-      m=Math.max(m,cp[clamp(j+dj,0,NB-1)*NB+clamp(i+di,0,NB-1)]);
-    DSMMAX[j*NB+i]=m;
-  }
-}
-const dsmMax=(x,y)=>DSMMAX[clamp(Math.floor(y/CB),0,NB-1)*NB+clamp(Math.floor(x/CB),0,NB-1)];
+const TER_MAX=(()=>{let m=0;for(let i=0;i<TERGRID.length;i++)if(TERGRID[i]>m)m=TERGRID[i];return m;})();
 // exact (un-quantised) DSM for the output cell height — keeps footprint edges
 // crisp at the 0.625 m output resolution
 const surfZ=(x,y,mode)=>mode==='datum'?0:mode==='dtm'?terrain(x,y):dsmAt(x,y);
@@ -324,61 +315,74 @@ function pixelDir(cam,px,py){
            M[0][1]*dc[0]+M[1][1]*dc[1]+M[2][1]*dc[2],
            M[0][2]*dc[0]+M[1][2]*dc[1]+M[2][2]*dc[2] ];
 }
-// march a ray from the lens until it meets the chosen surface
+// Where does a ray from the lens first meet the chosen surface?
+// Buildings are solved exactly (ray/prism); terrain is refined by bisection,
+// so the probe and the occlusion test agree to millimetres.
 function landOn(cam,dir,mode){
   const L=Math.hypot(dir[0],dir[1],dir[2]), d=[dir[0]/L,dir[1]/L,dir[2]/L];
-  let t=0.5;
-  for(let k=0;k<2600;k++){
-    const x=cam.X+d[0]*t, y=cam.Y+d[1]*t, z=cam.Z+d[2]*t;
-    if(z<-5) break;
-    if(x>=0&&x<=WORLD&&y>=0&&y<=WORLD&&z<=surfZ(x,y,mode)) return {X:x,Y:y,Z:z,t};
-    t+=0.45;
+  if(mode==='datum'){
+    const t=(0-cam.Z)/d[2];
+    return {X:cam.X+d[0]*t, Y:cam.Y+d[1]*t, Z:0, t};
   }
-  // fall back to the datum plane
-  const t0=(0-cam.Z)/d[2];
-  return {X:cam.X+d[0]*t0, Y:cam.Y+d[1]*t0, Z:0, t:t0};
+  // exact building entry (DSM only)
+  let tB=Infinity;
+  if(mode==='dsm'){
+    for(const b of BUILDINGS){
+      const r=boxRange(cam.X,cam.Y,cam.Z,d[0],d[1],d[2],
+        b.x,b.x+b.w,b.y,b.y+b.d,-10,b.zt);
+      if(r && r.t1>0.5){ const t=Math.max(r.t0,0); if(t<tB) tB=t; }
+    }
+  }
+  // terrain: march coarsely to bracket, then bisect
+  let tT=Infinity, prev=0.5;
+  const above=t=>cam.Z+d[2]*t - terFast(cam.X+d[0]*t, cam.Y+d[1]*t);
+  for(let t=1;t<1200;t+=1.0){
+    const x=cam.X+d[0]*t, y=cam.Y+d[1]*t, z=cam.Z+d[2]*t;
+    if(z<-6) break;
+    if(x<-250||x>WORLD+250||y<-250||y>WORLD+250) break;
+    if(above(t)<=0){
+      let lo=prev, hi=t;
+      for(let i=0;i<28;i++){ const m=(lo+hi)/2; if(above(m)>0) lo=m; else hi=m; }
+      tT=(lo+hi)/2; break;
+    }
+    prev=t;
+  }
+  let t=Math.min(tB,tT);
+  if(!isFinite(t)) t=(0-cam.Z)/d[2];
+  return {X:cam.X+d[0]*t, Y:cam.Y+d[1]*t, Z:cam.Z+d[2]*t, t};
 }
 // Conservative visibility march. `bias` is how far the (dilated) surface must
 // rise above the ray to count as blocking — smaller/negative blocks more
 // readily. The fill path passes a stricter bias, because copying a wrong pixel
 // from a neighbouring photo produces a visible ghost.
-// Measured trade-off (leak = façade pixels smeared into shadow, over-mask =
-// good ground wrongly hidden):
-//   step 2.5 m           → leak 0.51%, over-mask 2.1%
-//   step 1.2 m, plain    → leak 0.22%, over-mask 3.7%   ← primary mask
-//   step 1.2 m, dilated  → leak 0.17%, over-mask 17.1%  ← too fat for the mask,
-//                          but ideal for the fill decision (0 ghosts)
-const FINE_STEP=2.0;                           // m along the ray; see table above
-function visibleFrom(cam,x,y,z,bias,dilated,step){
-  if(bias===undefined) bias=0.15;
-  if(step===undefined) step=FINE_STEP;
-  const dx=cam.X-x, dy=cam.Y-y, dz=cam.Z-z, horiz=Math.hypot(dx,dy);
-  if(horiz<1e-6) return true;
-  const tSkip0=Math.min(0.3, 2.0/horiz);
-  // cheap coarse pre-pass against the upper-bound pyramid: if nothing along the
-  // ray can possibly reach it, we are done without the fine march
-  {
-    // Walk intervals, not points: compare the LOWEST ray height in each interval
-    // (its start) against the block max, and clamp the first interval to tSkip so
-    // the near field is never skipped. Both bounds are pessimistic, so a "clear"
-    // verdict here is guaranteed to match the fine march.
-    const cs=Math.max(2,Math.ceil(horiz/CB));
-    let maybe=false;
-    for(let k=0;k<cs;k++){
-      let t=k/cs; if(t<tSkip0) t=tSkip0;
-      if(t>=1) break;
-      const pz=z+dz*t; if(pz>64) break;
-      if(dsmMax(x+dx*t, y+dy*t) > pz+bias){ maybe=true; break; }
-    }
-    if(!maybe) return true;
+// Is (x,y,z) visible from the lens?
+//   • buildings — solved EXACTLY as ray/prism intersections (no fringe)
+//   • terrain   — marched, but it is smooth so 3 m steps are ample
+// `pad` grows the prisms; the fill path passes a small positive pad so it only
+// borrows a pixel from a neighbour that clearly saw the ground.
+function visibleFrom(cam,x,y,z,pad,ownB){
+  pad=pad||0;
+  const dx=cam.X-x, dy=cam.Y-y, dz=cam.Z-z;
+  const segLen=Math.hypot(dx,dy,dz);
+  if(segLen<1e-6) return true;
+  const tEps=Math.min(0.05, 0.25/segLen);   // numerical touch only
+  for(const b of BUILDINGS){
+    if(b===ownB) continue;                  // a cell never occludes itself
+    const r=boxRange(x,y,z,dx,dy,dz,
+      b.x-pad, b.x+b.w+pad, b.y-pad, b.y+b.d+pad, -10, b.zt+pad);
+    // blocked if the ray is inside the prism anywhere before reaching the lens
+    if(r && r.t1>tEps && r.t0<1-1e-6) return false;
   }
-  const steps=Math.max(3,Math.ceil(horiz/step));
-  const tSkip=tSkip0;                          // ignore the first ~2 m (self-blocking)
-  for(let k=1;k<steps;k++){
-    const t=k/steps; if(t<tSkip) continue;
-    const px=x+dx*t, py=y+dy*t, pz=z+dz*t;
-    if(pz>64) break;
-    if((dilated?dsmDil(px,py):dsmFast(px,py))>pz+bias) return false;
+  const horiz=Math.hypot(dx,dy);
+  if(horiz>1 && z<TER_MAX){
+    const steps=Math.max(3,Math.ceil(horiz/3));
+    const tS=Math.min(0.3,2.0/horiz);
+    for(let k=1;k<steps;k++){
+      const t=k/steps; if(t<tS) continue;
+      const pz=z+dz*t;
+      if(pz>TER_MAX) break;                 // above every hill — nothing left to block
+      if(terFast(x+dx*t,y+dy*t)>pz+0.15) return false;
+    }
   }
   return true;
 }
@@ -386,7 +390,7 @@ function visibleFrom(cam,x,y,z,bias,dilated,step){
 // ============================================================
 //  State
 // ============================================================
-const state={ H:100, camX:200, camY:200, om:5*DEG, ph:-4*DEG, ka:6*DEG,
+const state={ H:100, camX:200, camY:200, om:0, ph:0, ka:0,
               mode:'dsm', occ:true, fill:false, grid:true, ogrid:true, foot:true,
               probe:{x:167,y:163} };
 const cam1=()=>makeCam(state.camX,state.camY,state.H,state.om,state.ph,state.ka);
@@ -479,12 +483,12 @@ function renderView(cam,ctx,opts){
   // buildings — painter's algorithm: FARTHEST from the lens first, so a nearer
   // building correctly hides the one behind it
   const sorted=BUILDINGS.slice().sort((a,b)=>{
-    const da=Math.hypot(a.x+a.w/2-cam.X,a.y+a.d/2-cam.Y,terrain(a.x+a.w/2,a.y+a.d/2)+a.h-cam.Z);
-    const db=Math.hypot(b.x+b.w/2-cam.X,b.y+b.d/2-cam.Y,terrain(b.x+b.w/2,b.y+b.d/2)+b.h-cam.Z);
+    const da=Math.hypot(a.x+a.w/2-cam.X,a.y+a.d/2-cam.Y,a.zt-cam.Z);
+    const db=Math.hypot(b.x+b.w/2-cam.X,b.y+b.d/2-cam.Y,b.zt-cam.Z);
     return db-da;
   });
   for(const b of sorted){
-    const zb=terrain(b.x+b.w/2,b.y+b.d/2), zt=zb+b.h;
+    const zb=b.zb, zt=b.zt;                     // flat pad — matches the DSM exactly
     const c=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.d],[b.x,b.y+b.d]];
     const base=c.map(q=>P(q[0],q[1],zb)), top=c.map(q=>P(q[0],q[1],zt));
     if(base.some(p=>!p)||top.some(p=>!p)) continue;
@@ -866,18 +870,18 @@ function computeOrtho(stride){
     for(let px=0;px<IMG;px+=stride){
       const X=px/IMG*WORLD;
       const Z=surfZ(X,Y,mode);
+      const ownB=mode==='dsm'?buildingAt(X,Y):null;
       let col=null; tot++;
-      const occluded=doOcc&&!visibleFrom(c1,X,Y,Z);
+      const occluded=doOcc&&!visibleFrom(c1,X,Y,Z,0,ownB);
       if(!occluded){
         const ip=project(c1,X,Y,Z);
         if(ip) col=sampleSrc(srcData,ip[0],ip[1]);
       } else occN++;
       if(!col&&doFill){
         for(let n=0;n<nbCams.length;n++){
-          // dilated + strict bias: only fill from a neighbour that CLEARLY saw
-          // this ground, otherwise we paste its façade in and the building ghosts
-          // (only ~7% of cells reach here, so the finer 1 m step is cheap)
-          if(!visibleFrom(nbCams[n],X,Y,Z,-0.6,true,1.0)) continue;
+          // padded prisms: only fill from a neighbour that CLEARLY saw this
+          // ground, otherwise we paste its façade in and the building ghosts
+          if(!visibleFrom(nbCams[n],X,Y,Z,0.8,ownB)) continue;
           const ip2=project(nbCams[n],X,Y,Z); if(!ip2) continue;
           const s2=sampleSrc(nbData[n],ip2[0],ip2[1]);
           if(s2){col=s2;fillN++;break;}
@@ -933,8 +937,17 @@ function scheduleOrtho(fast){
 // ============================================================
 //  Controls
 // ============================================================
+function updateSrcNote(){
+  const tilted=Math.abs(state.om)>1e-9||Math.abs(state.ph)>1e-9;
+  document.getElementById('srcNote').innerHTML = tilted
+    ? `<b>The photo is tilted, so the 50 m grid keystones and every roof images as a quadrilateral — not a rectangle.</b>
+       On top of that, roofs shift radially from the nadir ⊕. Zoom in and <b>click any roof</b> to probe it.`
+    : `<b>A truly vertical photo (ω = φ = 0):</b> the 50 m grid stays square and roofs image as rectangles — so the
+       <i>only</i> distortion here is <b>relief displacement</b>, pushing every roof radially away from the nadir ⊕.
+       Add tilt below to make the grid keystone as well. Zoom in and <b>click any roof</b> to probe it.`;
+}
 function refreshAll(fast){
-  renderSources(); drawSource(); drawSection(); drawElevPair(); scheduleOrtho(fast);
+  renderSources(); drawSource(); drawSection(); drawElevPair(); updateSrcNote(); scheduleOrtho(fast);
 }
 document.getElementById('hSlider').addEventListener('input',e=>{
   state.H=+e.target.value; document.getElementById('hVal').textContent=state.H+' m';
@@ -978,7 +991,7 @@ document.getElementById('btnHelpClose').addEventListener('click',()=>document.ge
 //  Quiz
 // ============================================================
 const QUIZ=[
-  {q:'In the source photo the 50 m grid squares image as keystoned quadrilaterals. What causes that?',
+  {q:'Raise the tilt sliders and the 50 m grid squares image as keystoned quadrilaterals. What causes that?',
    opts:['Relief displacement','Camera tilt (ω, φ) — the photo plane is not parallel to the ground','Earth curvature','Lens vignetting'],r:1,
    why:'Tilt makes the image a true perspective of the ground plane, so parallel lines converge. Relief displacement is a separate, radial effect caused by height.'},
   {q:'A roof images as a quadrilateral, yet in the true orthophoto it is an exact rectangle. Why?',
