@@ -1,9 +1,11 @@
+import OrthoRectification from './simulations/OrthoRectification.jsx';
+
 const simulators = [
   { title: 'Survey Mission Designer', description: 'Plan a drone survey over terrain, place control points and obstructions, and explore the trade-offs behind a robust flight plan.', tags: ['Flight planning', 'Terrain', 'Obstructions', 'Coverage'], path: 'games/survey-mission-designer/', kind: 'survey' },
   { title: 'Aerial Triangulation', description: 'Build an image block, measure tie points, and see how bundle adjustment turns overlapping photographs into a connected survey.', tags: ['Image block', 'Tie points', 'Bundle adjustment'], path: 'games/aerial-triangulation/', kind: 'triangulation' },
   { title: 'LiDAR Scan Patterns', description: 'Compare six real beam-steering mechanisms and watch their ground patterns build up as a drone moves across the map.', tags: ['Scan mechanisms', 'Point pattern', 'Coverage'], path: 'games/lidar-scanning/', kind: 'scanning' },
   { title: 'Beam & Target Interaction', description: 'Follow a laser pulse through reflection, absorption, transmission, and scatter across different surfaces and targets.', tags: ['Energy balance', 'Signal strength', 'Multi-return'], path: 'games/lidar-interaction/', kind: 'interaction' },
-  { title: 'True Ortho-Rectification', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho' },
+  { title: 'True Ortho-Rectification', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: '?simulation=ortho', kind: 'ortho' },
 ];
 
 function Thumbnail({ kind }) {
@@ -19,5 +21,6 @@ function SimulatorCard({ simulator }) {
 }
 
 export default function App() {
+  if (new URLSearchParams(window.location.search).get('simulation') === 'ortho') return <OrthoRectification />;
   return <main className="wrap"><header className="hero"><p className="eyebrow">&#9650; Interactive survey training</p><h1><em>Simulation-based training</em> for surveyors.</h1><p>Explore practical surveying concepts through browser-based simulators. Nothing to install, no accounts, and your progress stays on your own device.</p></header><div className="section-head"><h2>Simulators</h2><span className="rule" /></div><div className="grid">{simulators.map((simulator) => <SimulatorCard key={simulator.title} simulator={simulator} />)}</div><footer><span>Browser-based survey simulators.</span><span className="spacer" /><a href="https://github.com/opensourcegis/Simulations">Source on GitHub &rarr;</a></footer></main>;
 }
