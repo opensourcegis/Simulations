@@ -5,7 +5,8 @@ const simulators = [
   { title: 'Aerial Triangulation', description: 'Build an image block, measure tie points, and see how bundle adjustment turns overlapping photographs into a connected survey.', tags: ['Image block', 'Tie points', 'Bundle adjustment'], path: 'games/aerial-triangulation/', kind: 'triangulation' },
   { title: 'LiDAR Scan Patterns', description: 'Compare six real beam-steering mechanisms and watch their ground patterns build up as a drone moves across the map.', tags: ['Scan mechanisms', 'Point pattern', 'Coverage'], path: 'games/lidar-scanning/', kind: 'scanning' },
   { title: 'Beam & Target Interaction', description: 'Follow a laser pulse through reflection, absorption, transmission, and scatter across different surfaces and targets.', tags: ['Energy balance', 'Signal strength', 'Multi-return'], path: 'games/lidar-interaction/', kind: 'interaction' },
-  { title: 'True Ortho-Rectification', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: '?simulation=ortho', kind: 'ortho' },
+  { title: 'True Ortho-Rectification', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho', status: 'Original' },
+  { title: 'True Ortho-Rectification — React', description: 'React migration workspace for the same rectification renderer, with the original interaction model preserved while the engine is split into React modules.', tags: ['React migration', 'Canvas engine', 'DSM vs DTM'], path: '?simulation=ortho', kind: 'ortho', status: 'React preview' },
 ];
 
 function Thumbnail({ kind }) {
@@ -17,7 +18,7 @@ function Thumbnail({ kind }) {
 }
 
 function SimulatorCard({ simulator }) {
-  return <a className="card" href={simulator.path}><div className="thumb"><Thumbnail kind={simulator.kind} /><span className="pill live">&bull; Playable</span></div><div className="card-body"><h3>{simulator.title}</h3><p>{simulator.description}</p><div className="tags">{simulator.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div><span className="go">Open simulator <span className="arrow">&rarr;</span></span></div></a>;
+  return <a className="card" href={simulator.path}><div className="thumb"><Thumbnail kind={simulator.kind} /><span className="pill live">&bull; {simulator.status || 'Playable'}</span></div><div className="card-body"><h3>{simulator.title}</h3><p>{simulator.description}</p><div className="tags">{simulator.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div><span className="go">Open simulator <span className="arrow">&rarr;</span></span></div></a>;
 }
 
 export default function App() {
