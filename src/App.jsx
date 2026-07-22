@@ -8,7 +8,7 @@ const simulators = [
   { title: 'Beam & Target Interaction', description: 'Follow a laser pulse through reflection, absorption, transmission, and scatter across different surfaces and targets.', tags: ['Energy balance', 'Signal strength', 'Multi-return'], path: 'games/lidar-interaction/', kind: 'interaction' },
   { title: 'True Ortho-Rectification', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho', status: 'Original' },
   { title: 'True Ortho-Rectification — React', description: 'React migration workspace for the same rectification renderer, with the original interaction model preserved while the engine is split into React modules.', tags: ['React migration', 'Canvas engine', 'DSM vs DTM'], path: '?simulation=ortho', kind: 'ortho', status: 'React preview' },
-  { title: 'Structure from Motion', description: 'Match distinctive features across ten photographs and watch bundle adjustment recover each camera’s position and orientation, reconstructing the scene in an interactive 3D view.', tags: ['Feature matching', 'Triangulation', 'Camera pose', '3D reconstruction'], path: '?simulation=sfm', kind: 'sfm', status: 'Native React' },
+  { title: 'Structure from Motion', description: 'Match the same corner of a 3D object across photographs and watch triangulation and resection recover each camera’s position and orientation in an interactive 3D reconstruction.', tags: ['Feature matching', 'Triangulation', 'Camera pose', '3D reconstruction'], path: '?simulation=sfm', kind: 'sfm', status: 'Native React' },
 ];
 
 function Thumbnail({ kind }) {
