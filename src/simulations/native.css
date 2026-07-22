@@ -1,0 +1,12 @@
+.native-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border: 1px solid rgba(15, 138, 77, .35);
+  border-radius: 999px;
+  color: #0f8a4d;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  vertical-align: middle;
+}

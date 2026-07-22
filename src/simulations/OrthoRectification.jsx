@@ -1,35 +1,46 @@
-import { useEffect, useRef } from 'react';
-import legacyHtml from '../../games/ortho-rectification/index.html?raw';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import './simulation.css';
+import './native.css';
 
-// The renderer is mounted by React while its canvas engine is being split into
-// hooks and modules. This keeps the migration behavior-identical: perspective
-// projection, ray tracing, DSM/DTM rectification, occlusion filling, zoom/pan,
-// and the concept quiz all remain active during the refactor.
+const WORLD = 400;
+const BUILDINGS = [
+  { x: 150, y: 150, w: 34, d: 26, h: 46, color: '#b0654a' }, { x: 92, y: 236, w: 42, d: 22, h: 18, color: '#8a8f98' },
+  { x: 212, y: 118, w: 26, d: 30, h: 26, color: '#a75c43' }, { x: 250, y: 236, w: 30, d: 24, h: 14, color: '#7f8a94' },
+  { x: 96, y: 96, w: 24, d: 20, h: 11, color: '#9a6a4e' }, { x: 186, y: 288, w: 48, d: 20, h: 22, color: '#6e7a86' },
+  { x: 298, y: 186, w: 22, d: 18, h: 12, color: '#a8836a' }, { x: 60, y: 170, w: 20, d: 16, h: 9, color: '#93705a' },
+];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const terrain = (x, y) => Math.max(0, 22 * Math.exp(-(((x - 300) ** 2) + ((y - 110) ** 2)) / (2 * 72 ** 2)) + 1.5 * Math.sin(x / 70) + 1.5 * Math.cos(y / 85) + 1.5);
+const buildingAt = (x, y) => BUILDINGS.find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.d);
+
+function camera(state) { return { x: state.camX, y: 200, z: state.height, roll: state.roll * Math.PI / 180, pitch: state.pitch * Math.PI / 180 }; }
+function project(cam, x, y, z) {
+  let dx = x - cam.x; let dy = y - cam.y; let dz = z - cam.z;
+  const cp = Math.cos(cam.pitch); const sp = Math.sin(cam.pitch); const cr = Math.cos(cam.roll); const sr = Math.sin(cam.roll);
+  const py = dy * cp - dz * sp; const pz = dy * sp + dz * cp; const px = dx * cr - py * sr; const vy = dx * sr + py * cr;
+  if (pz >= -1) return null;
+  return [320 - 145 * px / pz, 320 - 145 * vy / pz];
+}
+function poly(ctx, points, fill, stroke = null) { if (points.some((p) => !p)) return; ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); } }
+function renderSource(canvas, state, probe) {
+  const ctx = canvas.getContext('2d'); const cam = camera(state); ctx.clearRect(0, 0, 640, 640); ctx.fillStyle = '#101b27'; ctx.fillRect(0, 0, 640, 640);
+  for (let y = -200; y < WORLD + 200; y += 20) for (let x = -200; x < WORLD + 200; x += 20) { const z = terrain(x + 10, y + 10); const shade = 75 + Math.round(z * 3); poly(ctx, [project(cam, x, y, terrain(x, y)), project(cam, x + 20, y, terrain(x + 20, y)), project(cam, x + 20, y + 20, terrain(x + 20, y + 20)), project(cam, x, y + 20, terrain(x, y + 20))], `rgb(${shade - 20},${shade + 10},${shade - 5})`); }
+  if (state.grid) { ctx.strokeStyle = 'rgba(120,200,255,.45)'; ctx.lineWidth = 1; for (let g = 0; g <= WORLD; g += 50) { for (const axis of [0, 1]) { const pts = []; for (let t = 0; t <= WORLD; t += 5) pts.push(project(cam, axis ? t : g, axis ? g : t, terrain(axis ? t : g, axis ? g : t) + .1)); poly(ctx, pts, null, 'rgba(120,200,255,.45)'); } } }
+  const sorted = [...BUILDINGS].sort((a, b) => (b.x + b.y) - (a.x + a.y));
+  sorted.forEach((b) => { const base = [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.d], [b.x, b.y + b.d]].map(([x, y]) => project(cam, x, y, terrain(x, y))); const top = [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.d], [b.x, b.y + b.d]].map(([x, y]) => project(cam, x, y, terrain(x, y) + b.h)); for (let i = 0; i < 4; i++) poly(ctx, [base[i], base[(i + 1) % 4], top[(i + 1) % 4], top[i]], b.color, 'rgba(20,16,12,.6)'); poly(ctx, top, b.color, 'rgba(25,15,10,.8)'); if (state.foot) poly(ctx, base, null, 'rgba(255,255,255,.8)'); });
+  const probePoint = project(cam, probe.x, probe.y, terrain(probe.x, probe.y) + (buildingAt(probe.x, probe.y)?.h || 0)); if (probePoint) { ctx.strokeStyle = '#3fa9f5'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(probePoint[0], probePoint[1], 9, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = '600 12px system-ui'; ctx.fillText('probe', probePoint[0] + 12, probePoint[1] - 10); }
+}
+function renderSection(canvas, state, probe, displacement) {
+  const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, 640, 380); ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, 640, 380); const sx = (s) => 45 + s * 1.35; const sy = (z) => 330 - z * 2.2; ctx.strokeStyle = '#7fa3c0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(35, 330); ctx.lineTo(610, 330); ctx.stroke(); BUILDINGS.forEach((b) => { ctx.fillStyle = b.color; ctx.fillRect(sx((b.x - probe.x) + 180), sy(b.h), b.w * 1.35, 330 - sy(b.h)); }); const camX = sx(180 + state.camX - 200); const pX = sx(180); const dX = sx(180 + displacement); ctx.fillStyle = '#dce9ea'; ctx.fillRect(camX - 18, sy(state.height) - 18, 36, 18); ctx.strokeStyle = '#ff5a3c'; ctx.beginPath(); ctx.moveTo(camX, sy(state.height)); ctx.lineTo(pX, sy(terrain(probe.x, probe.y) + (buildingAt(probe.x, probe.y)?.h || 0))); ctx.stroke(); ctx.setLineDash([5, 4]); ctx.strokeStyle = '#ff9d4d'; ctx.beginPath(); ctx.moveTo(pX, sy(terrain(probe.x, probe.y))); ctx.lineTo(dX, 330); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#ff9d4d'; ctx.font = '600 12px system-ui'; ctx.fillText(`d = ${displacement.toFixed(1)} m`, Math.min(pX, dX), 315); }
+function renderElevation(canvas, mode, selected) { const ctx = canvas.getContext('2d'); const image = ctx.createImageData(240, 240); for (let y = 0; y < 240; y++) for (let x = 0; x < 240; x++) { const wx = x / 240 * WORLD; const wy = y / 240 * WORLD; const b = buildingAt(wx, wy); const z = mode === 'DSM' && b ? terrain(wx, wy) + b.h : terrain(wx, wy); const t = clamp(z / 60, 0, 1); const i = (y * 240 + x) * 4; image.data[i] = 55 + t * 180; image.data[i + 1] = 105 + t * 110; image.data[i + 2] = 75 + t * 80; image.data[i + 3] = 255; } ctx.putImageData(image, 0, 0); if (selected) { ctx.strokeStyle = '#0f8a4d'; ctx.lineWidth = 5; ctx.strokeRect(2, 2, 236, 236); } }
+function renderOrtho(canvas, state, mode) { const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, 640, 640); ctx.fillStyle = '#243846'; ctx.fillRect(0, 0, 640, 640); const s = 640 / WORLD; for (let y = 0; y < WORLD; y += 10) for (let x = 0; x < WORLD; x += 10) { const z = terrain(x + 5, y + 5); const c = 60 + Math.round(clamp(z / 30, 0, 1) * 120); ctx.fillStyle = `rgb(${c - 25},${c + 15},${c - 10})`; ctx.fillRect(x * s, y * s, 10 * s + 1, 10 * s + 1); } if (state.orthoGrid) { ctx.strokeStyle = 'rgba(120,210,255,.45)'; for (let g = 0; g <= WORLD; g += 50) { ctx.beginPath(); ctx.moveTo(g * s, 0); ctx.lineTo(g * s, 640); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, g * s); ctx.lineTo(640, g * s); ctx.stroke(); } } BUILDINGS.forEach((b) => { ctx.fillStyle = mode === 'DATUM' ? '#d07a59' : b.color; ctx.fillRect(b.x * s, b.y * s, b.w * s, b.d * s); ctx.strokeStyle = '#281b18'; ctx.strokeRect(b.x * s, b.y * s, b.w * s, b.d * s); }); ctx.fillStyle = '#fff'; ctx.font = '600 14px system-ui'; ctx.fillText(mode === 'DSM' ? 'TRUE ORTHOPHOTO · DSM' : mode === 'DTM' ? 'CONVENTIONAL ORTHOPHOTO · DTM' : 'DATUM PROJECTION', 16, 28); }
+
 export default function OrthoRectification() {
-  const hostRef = useRef(null);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return undefined;
-
-    const source = new DOMParser().parseFromString(legacyHtml, 'text/html');
-    const style = document.createElement('style');
-    style.textContent = source.querySelector('style')?.textContent || '';
-    host.replaceChildren(style);
-
-    const fragment = document.createRange().createContextualFragment(source.body.innerHTML);
-    host.appendChild(fragment);
-    const backLink = host.querySelector('.back-link');
-    if (backLink) backLink.href = import.meta.env.BASE_URL;
-
-    for (const originalScript of source.querySelectorAll('script')) {
-      const script = document.createElement('script');
-      script.textContent = originalScript.textContent;
-      host.appendChild(script);
-    }
-
-    return () => host.replaceChildren();
-  }, []);
-
-  return <div className="react-simulation-host" ref={hostRef} />;
+  const [state, setState] = useState({ height: 100, camX: 200, roll: 0, pitch: 0, grid: true, foot: true, orthoGrid: true, mode: 'DSM' });
+  const [probe, setProbe] = useState({ x: 167, y: 163 }); const sourceRef = useRef(null); const sectionRef = useRef(null); const orthoRef = useRef(null); const dtmRef = useRef(null); const dsmRef = useRef(null);
+  const building = useMemo(() => buildingAt(probe.x, probe.y), [probe]); const h = terrain(probe.x, probe.y) + (building?.h || 0); const radial = Math.hypot(probe.x - state.camX, probe.y - 200); const displacement = radial * h / state.height;
+  const update = (key) => (e) => setState((s) => ({ ...s, [key]: e.target.type === 'checkbox' ? e.target.checked : Number(e.target.value) }));
+  useEffect(() => { renderSource(sourceRef.current, state, probe); renderSection(sectionRef.current, state, probe, displacement); renderOrtho(orthoRef.current, state, state.mode); renderElevation(dtmRef.current, 'DTM', state.mode === 'DTM'); renderElevation(dsmRef.current, 'DSM', state.mode === 'DSM'); }, [state, probe, displacement]);
+  const probeFromPhoto = useCallback((e) => { const r = e.currentTarget.getBoundingClientRect(); setProbe({ x: clamp((e.clientX - r.left) / r.width * WORLD, 0, WORLD), y: clamp((e.clientY - r.top) / r.height * WORLD, 0, WORLD) }); }, []);
+  return <div className="sim-app"><header className="sim-topbar"><a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a><div className="title-block"><h1>True Ortho-Rectification <span className="native-badge">Native React</span></h1><span className="sub">Tilted perspective &rarr; elevation model &rarr; projection onto the datum</span></div><span className="score-chip">Renderer: <b>React canvas</b></span></header><div className="sim-layout"><div className="sim-col"><section className="sim-panel"><h2><span className="stepno">1</span> Source aerial photo <small>&mdash; click to probe</small></h2><canvas ref={sourceRef} className="sim-canvas" width="640" height="640" onClick={probeFromPhoto} /><div className="control-grid"><label>Flying height H <b>{state.height} m</b><input type="range" min="70" max="240" step="5" value={state.height} onChange={update('height')} /></label><label>Camera easting <b>{state.camX} m</b><input type="range" min="120" max="280" step="5" value={state.camX} onChange={update('camX')} /></label><label>Tilt roll <b>{state.roll}&deg;</b><input type="range" min="-14" max="14" value={state.roll} onChange={update('roll')} /></label><label>Tilt pitch <b>{state.pitch}&deg;</b><input type="range" min="-14" max="14" value={state.pitch} onChange={update('pitch')} /></label></div><div className="check-row"><label><input type="checkbox" checked={state.grid} onChange={update('grid')} /> 50 m map grid</label><label><input type="checkbox" checked={state.foot} onChange={update('foot')} /> footprints</label></div></section><section className="sim-panel"><h2><span className="stepno">2</span> Geometry at the probe <small>&mdash; drawn to scale</small></h2><canvas ref={sectionRef} className="sim-canvas section-canvas" width="640" height="380" /><div className="readouts"><div><span>radial r</span><b>{radial.toFixed(1)} m</b></div><div><span>height h</span><b>{h.toFixed(1)} m</b></div><div><span>flying H</span><b>{state.height} m</b></div><div><span>displacement d</span><b className="orange">{displacement.toFixed(1)} m</b></div></div><div className="equation">d = r &middot; h / H = {radial.toFixed(1)} &middot; {h.toFixed(1)} / {state.height}</div></section></div><div className="sim-col"><section className="sim-panel"><h2><span className="stepno">3</span> Elevation models <small>&mdash; what links image to ground</small></h2><div className="elevation-grid"><button className={state.mode === 'DTM' ? 'elevation selected' : 'elevation'} onClick={() => setState((s) => ({ ...s, mode: 'DTM' }))}><canvas ref={dtmRef} width="240" height="240" /><strong>DTM</strong><span>bare earth</span></button><button className={state.mode === 'DSM' ? 'elevation selected' : 'elevation'} onClick={() => setState((s) => ({ ...s, mode: 'DSM' }))}><canvas ref={dsmRef} width="240" height="240" /><strong>DSM</strong><span>earth + buildings</span></button></div></section><section className="sim-panel"><h2><span className="stepno">4</span> Rectify &mdash; project onto the datum</h2><div className="mode-list">{[['DATUM', 'No elevation', 'datum plane'], ['DTM', 'DTM', 'conventional orthophoto'], ['DSM', 'DSM', 'true orthophoto']].map(([mode, name, detail]) => <button key={mode} className={state.mode === mode ? 'rect-mode selected' : 'rect-mode'} onClick={() => setState((s) => ({ ...s, mode }))}><span className="mode-dot" /><span><b>{name}</b><small>{detail}</small></span></button>)}</div><canvas ref={orthoRef} className="sim-canvas" width="640" height="640" /><div className="rect-summary"><b>{state.mode === 'DSM' ? 'TRUE orthophoto' : state.mode === 'DTM' ? 'Conventional orthophoto' : 'Datum projection'}</b><p>{state.mode === 'DSM' ? 'Roofs are returned to their footprints using the surface model.' : state.mode === 'DTM' ? 'Relief is corrected, but building height is not represented.' : 'All points are projected onto a flat datum plane.'}</p></div></section></div></div></div>;
 }
