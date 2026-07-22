@@ -2,21 +2,20 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [react]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: gh-pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    name: Build and deploy gh-pages
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,19 +28,10 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish dist to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: dist
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    needs: build
-    runs-on: ubuntu-latest
-    name: Deploy
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true

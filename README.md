@@ -20,9 +20,9 @@ npm run preview
 
 ## GitHub Pages deployment
 
-The repository includes `.github/workflows/deploy-pages.yml`. Every push to `main` builds the Vite app and deploys `dist/` to GitHub Pages.
+The repository includes `.github/workflows/deploy-pages.yml`. Every push to `react` builds the Vite app and publishes `dist/` to the separate `gh-pages` branch. Source code remains on `react`; `gh-pages` contains deployment output only.
 
-In the repository’s GitHub settings, open **Pages** and set **Build and deployment → Source** to **GitHub Actions**. After the workflow completes, the site will be available at:
+In the repository’s GitHub settings, open **Pages** and set **Build and deployment → Source** to **Deploy from a branch**, then choose `gh-pages` and `/(root)`. After the workflow completes, the site will be available at:
 
 `https://opensourcegis.github.io/Simulations/`
 
