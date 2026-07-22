@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LiDAR Scan Patterns — Scanner Mechanism Trainer</title>
+<meta name="description" content="Choose an airborne LiDAR scanning mechanism — oscillating mirror, rotating polygon, Palmer conical, Risley prism, MEMS or rotating multi-beam — watch the beam strike the moving optic and fly one flight line to build the ground scan pattern. Zoom in to inspect the point pattern.">
+<style>
+  :root {
+    --bg: #eef2f6; --panel: #ffffff; --panel-2: #f5f8fa;
+    --line: #d6dee7; --line-soft: #e5ebf1;
+    --text: #16202c; --text-dim: #56677a; --text-faint: #7d8fa1;
+    --accent: #0f8a4d; --accent-wash: rgba(15, 138, 77, .09);
+    --bad: #c62828; --info: #1565c0; --info-wash: rgba(21, 101, 192, .07);
+    --orange: #e37400;
+    --radius: 12px; --radius-sm: 8px; --shadow: 0 10px 34px rgba(22, 32, 44, .16);
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: radial-gradient(1200px 600px at 15% -10%, rgba(21,101,192,.07) 0%, transparent 55%), var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; border-radius: 4px; }
+
+  .app { max-width: 1520px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
+  .topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; box-shadow: 0 1px 2px rgba(22,32,44,.05); }
+  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+  .back-link:hover { color: var(--text); border-color: var(--text-faint); }
+  .title-block { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+  .title-block h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+  .title-block .sub { font-size: 12.5px; color: var(--text-faint); }
+  .btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px; padding: 7px 15px; font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+  .btn:hover { border-color: var(--text-faint); color: var(--text); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); color: #fff; }
+  .btn.primary:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn.danger-ghost { color: var(--bad); }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 14px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; box-shadow: 0 1px 2px rgba(22,32,44,.05); }
+  .panel h3 { margin: 0 0 9px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); }
+  .panel h3 .lt { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-faint); }
+  .map-panel { padding: 12px; }
+
+  .map-stack { position: relative; width: 100%; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--line-soft); background: #cdd6c8; cursor: grab; touch-action: none; }
+  .map-stack.grabbing { cursor: grabbing; }
+  .map-stack canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .map-stack canvas.base { position: relative; height: auto; }
+  .map-hud { position: absolute; left: 10px; top: 10px; z-index: 4; background: rgba(255,255,255,.86); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--text-dim); backdrop-filter: blur(4px); font-family: var(--mono); display: none; pointer-events: none; }
+  .map-hud.show { display: block; }
+  .map-hud b { color: var(--text); }
+  .map-prompt { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(22,32,44,.28); backdrop-filter: blur(1px); }
+  .map-prompt .card { background: var(--panel); border-radius: var(--radius); padding: 16px 20px; box-shadow: var(--shadow); font-size: 14px; color: var(--text-dim); max-width: 320px; text-align: center; }
+  .map-prompt.hide { display: none; }
+  .zoom-badge { position: absolute; right: 10px; top: 10px; z-index: 4; background: rgba(255,255,255,.86); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 11.5px; color: var(--text-dim); font-family: var(--mono); backdrop-filter: blur(4px); pointer-events: none; }
+
+  .map-toolbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .map-toolbar .spacer { margin-left: auto; }
+  .cmode { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .cmode button { border: 0; background: var(--panel-2); padding: 6px 12px; font-size: 12px; color: var(--text-dim); border-right: 1px solid var(--line); }
+  .cmode button:last-child { border-right: 0; }
+  .cmode button.on { background: var(--info-wash); color: var(--info); font-weight: 600; }
+  .zbtns { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .zbtns button { border: 0; background: var(--panel-2); padding: 6px 11px; font-size: 12px; color: var(--text-dim); border-right: 1px solid var(--line); font-family: var(--mono); }
+  .zbtns button:last-child { border-right: 0; }
+  .zbtns button:hover { background: var(--info-wash); color: var(--info); }
+  .zoom-hint { font-size: 11px; color: var(--text-faint); }
+  .legend-ramp { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-faint); }
+  .ramp-bar { width: 84px; height: 9px; border-radius: 5px; background: linear-gradient(90deg,#2c6fbb,#2fa4a0,#63b34d,#e0c23a,#d1502e); border: 1px solid var(--line); }
+
+  #opticsCanvas { width: 100%; height: auto; display: block; border-radius: var(--radius-sm); border: 1px solid var(--line-soft); background: linear-gradient(180deg,#0f1720,#1b2836); }
+  .optics-cap { font-size: 11.5px; color: var(--text-faint); margin-top: 8px; line-height: 1.4; }
+
+  .mech-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  @media (max-width: 1240px) { .mech-grid { grid-template-columns: 1fr 1fr; } }
+  .mech-card { text-align: left; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel); padding: 8px 9px; display: flex; flex-direction: column; gap: 5px; transition: border-color .12s, box-shadow .12s; }
+  .mech-card:hover { border-color: var(--text-faint); }
+  .mech-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-wash); }
+  .mech-card svg { width: 100%; height: 40px; display: block; }
+  .mech-card .nm { font-size: 12px; font-weight: 650; line-height: 1.2; color: var(--text); }
+  .mech-card .pt { font-size: 10.5px; color: var(--text-faint); }
+
+  .ctrl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  @media (max-width: 520px) { .ctrl { grid-template-columns: 1fr; } }
+  .ctrl label { font-size: 12.5px; color: var(--text-dim); display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .ctrl label b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  .stat-strip { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
+  @media (max-width: 620px) { .stat-strip { grid-template-columns: 1fr 1fr; } }
+  .stat { border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--panel-2); padding: 6px 9px; }
+  .stat .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .7px; color: var(--text-faint); }
+  .stat .v { font-size: 15px; font-weight: 650; font-family: var(--mono); }
+  .stat .v small { font-size: 11px; color: var(--text-faint); font-weight: 400; }
+  .prog-track { height: 7px; background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 5px; overflow: hidden; margin-top: 3px; }
+  .prog-fill { height: 100%; width: 0%; background: var(--info); border-radius: 5px; transition: width .08s linear; }
+
+  .mech-detail { font-size: 12.5px; color: var(--text-dim); }
+  .mech-detail h4 { margin: 2px 0 4px; font-size: 13.5px; color: var(--text); }
+  .mech-detail .row { margin: 5px 0; }
+  .mech-detail .row b { color: var(--text); }
+  .mech-detail .ex { font-size: 11.5px; color: var(--text-faint); font-style: italic; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 5px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text-dim); margin: 1px 2px 1px 0; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(22,32,44,.45); display: none; align-items: center; justify-content: center; padding: 18px; z-index: 50; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); max-width: 680px; width: 100%; max-height: 88vh; overflow-y: auto; padding: 22px 24px; }
+  .modal h2 { margin: 0 0 6px; font-size: 19px; }
+  .modal p, .modal li { font-size: 13.5px; color: var(--text-dim); }
+  .modal p { margin: 7px 0; }
+  .modal .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .mtable { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 8px 0; }
+  .mtable th, .mtable td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  .mtable th { color: var(--text-faint); text-transform: uppercase; font-size: 10.5px; letter-spacing: .6px; }
+  .mtable td b { color: var(--text); }
+  .callout { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px; color: var(--text-dim); margin: 10px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <a class="back-link" href="../../">← All simulators</a>
+    <div class="title-block">
+      <h1>LiDAR Scan Patterns</h1>
+      <span class="sub">Watch the beam strike the moving optic · fly one line · zoom in on the point pattern</span>
+    </div>
+    <button class="btn" id="btnHelp">Mechanisms explained</button>
+    <button class="btn danger-ghost" id="btnReset">Reset</button>
+    <button class="btn" id="btnPause" disabled>Pause</button>
+    <button class="btn primary" id="btnFly" disabled>Choose a mechanism</button>
+  </div>
+
+  <div class="layout">
+
+    <div class="col">
+      <div class="panel map-panel">
+        <h3>Ground scan — one flight line</h3>
+        <div class="map-stack" id="mapStack">
+          <canvas class="base" id="mapCanvas"></canvas>
+          <canvas id="dataCanvas"></canvas>
+          <canvas id="fxCanvas"></canvas>
+          <div class="map-hud" id="mapHud"></div>
+          <div class="zoom-badge" id="zoomBadge">1.0×</div>
+          <div class="map-prompt" id="mapPrompt"><div class="card">Select a scanning mechanism, then press <b>Fly line</b>.</div></div>
+        </div>
+        <div class="map-toolbar">
+          <div class="cmode" id="cmode">
+            <button data-mode="seq" class="on">Colour: scan sequence</button>
+            <button data-mode="elev">Elevation (DSM)</button>
+          </div>
+          <div class="zbtns" id="zbtns">
+            <button data-z="out" title="Zoom out">−</button>
+            <button data-z="in" title="Zoom in">+</button>
+            <button data-z="fit" title="Fit whole line">fit</button>
+          </div>
+          <span class="zoom-hint">double-click or ctrl+scroll to zoom · drag to pan</span>
+          <div class="spacer"></div>
+          <div class="legend-ramp" id="rampLegend" style="display:none"><span>low</span><span class="ramp-bar"></span><span>high</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Scanning mechanism</h3>
+        <div class="mech-grid" id="mechGrid"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Flight &amp; sensor</h3>
+        <div class="ctrl">
+          <div>
+            <label>Flying height AGL <b id="altVal">80 m</b></label>
+            <input type="range" id="altSlider" min="40" max="140" step="5" value="80">
+          </div>
+          <div>
+            <label>Playback speed (slow-mo) <b id="spdVal">1.0×</b></label>
+            <input type="range" id="spdSlider" min="0.2" max="3" step="0.1" value="1">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="panel">
+        <h3>Scanner optics <span class="lt">— live beam &amp; footprint</span></h3>
+        <canvas id="opticsCanvas" width="700" height="320"></canvas>
+        <div class="optics-cap" id="opticsCap">Select a mechanism to see the beam strike the moving optic and trace its footprint.</div>
+      </div>
+
+      <div class="panel">
+        <h3>Capture</h3>
+        <div class="stat-strip">
+          <div class="stat"><div class="k">Swath width</div><div class="v" id="stSwath">—</div></div>
+          <div class="stat"><div class="k">Points</div><div class="v" id="stPts">0</div></div>
+          <div class="stat"><div class="k">Density</div><div class="v" id="stDens">—</div></div>
+          <div class="stat"><div class="k">Spacing</div><div class="v" id="stGsd">—</div></div>
+        </div>
+        <div style="margin-top:9px">
+          <label style="font-size:12px;color:var(--text-dim);display:flex;justify-content:space-between"><span>Flight-line progress</span><b id="progVal" style="font-family:var(--mono)">0%</b></label>
+          <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>About this mechanism</h3>
+        <div class="mech-detail" id="mechDetail">
+          <p style="color:var(--text-faint);font-style:italic;margin:0">Select a mechanism to see how it steers the beam, the ground pattern it produces, and which market systems use it.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="overlay" id="helpOverlay">
+  <div class="modal">
+    <h2>How airborne LiDAR paints the ground</h2>
+    <p>A LiDAR sensor fires a laser and times the returning pulse to measure range. A single beam only sees one spot — so every scanner needs a <b>beam-steering mechanism</b> that sweeps that spot across the flight path while the aircraft carries it forward. The mechanism decides the <b>ground pattern</b> of the point cloud. These are the mechanisms in the market:</p>
+    <table class="mtable">
+      <tr><th>Mechanism</th><th>Optic &amp; ground pattern</th><th>Representative systems</th></tr>
+      <tr><td><b>Oscillating mirror</b><br>(galvanometer)</td><td>Flat mirror swings; sinusoidal zig-zag, points bunch at the swath edges.</td><td>Leica ALS40–ALS80, Optech ALTM</td></tr>
+      <tr><td><b>Rotating polygon mirror</b></td><td>Beam strikes each spinning facet in turn; straight parallel one-way lines.</td><td>RIEGL VQ / VUX, Optech</td></tr>
+      <tr><td><b>Palmer / conical</b><br>(nutating mirror)</td><td>Tilted mirror spins about the axis; overlapping ellipses, fore &amp; aft looks.</td><td>TopoSys, conical topo scanners</td></tr>
+      <tr><td><b>Risley prisms</b><br>(dual rotating wedges)</td><td>Light <i>refracts</i> through two counter-rotating wedges; non-repetitive rosette.</td><td>Livox Avia, DJI Zenmuse L1 / L2</td></tr>
+      <tr><td><b>MEMS micro-mirror</b></td><td>Gimbaled micro-mirror tilts on two axes; Lissajous tile in a narrow FOV.</td><td>Innoviz, automotive-class UAV units</td></tr>
+      <tr><td><b>Rotating multi-beam</b><br>(spinning head)</td><td>Laser modules ride a spinning head; concentric rings, one per channel.</td><td>Velodyne / Ouster / Hesai, YellowScan</td></tr>
+    </table>
+    <div class="callout">The <b>Scanner optics</b> panel shows the beam hitting the real moving surface — the facet, the mirror face, or the prism — and the footprint it traces. On the map you can <b>scroll to zoom and drag to pan</b> to inspect individual laser points and their spacing.</div>
+    <div class="modal-actions"><button class="btn primary" id="btnHelpClose">Got it</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+//  Map geometry and canvases
+// ============================================================
+const MAP_W = 520, MAP_H = 230, PXPM = 1.86;
+const CW = Math.round(MAP_W * PXPM), CH = Math.round(MAP_H * PXPM);
+const DEG = Math.PI / 180;
+
+const mapCanvas = document.getElementById('mapCanvas');
+const dataCanvas = document.getElementById('dataCanvas');
+const fxCanvas = document.getElementById('fxCanvas');
+[mapCanvas, dataCanvas, fxCanvas].forEach(c => { c.width = CW; c.height = CH; });
+const mapCtx = mapCanvas.getContext('2d');
+const dataCtx = dataCanvas.getContext('2d');
+const fxCtx = fxCanvas.getContext('2d');
+const px = x => x * PXPM;
+
+// ---- view (zoom / pan) ----
+const view = { zoom: 1, ox: 0, oy: 0 };     // ox,oy = top-left of viewport in unzoomed canvas px
+const PT_SCREEN = 2.6;                       // base laser-point size; grows as sqrt(zoom) so dots
+function ptSize() { return PT_SCREEN / Math.sqrt(view.zoom); }   // stay legible but separate when zoomed
+function clampView() {
+  const vw = CW / view.zoom, vh = CH / view.zoom;
+  view.ox = Math.max(0, Math.min(CW - vw, view.ox));
+  view.oy = Math.max(0, Math.min(CH - vh, view.oy));
+}
+function applyView(ctx) { ctx.setTransform(view.zoom, 0, 0, view.zoom, -view.ox * view.zoom, -view.oy * view.zoom); }
+
+// ============================================================
+//  Scene
+// ============================================================
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const SCENE = (() => {
+  const rnd = mulberry32(424242);
+  const fields = []; const cols = ['#9caf68','#aeb977','#8fa65f','#b7bd82','#a3b06d','#c0c088','#93a862']; let ci = 0;
+  for (let gx=-20; gx<MAP_W+20; gx+=130) for (let gy=-20; gy<MAP_H+20; gy+=92)
+    fields.push({ x:gx+(rnd()-.5)*26, y:gy+(rnd()-.5)*22, w:130+(rnd()-.5)*30, h:92+(rnd()-.5)*24, c:cols[ci++%cols.length] });
+  const river = []; for (let t=-0.1;t<=1.1;t+=0.05) river.push([t*MAP_W, 52+40*Math.sin(t*5.5)+22*Math.sin(t*2.1+1)]);
+  const pond = { cx:360, cy:186, rx:24, ry:15 };
+  const roads = [
+    { pts:[[-10,118],[130,126],[250,120],[360,138],[470,120],[MAP_W+10,126]], w:6 },
+    { pts:[[170,-10],[176,118],[182,MAP_H+10]], w:5 },
+    { pts:[[400,-10],[406,138],[412,MAP_H+10]], w:4 },
+  ];
+  const buildings = [];
+  const addTown=(ox,oy,nx,ny,gap,bw,bd,hmin,hmax)=>{for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){if(rnd()<0.12)continue;buildings.push({x:ox+i*gap+(rnd()-.5)*4,y:oy+j*gap+(rnd()-.5)*4,w:bw+(rnd()-.5)*6,d:bd+(rnd()-.5)*5,rot:(rnd()-.5)*0.25,h:hmin+rnd()*(hmax-hmin)});}};
+  addTown(210,30,5,3,24,15,12,6,16); addTown(60,178,4,2,28,18,14,5,11);
+  buildings.push({x:456,y:74,w:26,d:20,rot:0.15,h:28}); buildings.push({x:300,y:96,w:12,d:12,rot:0,h:34});
+  const forests = [];
+  const addForest=(cx,cy,r,n)=>{for(let i=0;i<n;i++){const a=rnd()*7,rr=Math.sqrt(rnd())*r;forests.push({x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr,r:3+rnd()*3.5,h:6+rnd()*9});}};
+  addForest(90,48,34,70); addForest(470,200,30,58); addForest(250,205,26,46);
+  return { fields, river, pond, roads, buildings, forests };
+})();
+function inRect(x,y,b){const c=Math.cos(-b.rot),s=Math.sin(-b.rot),dx=x-b.x,dy=y-b.y;return Math.abs(dx*c-dy*s)<=b.w/2&&Math.abs(dx*s+dy*c)<=b.d/2;}
+function nearRiver(x,y){let best=1e9;for(let i=0;i<SCENE.river.length-1;i++){const a=SCENE.river[i],b=SCENE.river[i+1],vx=b[0]-a[0],vy=b[1]-a[1];const t=Math.max(0,Math.min(1,((x-a[0])*vx+(y-a[1])*vy)/(vx*vx+vy*vy)));best=Math.min(best,Math.hypot(x-(a[0]+t*vx),y-(a[1]+t*vy)));}return best;}
+function surfaceAt(x,y){
+  if(nearRiver(x,y)<8) return {h:0,water:true};
+  const p=SCENE.pond; if(((x-p.cx)/p.rx)**2+((y-p.cy)/p.ry)**2<1) return {h:0,water:true};
+  for(const b of SCENE.buildings) if(inRect(x,y,b)) return {h:b.h,water:false};
+  for(const f of SCENE.forests) if(Math.hypot(x-f.x,y-f.y)<f.r) return {h:f.h*(0.7+0.3*Math.random()),water:false};
+  return {h:Math.max(0, 2.4+1.8*Math.sin(x/70)+1.3*Math.cos(y/55)+0.9*Math.sin((x+y)/90)), water:false};
+}
+const RAMP=[[0,[44,111,187]],[0.25,[47,164,160]],[0.5,[99,179,77]],[0.72,[224,194,58]],[1,[209,80,46]]];
+function elevColor(h){const t=Math.max(0,Math.min(1,h/30));for(let i=0;i<RAMP.length-1;i++)if(t<=RAMP[i+1][0]){const a=RAMP[i],b=RAMP[i+1],f=(t-a[0])/(b[0]-a[0]),c=a[1].map((v,k)=>Math.round(v+(b[1][k]-v)*f));return `rgb(${c[0]},${c[1]},${c[2]})`;}return 'rgb(209,80,46)';}
+const seqColor = t => `hsl(${(t*26)%360}, 78%, 52%)`;
+
+function paintBaseMap(ctx) {
+  ctx.fillStyle = '#9fae70'; ctx.fillRect(0, 0, CW, CH);
+  for (const f of SCENE.fields) {
+    ctx.fillStyle=f.c; ctx.fillRect(px(f.x),px(f.y),px(f.w),px(f.h));
+    ctx.strokeStyle='rgba(90,100,60,.14)'; ctx.lineWidth=1; ctx.strokeRect(px(f.x),px(f.y),px(f.w),px(f.h));
+    ctx.strokeStyle='rgba(255,255,235,.08)';
+    for(let yy=f.y+6;yy<f.y+f.h;yy+=8){ctx.beginPath();ctx.moveTo(px(f.x),px(yy));ctx.lineTo(px(f.x+f.w),px(yy));ctx.stroke();}
+  }
+  for (const r of SCENE.roads) {
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath(); r.pts.forEach((p,i)=>i?ctx.lineTo(px(p[0]),px(p[1])):ctx.moveTo(px(p[0]),px(p[1])));
+    ctx.strokeStyle='#8f8878'; ctx.lineWidth=px(r.w)+3; ctx.stroke();
+    ctx.strokeStyle='#bdb4a2'; ctx.lineWidth=px(r.w); ctx.stroke();
+  }
+  ctx.lineCap='round';
+  ctx.beginPath(); SCENE.river.forEach((p,i)=>i?ctx.lineTo(px(p[0]),px(p[1])):ctx.moveTo(px(p[0]),px(p[1])));
+  ctx.strokeStyle='#6d93ac'; ctx.lineWidth=px(15); ctx.stroke();
+  ctx.strokeStyle='#7ea4bd'; ctx.lineWidth=px(11); ctx.stroke();
+  const p=SCENE.pond; ctx.fillStyle='#6d93ac'; ctx.beginPath(); ctx.ellipse(px(p.cx),px(p.cy),px(p.rx),px(p.ry),0,0,7); ctx.fill();
+  for(const f of SCENE.forests){const g=ctx.createRadialGradient(px(f.x)-2,px(f.y)-2,1,px(f.x),px(f.y),px(f.r));g.addColorStop(0,'#5f7f3f');g.addColorStop(1,'#3f5a2b');ctx.fillStyle=g;ctx.beginPath();ctx.arc(px(f.x),px(f.y),px(f.r),0,7);ctx.fill();}
+  for(const b of SCENE.buildings){const cs=Math.cos(b.rot),sn=Math.sin(b.rot);ctx.fillStyle='rgba(30,36,20,.28)';ctx.beginPath();[[-b.w/2,-b.d/2],[b.w/2,-b.d/2],[b.w/2,b.d/2],[-b.w/2,b.d/2]].forEach(([u,v],i)=>{const x=b.x+u*cs-v*sn+4*(b.h/16),y=b.y+u*sn+v*cs+3*(b.h/16);i?ctx.lineTo(px(x),px(y)):ctx.moveTo(px(x),px(y));});ctx.closePath();ctx.fill();}
+  for(const b of SCENE.buildings){const cs=Math.cos(b.rot),sn=Math.sin(b.rot);ctx.beginPath();[[-b.w/2,-b.d/2],[b.w/2,-b.d/2],[b.w/2,b.d/2],[-b.w/2,b.d/2]].forEach(([u,v],i)=>{const x=b.x+u*cs-v*sn,y=b.y+u*sn+v*cs;i?ctx.lineTo(px(x),px(y)):ctx.moveTo(px(x),px(y));});ctx.closePath();const sh=150+Math.min(70,b.h*3);ctx.fillStyle=`rgb(${sh},${sh-14},${sh-30})`;ctx.fill();ctx.strokeStyle='rgba(40,30,25,.4)';ctx.lineWidth=1;ctx.stroke();}
+}
+
+// ============================================================
+//  Optics — every mechanism has a real surface the beam strikes
+// ============================================================
+const opticsCanvas = document.getElementById('opticsCanvas');
+const octx = opticsCanvas.getContext('2d');
+const OW = opticsCanvas.width, OH = opticsCanvas.height;
+const LASER = '#ff5a3c';
+const SCH = { cx: 200, pivot: 116, ground: 252 };
+const TGT = { cx: 560, cy: 150, R: 86 };
+
+function reflect(dx, dy, nx, ny) { const d = dx*nx + dy*ny; return [dx - 2*d*nx, dy - 2*d*ny]; }
+function hitGround(ox, oy, rx, ry, gy) { if (ry <= 1e-3) return null; const t = (gy-oy)/ry; return [ox + rx*t, gy]; }
+function beam(ctx,x1,y1,x2,y2,w,a){ ctx.strokeStyle=`rgba(255,90,60,${a==null?0.95:a})`; ctx.lineWidth=w||2; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+function laserBox(ctx,x,y){ ctx.fillStyle='#26313d'; ctx.strokeStyle='#4a5a6b'; ctx.lineWidth=1; ctx.fillRect(x-16,y-9,18,18); ctx.strokeRect(x-16,y-9,18,18); ctx.fillStyle=LASER; ctx.fillRect(x+2,y-2,3,4); ctx.fillStyle='#7d8fa1'; ctx.font='9px system-ui'; ctx.textAlign='center'; ctx.fillText('laser',x-7,y+21); ctx.textAlign='left'; }
+function glowDot(ctx,x,y,r,col){ ctx.save(); const g=ctx.createRadialGradient(x,y,0,x,y,r*3); g.addColorStop(0,col); g.addColorStop(1,'rgba(255,90,60,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r*3,0,7); ctx.fill(); ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); ctx.restore(); }
+function groundBar(ctx,y){ ctx.fillStyle='rgba(120,140,120,.12)'; ctx.fillRect(26,y,360,9); ctx.strokeStyle='#3b4a59'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(26,y); ctx.lineTo(386,y); ctx.stroke(); ctx.fillStyle='#7d8fa1'; ctx.font='9px system-ui'; ctx.fillText('ground',348,y+19); }
+function olabel(ctx,x,y,t){ ctx.font='600 11px system-ui'; ctx.fillStyle='#9db4c9'; ctx.textAlign='center'; ctx.fillText(t,x,y); ctx.textAlign='left'; }
+function drawMirrorBar(ctx,cx,cy,ang,L){
+  const dx=Math.cos(ang)*L, dy=Math.sin(ang)*L;
+  const bx=Math.cos(ang+Math.PI/2)*3.5, by=Math.sin(ang+Math.PI/2)*3.5;
+  ctx.strokeStyle='#5a6b7c'; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx-dx+bx,cy-dy+by); ctx.lineTo(cx+dx+bx,cy+dy+by); ctx.stroke();   // backing
+  ctx.strokeStyle='#e8f4ff'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(cx-dx,cy-dy); ctx.lineTo(cx+dx,cy+dy); ctx.stroke(); // reflective face
+}
+
+// -- oscillating mirror: flat mirror, beam strikes its face --
+function opticOsc(ctx, td, m) {
+  const cx=SCH.cx, py=SCH.pivot, gy=SCH.ground;
+  const swing = 17*DEG*Math.sin(2*Math.PI*m.scanHz*td);
+  const nA = 135*DEG + swing, nx=Math.cos(nA), ny=Math.sin(nA);
+  laserBox(ctx,44,py); beam(ctx,46,py,cx,py,2,.95);
+  drawMirrorBar(ctx,cx,py,nA-Math.PI/2,30);
+  const r=reflect(1,0,nx,ny), hit=hitGround(cx,py,r[0],r[1],gy);
+  if(hit) beam(ctx,cx,py,hit[0],hit[1],2,.95);
+  glowDot(ctx,cx,py,2,'#ffffff');
+  groundBar(ctx,gy); if(hit) glowDot(ctx,hit[0],gy,3,LASER);
+  olabel(ctx,cx,24,'flat mirror swings — angle in = angle out');
+}
+
+// -- rotating polygon: true ray/facet intersection, reflect off that facet --
+function opticPoly(ctx, td, m) {
+  const cx=SCH.cx, py=SCH.pivot, gy=SCH.ground, N=8, R=34;
+  const rot = 2*Math.PI*m.scanHz*td;
+  const V=[]; for(let i=0;i<N;i++){const a=rot+i*2*Math.PI/N; V.push([cx+Math.cos(a)*R, py+Math.sin(a)*R]);}
+  // polygon body (mirrored facets)
+  ctx.beginPath(); V.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+  ctx.fillStyle='rgba(200,225,245,.13)'; ctx.fill();
+  ctx.strokeStyle='#e8f4ff'; ctx.lineWidth=2.6; ctx.stroke();
+  ctx.fillStyle='#1b2836'; ctx.beginPath(); ctx.arc(cx,py,4,0,7); ctx.fill();
+  // incoming ray aimed below centre so it lands on the lower-left facet
+  const by = py + R*0.5;
+  laserBox(ctx,40,by);
+  let best=null;
+  for(let i=0;i<N;i++){
+    const a=V[i], b=V[(i+1)%N];
+    const d1=a[1]-by, d2=b[1]-by;
+    if((d1>0)===(d2>0)) continue;               // edge doesn't cross the ray line
+    const t=d1/(d1-d2), xi=a[0]+(b[0]-a[0])*t;
+    if(xi<42) continue;
+    if(!best||xi<best.x){
+      let nx=b[1]-a[1], ny=-(b[0]-a[0]); const L=Math.hypot(nx,ny); nx/=L; ny/=L;
+      if((xi-cx)*nx+(by-py)*ny<0){nx=-nx;ny=-ny;}   // outward
+      best={x:xi,nx,ny};
+    }
+  }
+  beam(ctx,42,by,best?best.x:cx,by,2,.95);
+  if(best){
+    const r=reflect(1,0,best.nx,best.ny), hit=hitGround(best.x,by,r[0],r[1],gy);
+    if(hit) beam(ctx,best.x,by,hit[0],hit[1],2,.95);
+    glowDot(ctx,best.x,by,2,'#ffffff');           // spot on the facet
+    if(hit) glowDot(ctx,hit[0],gy,3,LASER);
+  }
+  groundBar(ctx,gy);
+  olabel(ctx,cx,24,'beam strikes each spinning facet in turn');
+}
+
+// -- Palmer: tilted mirror spinning about the vertical axis --
+function opticPalmer(ctx, td, m) {
+  const cx=SCH.cx, py=SCH.pivot, gy=SCH.ground;
+  const rot=2*Math.PI*m.scanHz*td;
+  laserBox(ctx,44,py); beam(ctx,46,py,cx,py,2,.95);
+  // rotation axis
+  ctx.strokeStyle='rgba(157,180,201,.45)'; ctx.setLineDash([3,4]); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(cx,py-42); ctx.lineTo(cx,py+22); ctx.stroke(); ctx.setLineDash([]);
+  // the tilted mirror face: its normal precesses on a cone -> in-plane tilt wobbles
+  const nA = 135*DEG + (m.swathDeg*DEG/2)*Math.sin(rot);
+  const nx=Math.cos(nA), ny=Math.sin(nA);
+  // elliptical face (foreshortened disc) + edge-on bar so the surface is visible
+  ctx.save(); ctx.translate(cx,py); ctx.rotate(nA-Math.PI/2);
+  ctx.fillStyle='rgba(200,225,245,.16)'; ctx.strokeStyle='rgba(232,244,255,.7)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.ellipse(0,0,30,10*Math.abs(Math.cos(rot))+4,0,0,7); ctx.fill(); ctx.stroke(); ctx.restore();
+  drawMirrorBar(ctx,cx,py,nA-Math.PI/2,30);
+  // spin marker orbiting the axis
+  const mx=cx+Math.cos(rot)*20, my=py-34+Math.sin(rot)*6;
+  ctx.fillStyle='#9db4c9'; ctx.beginPath(); ctx.arc(mx,my,2.6,0,7); ctx.fill();
+  const r=reflect(1,0,nx,ny), hit=hitGround(cx,py,r[0],r[1],gy);
+  if(hit) beam(ctx,cx,py,hit[0],hit[1],2,.9);
+  glowDot(ctx,cx,py,2,'#ffffff');
+  groundBar(ctx,gy); if(hit) glowDot(ctx,hit[0],gy,3,LASER);
+  olabel(ctx,cx,24,'tilted mirror spins about the axis — cone');
+}
+
+// -- Risley: light refracts THROUGH two counter-rotating wedges --
+function opticRisley(ctx, td, m) {
+  const py=SCH.pivot, gy=SCH.ground, x1=SCH.cx-36, x2=SCH.cx+34, R=23;
+  const a1=2*Math.PI*m.f1*td, a2=2*Math.PI*m.f2*td;
+  const t1=Math.tan(m.d1*DEG)*Math.cos(a1), t2=Math.tan(m.d2*DEG)*Math.cos(a2);
+  const span=Math.tan(m.d1*DEG)+Math.tan(m.d2*DEG);
+  laserBox(ctx,30,py);
+  const yMid = py + (t1/span)*30;
+  const gx = SCH.cx + ((t1+t2)/span)*130;
+  beam(ctx,32,py,x1,py,2,.95);          // into prism 1
+  beam(ctx,x1,py,x2,yMid,2,.9);         // deflected by prism 1
+  beam(ctx,x2,yMid,gx,gy,2,.9);         // deflected again by prism 2
+  const wedge=(x,spin)=>{ ctx.save(); ctx.translate(x,py); ctx.rotate(spin);
+    ctx.beginPath(); ctx.moveTo(-R,0); ctx.lineTo(R,-R*0.55); ctx.lineTo(R,R*0.55); ctx.closePath();
+    ctx.fillStyle='rgba(200,225,245,.22)'; ctx.fill(); ctx.strokeStyle='#cfe0ef'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,R,0,7); ctx.strokeStyle='rgba(157,180,201,.55)'; ctx.lineWidth=1.4; ctx.stroke(); ctx.restore(); };
+  wedge(x1,a1); wedge(x2,a2);
+  glowDot(ctx,x1,py,1.8,'#ffffff'); glowDot(ctx,x2,yMid,1.8,'#ffffff');
+  groundBar(ctx,gy); glowDot(ctx,gx,gy,3,LASER);
+  olabel(ctx,SCH.cx,24,'light refracts through two counter-rotating wedges');
+}
+
+// -- MEMS: gimbaled micro-mirror, beam strikes its face --
+function opticMems(ctx, td, m) {
+  const cx=SCH.cx, py=SCH.pivot, gy=SCH.ground;
+  const tx=15*DEG*Math.sin(2*Math.PI*m.fx*td);
+  const bob=4*Math.sin(2*Math.PI*m.fy*td);
+  const nA=135*DEG+tx, nx=Math.cos(nA), ny=Math.sin(nA);
+  laserBox(ctx,44,py); beam(ctx,46,py,cx,py,2,.95);
+  ctx.strokeStyle='#4a5a6b'; ctx.lineWidth=1.2; ctx.strokeRect(cx-26,py-24,52,48);   // gimbal frame
+  ctx.strokeStyle='rgba(74,90,107,.8)'; ctx.beginPath(); ctx.moveTo(cx-26,py); ctx.lineTo(cx-18,py); ctx.moveTo(cx+18,py); ctx.lineTo(cx+26,py); ctx.stroke();
+  drawMirrorBar(ctx,cx,py,nA-Math.PI/2,18);
+  const r=reflect(1,0,nx,ny), hit=hitGround(cx,py,r[0],r[1],gy);
+  if(hit) beam(ctx,cx,py,hit[0]+bob,hit[1],2,.95);
+  glowDot(ctx,cx,py,2,'#ffffff');
+  groundBar(ctx,gy); if(hit) glowDot(ctx,hit[0]+bob,gy,3,LASER);
+  olabel(ctx,cx,24,'gimbaled micro-mirror tilts fast × slow');
+}
+
+// -- rotating multi-beam: laser modules ride the spinning head --
+function opticMulti(ctx, td, m) {
+  const cx=SCH.cx, py=SCH.pivot+8, gy=SCH.ground, R=32, r0=15;
+  const rot=2*Math.PI*m.scanHz*td;
+  // housing
+  ctx.strokeStyle='#9db4c9'; ctx.lineWidth=2; ctx.fillStyle='rgba(157,180,201,.10)';
+  ctx.beginPath(); ctx.arc(cx,py,R,0,7); ctx.fill(); ctx.stroke();
+  // spinning module carrier
+  ctx.strokeStyle='rgba(232,244,255,.55)'; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.arc(cx,py,r0,0,7); ctx.stroke();
+  let lead=null;
+  for(let k=0;k<m.channels;k++){
+    const a=rot+k*2*Math.PI/m.channels;
+    const mx=cx+Math.cos(a)*r0, my=py+Math.sin(a)*r0;      // module on the carrier
+    const ex=cx+Math.cos(a)*R, ey=py+Math.sin(a)*R;        // exits the window
+    ctx.fillStyle='#cfe0ef'; ctx.beginPath(); ctx.arc(mx,my,2,0,7); ctx.fill();
+    beam(ctx,mx,my,ex,ey,1.3,.5);
+    if(k===0) lead={mx,my,ex,ey};
+  }
+  ctx.fillStyle='#1b2836'; ctx.beginPath(); ctx.arc(cx,py,4,0,7); ctx.fill();
+  if(lead){
+    const dx=lead.ex-lead.mx, dy=lead.ey-lead.my, L=Math.hypot(dx,dy);
+    const hit=hitGround(lead.ex,lead.ey,dx/L,dy/L,gy);
+    if(hit && Math.abs(hit[0]-cx)<190) { beam(ctx,lead.mx,lead.my,hit[0],hit[1],2,.85); glowDot(ctx,hit[0],gy,3,LASER); }
+  }
+  groundBar(ctx,gy);
+  olabel(ctx,cx,24,'laser modules ride the spinning head');
+}
+
+// footprint target
+let opticTrail = [];
+function drawFootprint(ctx, m, td) {
+  const cx=TGT.cx, cy=TGT.cy, R=TGT.R;
+  ctx.strokeStyle='#3b4a59'; ctx.lineWidth=1; ctx.strokeRect(cx-R,cy-R,R*2,R*2);
+  ctx.strokeStyle='rgba(90,110,130,.30)'; ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+  olabel(ctx,cx,cy-R-8,'ground footprint (top view)');
+  ctx.fillStyle='#7d8fa1'; ctx.font='9px system-ui'; ctx.textAlign='center'; ctx.fillText('cross-track →',cx,cy+R+15); ctx.textAlign='left';
+  const norm=Math.tan(m.swathDeg*DEG)*1.08;
+  const offs=m.fn(td,1,m);
+  offs.forEach(o=>opticTrail.push([o.ax,o.cx]));
+  if(opticTrail.length>1100) opticTrail.splice(0,opticTrail.length-1100);
+  for(let i=0;i<opticTrail.length;i++){
+    const p=opticTrail[i], a=i/opticTrail.length;
+    const x=cx+(p[1]/norm)*R, y=cy+(p[0]/norm)*R;
+    if(Math.abs(x-cx)>R||Math.abs(y-cy)>R) continue;
+    ctx.fillStyle=`rgba(227,116,0,${0.08+0.92*a})`; ctx.fillRect(x-0.8,y-0.8,1.7,1.7);
+  }
+  offs.forEach(o=>{const x=cx+(o.cx/norm)*R,y=cy+(o.ax/norm)*R; if(Math.abs(x-cx)<=R&&Math.abs(y-cy)<=R) glowDot(ctx,x,y,2,LASER);});
+}
+function drawOptics(clock) {
+  octx.setTransform(1,0,0,1,0,0);
+  octx.clearRect(0,0,OW,OH);
+  const m=state.mech;
+  if(!m){ octx.fillStyle='#5b6b7a'; octx.font='13px system-ui'; octx.textAlign='center'; octx.fillText('No mechanism selected',OW/2,OH/2); octx.textAlign='left'; return; }
+  octx.strokeStyle='rgba(90,110,130,.25)'; octx.lineWidth=1; octx.setLineDash([3,5]);
+  octx.beginPath(); octx.moveTo(438,24); octx.lineTo(438,OH-18); octx.stroke(); octx.setLineDash([]);
+  const td=clock*m.dispScale;
+  m.optic(octx,td,m);
+  drawFootprint(octx,m,td);
+}
+
+// ============================================================
+//  Mechanisms
+// ============================================================
+const MECHS = [
+  { key:'osc', name:'Oscillating mirror', pattern:'Zig-zag, edge-dense', swathDeg:25, scanHz:11, prf:640, dispScale:0.05, optic:opticOsc,
+    how:'A flat galvanometer mirror swings back and forth across track. Because it decelerates and reverses at each end, laser shots pile up at the swath edges and thin out in the centre.',
+    ground:'A tight sinusoidal zig-zag that fills the swath; density is highest at the left and right edges where the mirror reverses.',
+    pros:['Mature, wide field of view','Bidirectional — no dead time'], cons:['Uneven across-track density','Mirror inertia caps the scan rate'],
+    ex:'Leica ALS40–ALS80 · Optech ALTM Gemini',
+    fn:(t,H,m)=>{const th=m.swathDeg*DEG*Math.sin(2*Math.PI*m.scanHz*t);return [{ax:0,cx:H*Math.tan(th)}];},
+    svg:`<svg viewBox="0 0 120 40"><polyline points="6,8 24,32 42,8 60,32 78,8 96,32 114,8" fill="none" stroke="#0f8a4d" stroke-width="2"/></svg>` },
+  { key:'poly', name:'Rotating polygon', pattern:'Parallel lines, uniform', swathDeg:25, scanHz:11, prf:640, dispScale:0.05, optic:opticPoly,
+    how:'A multi-faceted mirror spins continuously; the beam strikes whichever facet is in front of it, and each facet sweeps the beam once across track before the next takes over.',
+    ground:'Straight, parallel, one-directional scan lines with very even point spacing across the whole swath.',
+    pros:['Uniform across-track density','High, steady scan rate'], cons:['Facet change-over is dead time','One-directional only'],
+    ex:'RIEGL VQ / VUX series · Optech',
+    fn:(t,H,m)=>{const ph=(m.scanHz*t)%1,th=(-m.swathDeg+2*m.swathDeg*ph)*DEG;return [{ax:0,cx:H*Math.tan(th)}];},
+    svg:`<svg viewBox="0 0 120 40"><g stroke="#0f8a4d" stroke-width="2"><line x1="8" y1="9" x2="112" y2="9"/><line x1="8" y1="20" x2="112" y2="20"/><line x1="8" y1="31" x2="112" y2="31"/></g></svg>` },
+  { key:'palmer', name:'Palmer conical', pattern:'Overlapping ellipses', swathDeg:20, scanHz:9, prf:760, dispScale:0.061, optic:opticPalmer,
+    how:'A mirror tilted off-nadir is rotated about the vertical axis, so its normal sweeps a cone and the beam traces a circle on the ground.',
+    ground:'Densely overlapping ellipses. Every ground point is measured twice — once looking forward, once looking back — which fills shadows and sees vertical faces.',
+    pros:['Fore & aft looks reduce shadowing','Good on building/tree sides'], cons:['Complex geometry & processing','Variable incidence angle'],
+    ex:'TopoSys · conical topographic scanners',
+    fn:(t,H,m)=>{const ps=2*Math.PI*m.scanHz*t,r=H*Math.tan(m.swathDeg*DEG);return [{ax:r*Math.cos(ps),cx:r*Math.sin(ps)}];},
+    svg:`<svg viewBox="0 0 120 40"><g fill="none" stroke="#0f8a4d" stroke-width="1.6"><ellipse cx="34" cy="20" rx="16" ry="10"/><ellipse cx="60" cy="20" rx="16" ry="10"/><ellipse cx="86" cy="20" rx="16" ry="10"/></g></svg>` },
+  { key:'risley', name:'Risley prisms', pattern:'Non-repetitive rosette', swathDeg:16, prf:1050, d1:8, d2:7, f1:18, f2:-28, dispScale:0.0306, optic:opticRisley,
+    how:'Two wedge prisms rotate at different speeds in opposite directions. The light passes THROUGH both and is refracted twice; the combined deflection traces a flower-like rosette that never exactly repeats.',
+    ground:'A dense rosette / flower. It is sparse at any instant but fills in the longer the sensor dwells over an area — "non-repetitive" scanning.',
+    pros:['Compact, low-cost, no big mirror','Dense with longer integration'], cons:['Non-uniform instantaneous density','Sensitive to platform motion'],
+    ex:'Livox Avia / Mid-40 · DJI Zenmuse L1 / L2',
+    fn:(t,H,m)=>{const a1=2*Math.PI*m.f1*t,a2=2*Math.PI*m.f2*t;return [{cx:H*(Math.tan(m.d1*DEG)*Math.cos(a1)+Math.tan(m.d2*DEG)*Math.cos(a2)),ax:H*(Math.tan(m.d1*DEG)*Math.sin(a1)+Math.tan(m.d2*DEG)*Math.sin(a2))}];},
+    svg:`<svg viewBox="0 0 120 40"><g fill="none" stroke="#0f8a4d" stroke-width="1.3"><path d="M60 20 m0,-14 a14,14 0 1,0 0.1,0"/><path d="M60 20 l0,-14 M60 20 l12,7 M60 20 l-12,7 M60 20 l12,-7 M60 20 l-12,-7 M60 20 l0,14"/></g></svg>` },
+  { key:'mems', name:'MEMS micro-mirror', pattern:'Lissajous raster tile', swathDeg:12, ampY:9, fx:30, fy:3.8, prf:900, dispScale:0.107, optic:opticMems,
+    how:'A tiny gimbaled micro-electro-mechanical mirror is driven on two resonant axes — fast one way, slow the other — sweeping the beam over a small rectangular field of view.',
+    ground:'A Lissajous / raster tile. The field of view is narrow, so adjacent flight lines must be tiled to cover an area.',
+    pros:['Solid-state, no bulky moving parts','Light and cheap'], cons:['Small field of view — needs tiling','Limited range / aperture'],
+    ex:'Innoviz · automotive-class UAV scanners',
+    fn:(t,H,m)=>{const thx=m.swathDeg*DEG*Math.sin(2*Math.PI*m.fx*t),thy=m.ampY*DEG*Math.sin(2*Math.PI*m.fy*t);return [{ax:H*Math.tan(thy),cx:H*Math.tan(thx)}];},
+    svg:`<svg viewBox="0 0 120 40"><path d="M20,20 C40,4 44,4 60,20 C76,36 80,36 100,20 C80,4 76,4 60,20 C44,36 40,36 20,20" fill="none" stroke="#0f8a4d" stroke-width="1.5"/></svg>` },
+  { key:'multi', name:'Rotating multi-beam', pattern:'Concentric rings', swathDeg:20, scanHz:9, channels:8, prf:170, dispScale:0.061, optic:opticMulti,
+    how:'A spinning head carries many laser modules at fixed elevation angles. There is no mirror — the emitters themselves rotate, so each channel sweeps its own circle.',
+    ground:'Concentric rings — one per channel. Full 360°, but inner rings are dense while outer rings stretch thin, and there can be a gap at nadir.',
+    pros:['360° coverage, many channels at once','Same sensor as mobile mapping'], cons:['Ring density varies with radius','Possible nadir gap'],
+    ex:'Velodyne / Ouster / Hesai · YellowScan',
+    fn:(t,H,m)=>{const ps=2*Math.PI*m.scanHz*t,out=[];for(let k=0;k<m.channels;k++){const b=(4+(m.swathDeg-4)*k/(m.channels-1))*DEG,r=H*Math.tan(b);out.push({ax:r*Math.cos(ps),cx:r*Math.sin(ps)});}return out;},
+    svg:`<svg viewBox="0 0 120 40"><g fill="none" stroke="#0f8a4d" stroke-width="1.4"><circle cx="60" cy="20" r="6"/><circle cx="60" cy="20" r="11"/><circle cx="60" cy="20" r="16"/></g></svg>` },
+];
+
+// ============================================================
+//  State
+// ============================================================
+const state = { mech:null, H:80, speed:1.0, colorMode:'seq', running:false, paused:false, t:0, animClock:0, droneX:0, stripY:MAP_H/2, points:0, shotAcc:0, lastShots:[] };
+const pts = [];                       // stored laser points {x,y,h,w,t} for re-render on zoom / colour change
+const V_GROUND = 30, MARGIN = 34, START_X = -MARGIN, END_X = MAP_W + MARGIN;
+
+function ptColor(p) { return p.w ? '#24506e' : (state.colorMode === 'elev' ? elevColor(p.h) : seqColor(p.t)); }
+
+// ============================================================
+//  Redraw pipeline (view-aware)
+// ============================================================
+function redrawBase() { mapCtx.setTransform(1,0,0,1,0,0); mapCtx.clearRect(0,0,CW,CH); applyView(mapCtx); paintBaseMap(mapCtx); }
+function drawFlightGuides(ctx) {
+  const yC = px(state.stripY);
+  ctx.save();
+  ctx.strokeStyle='rgba(40,50,64,.15)'; ctx.lineWidth=1/view.zoom; ctx.setLineDash([2/view.zoom,6/view.zoom]);
+  const sw = swathWidth(state.mech || {swathDeg:25}, state.H);
+  for(const dy of [-2,-1,1,2]){ const y=yC+dy*px(sw*0.8); if(y>2&&y<CH-2){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();} }
+  ctx.setLineDash([9/view.zoom,7/view.zoom]); ctx.strokeStyle='rgba(21,101,192,.5)'; ctx.lineWidth=1.5/view.zoom;
+  ctx.beginPath(); ctx.moveTo(0,yC); ctx.lineTo(CW,yC); ctx.stroke();
+  ctx.restore();
+}
+function redrawData() {
+  dataCtx.setTransform(1,0,0,1,0,0); dataCtx.clearRect(0,0,CW,CH); applyView(dataCtx);
+  drawFlightGuides(dataCtx);
+  const s = ptSize();
+  for (const p of pts) { dataCtx.fillStyle = ptColor(p); dataCtx.fillRect(px(p.x)-s/2, px(p.y)-s/2, s, s); }
+}
+function redrawAll() { redrawBase(); redrawData(); drawFx(); document.getElementById('zoomBadge').textContent = view.zoom.toFixed(1) + '×'; }
+
+function setZoom(z, ax, ay) {
+  const z0 = view.zoom; z = Math.max(1, Math.min(14, z));
+  if (z === z0) return;
+  if (ax == null) { ax = CW/2; ay = CH/2; }
+  const u = ax/z0 + view.ox, v = ay/z0 + view.oy;
+  view.zoom = z; view.ox = u - ax/z; view.oy = v - ay/z;
+  clampView(); redrawAll();
+}
+
+// ============================================================
+//  Mechanism UI
+// ============================================================
+const mechGrid = document.getElementById('mechGrid');
+MECHS.forEach(m => { const b=document.createElement('button'); b.className='mech-card'; b.dataset.key=m.key; b.innerHTML=`${m.svg}<span class="nm">${m.name}</span><span class="pt">${m.pattern}</span>`; b.addEventListener('click',()=>selectMech(m.key)); mechGrid.appendChild(b); });
+function selectMech(key) {
+  state.mech = MECHS.find(m=>m.key===key);
+  [...mechGrid.children].forEach(c=>c.classList.toggle('on', c.dataset.key===key));
+  document.getElementById('btnFly').disabled=false;
+  document.getElementById('btnFly').textContent='Fly line ▶';
+  document.getElementById('opticsCap').textContent='The beam strikes the moving optic (left) and traces the footprint (right). Fly the line, then zoom the map to inspect the points.';
+  opticTrail=[]; renderMechDetail(); updateSensorStats(); resetMission();
+}
+function renderMechDetail() {
+  const m=state.mech, el=document.getElementById('mechDetail'); if(!m) return;
+  el.innerHTML=`<h4>${m.name}</h4><div class="row"><b>Beam steering.</b> ${m.how}</div><div class="row"><b>Ground pattern.</b> ${m.ground}</div><div class="row">${m.pros.map(p=>`<span class="tag">＋ ${p}</span>`).join('')}${m.cons.map(p=>`<span class="tag">－ ${p}</span>`).join('')}</div><div class="row ex">In the market: ${m.ex}</div>`;
+}
+
+// ============================================================
+//  Mission
+// ============================================================
+function swathWidth(m,H){ return 2*H*Math.tan(m.swathDeg*DEG); }
+function updateSensorStats(){ const m=state.mech; if(!m) return; document.getElementById('stSwath').innerHTML=`${swathWidth(m,state.H).toFixed(0)} <small>m</small>`; }
+function resetMission() {
+  state.running=false; state.paused=false; state.t=0; state.points=0; state.shotAcc=0;
+  state.droneX=START_X; state.stripY=MAP_H/2; state.lastShots=[]; pts.length=0;
+  redrawAll(); fxCtx.setTransform(1,0,0,1,0,0); fxCtx.clearRect(0,0,CW,CH);
+  document.getElementById('stPts').textContent='0';
+  document.getElementById('stDens').textContent='—';
+  document.getElementById('stGsd').textContent='—';
+  document.getElementById('progVal').textContent='0%';
+  document.getElementById('progFill').style.width='0%';
+  document.getElementById('mapHud').classList.remove('show');
+  document.getElementById('btnPause').disabled=true;
+  document.getElementById('btnPause').textContent='Pause';
+  document.getElementById('mapPrompt').classList.toggle('hide', !!state.mech);
+}
+function startMission(){ if(!state.mech) return; resetMission(); opticTrail=[]; state.running=true; state.paused=false;
+  document.getElementById('mapPrompt').classList.add('hide'); document.getElementById('mapHud').classList.add('show');
+  document.getElementById('btnPause').disabled=false; document.getElementById('btnPause').textContent='Pause';
+  document.getElementById('btnFly').textContent='Re-fly ▶'; }
+
+function emitShots(tPrev,xPrev,tNow,xNow) {
+  const m=state.mech, H=state.H, dt=tNow-tPrev;
+  state.shotAcc += m.prf*dt;
+  let n=Math.floor(state.shotAcc); if(n<=0) return; state.shotAcc-=n; if(n>600) n=600;
+  const s = ptSize();
+  for(let i=0;i<n;i++){
+    const f=(i+1)/n, ts=tPrev+f*dt, dx=xPrev+f*(xNow-xPrev);
+    for(const o of m.fn(ts,H,m)){
+      const gx=dx+o.ax, gy=state.stripY+o.cx;
+      if(gx<0||gx>MAP_W||gy<0||gy>MAP_H) continue;
+      const surf=surfaceAt(gx,gy);
+      if(surf.water && Math.random()<0.8) continue;
+      const p={x:gx,y:gy,h:surf.h,w:surf.water,t:ts};
+      pts.push(p);
+      dataCtx.fillStyle=ptColor(p);
+      dataCtx.fillRect(px(gx)-s/2, px(gy)-s/2, s, s);
+      state.points++; state.lastShots.push([gx,gy]);
+    }
+  }
+  const keep=Math.max(1,(m.channels||1)*2);
+  if(state.lastShots.length>keep) state.lastShots.splice(0,state.lastShots.length-keep);
+}
+
+function drawFx() {
+  fxCtx.setTransform(1,0,0,1,0,0); fxCtx.clearRect(0,0,CW,CH); applyView(fxCtx);
+  if(!state.mech) return;
+  const dx=px(state.droneX), dy=px(state.stripY);
+  const onMap = state.droneX>=-2 && state.droneX<=MAP_W+2;
+  const k = 1/view.zoom;
+  if(state.running && onMap){
+    fxCtx.strokeStyle='rgba(255,60,40,.85)'; fxCtx.lineWidth=1.4*k; fxCtx.lineCap='round';
+    for(const s of state.lastShots){ fxCtx.beginPath(); fxCtx.moveTo(dx,dy); fxCtx.lineTo(px(s[0]),px(s[1])); fxCtx.stroke(); }
+    fxCtx.setLineDash([3*k,4*k]); fxCtx.strokeStyle='rgba(21,101,192,.45)'; fxCtx.lineWidth=k;
+    const sw=px(swathWidth(state.mech,state.H)/2);
+    fxCtx.beginPath(); fxCtx.moveTo(dx,dy-sw); fxCtx.lineTo(dx,dy+sw); fxCtx.stroke(); fxCtx.setLineDash([]);
+  }
+  if(state.running || state.points>0) drawDrone(dx,dy,onMap,k);
+}
+function drawDrone(x,y,active,k) {
+  const c=fxCtx; c.save(); c.translate(x,y); c.scale(k,k);
+  c.fillStyle='rgba(0,0,0,.12)'; c.beginPath(); c.ellipse(0,6,9,3,0,0,7); c.fill();
+  c.strokeStyle='#16202c'; c.lineWidth=2;
+  for(const [ax,ay] of [[-9,-7],[9,-7],[-9,7],[9,7]]){ c.beginPath(); c.moveTo(0,0); c.lineTo(ax,ay); c.stroke(); c.fillStyle='#1565c0'; c.beginPath(); c.arc(ax,ay,3.2,0,7); c.fill(); }
+  c.fillStyle=active?'#16202c':'#5a6b7c'; c.strokeStyle='#fff'; c.lineWidth=1.5;
+  c.beginPath(); c.arc(0,0,5.5,0,7); c.fill(); c.stroke(); c.restore();
+}
+
+function updateHud() {
+  const prog=Math.max(0,Math.min(100,(state.droneX-START_X)/(END_X-START_X)*100));
+  document.getElementById('mapHud').innerHTML=`<b>${state.mech.name}</b> · alt <b>${state.H} m</b> · <b>${state.points.toLocaleString()}</b> pts · t=<b>${state.t.toFixed(1)}s</b>`;
+  document.getElementById('stPts').textContent=state.points.toLocaleString();
+  document.getElementById('progVal').textContent=prog.toFixed(0)+'%';
+  document.getElementById('progFill').style.width=prog+'%';
+  const effLen=Math.max(1,Math.min(MAP_W,state.droneX));
+  const area=swathWidth(state.mech,state.H)*effLen;
+  if(state.droneX>20){ const d=state.points/area;
+    document.getElementById('stDens').innerHTML=`${d.toFixed(1)} <small>pt/m²</small>`;
+    document.getElementById('stGsd').innerHTML=`${(d>0?1/Math.sqrt(d):0).toFixed(2)} <small>m</small>`; }
+}
+
+// ============================================================
+//  Animation loop
+// ============================================================
+let lastT = performance.now();
+function frame(now) {
+  try {
+    const dtReal=Math.min(0.05,(now-lastT)/1000); lastT=now;
+    if(state.running && !state.paused){
+      const simDt=dtReal*state.speed, tPrev=state.t, xPrev=state.droneX;
+      state.t+=simDt; state.droneX+=V_GROUND*simDt;
+      emitShots(tPrev,xPrev,state.t,state.droneX);
+      state.animClock=state.t;
+      // keep the drone in view when zoomed in
+      if(view.zoom>1){
+        const vw=CW/view.zoom, dxp=px(state.droneX);
+        if(dxp>view.ox+vw*0.78 || dxp<view.ox+vw*0.22){
+          view.ox=dxp-vw*0.5; clampView(); redrawBase(); redrawData();
+        }
+      }
+      if(state.droneX>END_X) finishMission();
+      updateHud(); drawFx();
+    } else {
+      if(state.mech && !state.paused) state.animClock += dtReal*Math.max(0.7,state.speed);
+      if(state.points>0||state.running) drawFx();
+    }
+    drawOptics(state.animClock);
+  } catch(e){ if(window.console) console.warn('frame error', e); }
+  requestAnimationFrame(frame);
+}
+function finishMission(){
+  state.running=false; state.lastShots=[];
+  document.getElementById('progVal').textContent='100%';
+  document.getElementById('progFill').style.width='100%';
+  document.getElementById('btnPause').disabled=true;
+  document.getElementById('mapHud').innerHTML=`line complete · <b>${state.points.toLocaleString()}</b> points · <b>${state.mech.pattern}</b> · zoom in to inspect`;
+}
+
+// ============================================================
+//  Map zoom / pan interaction
+// ============================================================
+const mapStack = document.getElementById('mapStack');
+function toCanvas(e){ const r=fxCanvas.getBoundingClientRect(); return [(e.clientX-r.left)*CW/r.width, (e.clientY-r.top)*CH/r.height]; }
+// Ctrl/⌘ + wheel zooms; a plain wheel is left alone so the page still scrolls normally.
+mapStack.addEventListener('wheel', (e) => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  const [ax,ay]=toCanvas(e);
+  setZoom(view.zoom * (e.deltaY < 0 ? 1.22 : 1/1.22), ax, ay);
+}, { passive:false });
+mapStack.addEventListener('dblclick', (e) => {
+  const [ax,ay]=toCanvas(e);
+  setZoom(e.shiftKey ? view.zoom/1.8 : view.zoom*1.8, ax, ay);
+});
+let drag=null;
+mapStack.addEventListener('pointerdown', (e) => {
+  if(view.zoom<=1) return;
+  drag={x:e.clientX,y:e.clientY,ox:view.ox,oy:view.oy};
+  mapStack.classList.add('grabbing');
+  try{ mapStack.setPointerCapture(e.pointerId); }catch(_){}
+});
+mapStack.addEventListener('pointermove', (e) => {
+  if(!drag) return;
+  const r=fxCanvas.getBoundingClientRect();
+  const sx=(e.clientX-drag.x)*CW/r.width, sy=(e.clientY-drag.y)*CH/r.height;
+  view.ox=drag.ox - sx/view.zoom; view.oy=drag.oy - sy/view.zoom;
+  clampView(); redrawAll();
+});
+window.addEventListener('pointerup', () => { drag=null; mapStack.classList.remove('grabbing'); });
+document.getElementById('zbtns').addEventListener('click', (e) => {
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.z==='in') setZoom(view.zoom*1.6);
+  else if(b.dataset.z==='out') setZoom(view.zoom/1.6);
+  else { view.zoom=1; view.ox=0; view.oy=0; redrawAll(); }
+});
+
+// ============================================================
+//  Controls
+// ============================================================
+document.getElementById('btnFly').addEventListener('click',()=>{ if(state.mech) startMission(); });
+document.getElementById('btnPause').addEventListener('click',()=>{ if(!state.running) return; state.paused=!state.paused; document.getElementById('btnPause').textContent=state.paused?'Resume':'Pause'; });
+document.getElementById('btnReset').addEventListener('click',()=>resetMission());
+document.getElementById('altSlider').addEventListener('input',(e)=>{ state.H=+e.target.value; document.getElementById('altVal').textContent=state.H+' m'; updateSensorStats(); if(!state.running) resetMission(); });
+document.getElementById('spdSlider').addEventListener('input',(e)=>{ state.speed=+e.target.value; document.getElementById('spdVal').textContent=state.speed.toFixed(1)+'×'; });
+document.getElementById('cmode').addEventListener('click',(e)=>{
+  const b=e.target.closest('button'); if(!b) return;
+  state.colorMode=b.dataset.mode;
+  [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b));
+  document.getElementById('rampLegend').style.display = state.colorMode==='elev'?'flex':'none';
+  redrawData();                       // recolour points already captured
+});
+document.getElementById('btnHelp').addEventListener('click',()=>document.getElementById('helpOverlay').classList.add('open'));
+document.getElementById('btnHelpClose').addEventListener('click',()=>document.getElementById('helpOverlay').classList.remove('open'));
+
+// ============================================================
+//  Boot
+// ============================================================
+resetMission(); drawOptics(0);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
