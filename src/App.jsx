@@ -1,88 +1,23 @@
 const simulators = [
-  {
-    title: 'Survey Mission Designer',
-    description: 'Plan a drone survey over terrain, place control points and obstructions, and explore the trade-offs behind a robust flight plan.',
-    tags: ['Flight planning', 'Terrain', 'Obstructions', 'Coverage'],
-    path: 'games/survey-mission-designer/',
-    tone: 'terrain',
-    icon: '⌁',
-  },
-  {
-    title: 'Aerial Triangulation',
-    description: 'Build an image block, measure tie points, and see how bundle adjustment turns overlapping photographs into a connected survey.',
-    tags: ['Image block', 'Tie points', 'Bundle adjustment'],
-    path: 'games/aerial-triangulation/',
-    tone: 'photogrammetry',
-    icon: '＋',
-  },
-  {
-    title: 'LiDAR Scan Patterns',
-    description: 'Compare six real beam-steering mechanisms and watch their ground patterns build up as a drone moves across the map.',
-    tags: ['Scan mechanisms', 'Point pattern', 'Coverage'],
-    path: 'games/lidar-scanning/',
-    tone: 'lidar',
-    icon: '✦',
-  },
-  {
-    title: 'Beam & Target Interaction',
-    description: 'Follow a laser pulse through reflection, absorption, transmission, and scatter across different surfaces and targets.',
-    tags: ['Energy balance', 'Signal strength', 'Multi-return'],
-    path: 'games/lidar-interaction/',
-    tone: 'signal',
-    icon: '╱',
-  },
-  {
-    title: 'True Ortho-Rectification',
-    description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.',
-    tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'],
-    path: 'games/ortho-rectification/',
-    tone: 'ortho',
-    icon: '▣',
-  },
+  { title: 'Survey Mission Designer', description: 'Plan a drone survey over terrain, place control points and obstructions, and explore the trade-offs behind a robust flight plan.', tags: ['Flight planning', 'Terrain', 'Obstructions', 'Coverage'], path: 'games/survey-mission-designer/', kind: 'survey' },
+  { title: 'Aerial Triangulation', description: 'Build an image block, measure tie points, and see how bundle adjustment turns overlapping photographs into a connected survey.', tags: ['Image block', 'Tie points', 'Bundle adjustment'], path: 'games/aerial-triangulation/', kind: 'triangulation' },
+  { title: 'LiDAR Scan Patterns', description: 'Compare six real beam-steering mechanisms and watch their ground patterns build up as a drone moves across the map.', tags: ['Scan mechanisms', 'Point pattern', 'Coverage'], path: 'games/lidar-scanning/', kind: 'scanning' },
+  { title: 'Beam & Target Interaction', description: 'Follow a laser pulse through reflection, absorption, transmission, and scatter across different surfaces and targets.', tags: ['Energy balance', 'Signal strength', 'Multi-return'], path: 'games/lidar-interaction/', kind: 'interaction' },
+  { title: 'True Ortho-Rectification', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho' },
 ];
 
+function Thumbnail({ kind }) {
+  if (kind === 'survey') return <svg viewBox="0 0 640 360" role="img" aria-label="Drone survey flight lines over terrain"><rect width="640" height="360" fill="#d8d1bd" /><path d="M-20 90 Q120 20 270 95 T680 70 M-30 155 Q120 90 300 165 T680 135 M-20 235 Q140 165 310 245 T680 220 M-30 310 Q150 240 330 320 T680 295" fill="none" stroke="#a69d87" strokeWidth="5" opacity=".65" /><circle cx="330" cy="185" r="125" fill="#3a86b8" opacity=".09" stroke="#1768a0" strokeWidth="4" strokeDasharray="14 12" /><rect x="215" y="105" width="230" height="150" fill="#2d9b70" opacity=".14" stroke="#15704d" strokeWidth="5" /><g stroke="#15704d" strokeWidth="5" opacity=".9"><path d="M225 125 H435 M435 155 H225 M225 185 H435 M435 215 H225 M225 245 H435" /><path d="M435 125 V155 M225 155 V185 M435 185 V215 M225 215 V245" /></g><g transform="translate(330 44)" fill="#fff" stroke="#17384d" strokeWidth="4"><rect x="-28" y="-10" width="56" height="20" rx="6" /><path d="M-42 -18 H-16 M16 -18 H42 M-42 18 H-16 M16 18 H42 M-28 -10 L-42 -18 M28 -10 L42 -18 M-28 10 L-42 18 M28 10 L42 18" fill="none" /><circle cy="15" r="6" fill="#f28d45" /></g><circle cx="470" cy="85" r="18" fill="#c7473d" opacity=".85" /><circle cx="470" cy="85" r="34" fill="none" stroke="#c7473d" strokeWidth="3" strokeDasharray="8 8" /></svg>;
+  if (kind === 'triangulation') return <svg viewBox="0 0 640 360" role="img" aria-label="Aerial triangulation image block"><rect width="640" height="360" fill="#19364a" /><path d="M0 285 L125 220 235 265 365 180 500 245 640 175 V360 H0Z" fill="#286277" opacity=".8" /><g fill="#e7f1f3" stroke="#24728d" strokeWidth="6"><rect x="72" y="60" width="145" height="105" rx="8" transform="rotate(-10 145 112)" /><rect x="246" y="38" width="145" height="105" rx="8" transform="rotate(4 318 90)" /><rect x="423" y="72" width="145" height="105" rx="8" transform="rotate(14 495 125)" /></g><g fill="#f28d45"><circle cx="145" cy="112" r="7" /><circle cx="318" cy="90" r="7" /><circle cx="495" cy="125" r="7" /><circle cx="240" cy="260" r="7" /><circle cx="365" cy="225" r="7" /><circle cx="470" cy="245" r="7" /></g><g stroke="#f6c85f" strokeWidth="3" strokeDasharray="8 8" opacity=".9"><path d="M145 112 L240 260 M318 90 L240 260 M318 90 L365 225 M495 125 L365 225 M495 125 L470 245" /></g><path d="M80 305 Q320 230 560 305" fill="none" stroke="#99d6e5" strokeWidth="4" opacity=".6" /></svg>;
+  if (kind === 'scanning') return <svg viewBox="0 0 640 360" role="img" aria-label="LiDAR scan pattern"><rect width="640" height="360" fill="#132c3a" /><path d="M0 95 Q130 45 280 100 T640 85 M0 180 Q150 125 300 190 T640 175 M0 270 Q150 215 300 280 T640 265" fill="none" stroke="#2b716f" strokeWidth="5" opacity=".65" /><g transform="translate(320 58)"><rect x="-45" y="-22" width="90" height="42" rx="9" fill="#eff7f7" stroke="#102b3a" strokeWidth="6" /><circle cx="0" cy="24" r="11" fill="#f28d45" /></g><g stroke="#66e2c4" strokeWidth="4" opacity=".75"><path d="M320 92 L100 290 M320 92 L170 320 M320 92 L260 330 M320 92 L340 330 M320 92 L430 320 M320 92 L540 290" /></g><g fill="#f6c85f">{Array.from({ length: 28 }, (_, i) => <circle key={i} cx={85 + ((i * 67) % 470)} cy={230 + ((i * 41) % 86)} r="4" />)}</g></svg>;
+  if (kind === 'interaction') return <svg viewBox="0 0 640 360" role="img" aria-label="LiDAR beam interacting with a target"><rect width="640" height="360" fill="#182332" /><rect y="245" width="640" height="115" fill="#425566" /><path d="M0 245 H640" stroke="#9ec0cc" strokeWidth="5" /><g transform="translate(320 50)"><rect x="-53" y="-20" width="106" height="48" rx="8" fill="#dce9ea" stroke="#0b2434" strokeWidth="6" /><circle cx="-22" cy="35" r="10" fill="#f04f45" /><circle cx="22" cy="35" r="10" fill="#55c8e8" /></g><path d="M298 86 L298 245" stroke="#f04f45" strokeWidth="9" /><path d="M342 86 L342 245" stroke="#55c8e8" strokeWidth="9" /><g stroke="#55c8e8" strokeWidth="4" opacity=".85"><path d="M320 245 L170 145 M320 245 L220 105 M320 245 L320 100 M320 245 L420 105 M320 245 L470 145" /></g><g stroke="#c8d64a" strokeWidth="6"><path d="M320 245 L505 120" /><path d="M320 245 L380 330" /></g><circle cx="320" cy="245" r="34" fill="#f04f45" opacity=".22" /></svg>;
+  return <svg viewBox="0 0 640 360" role="img" aria-label="True orthophoto rectification"><rect width="640" height="360" fill="#263744" /><rect x="34" y="45" width="250" height="250" rx="12" fill="#334d5c" stroke="#68808a" strokeWidth="4" /><rect x="356" y="45" width="250" height="250" rx="12" fill="#334d5c" stroke="#68808a" strokeWidth="4" /><g fill="#c66f51" stroke="#f5c8a4" strokeWidth="4"><path d="M95 245 L175 245 L230 175 L150 175Z" /><path d="M175 245 L175 175 L230 105 L230 175Z" /><rect x="428" y="180" width="80" height="65" /></g><g stroke="#f6c85f" strokeWidth="5" fill="none"><path d="M270 170 H345" /><path d="M335 158 L350 170 L335 182" /></g><g stroke="#d6e7ea" strokeWidth="3" strokeDasharray="9 8"><rect x="88" y="238" width="92" height="64" /><rect x="421" y="238" width="94" height="64" /></g><text x="158" y="330" fill="#d6e7ea" textAnchor="middle" fontSize="18" fontFamily="system-ui">perspective</text><text x="481" y="330" fill="#d6e7ea" textAnchor="middle" fontSize="18" fontFamily="system-ui">true ortho</text></svg>;
+}
+
 function SimulatorCard({ simulator }) {
-  return (
-    <a className="card" href={simulator.path}>
-      <div className={`thumb ${simulator.tone}`} aria-hidden="true">
-        <span className="thumb-grid" />
-        <span className="thumb-icon">{simulator.icon}</span>
-        <span className="pill live">● Playable</span>
-      </div>
-      <div className="card-body">
-        <h3>{simulator.title}</h3>
-        <p>{simulator.description}</p>
-        <div className="tags">
-          {simulator.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
-        </div>
-        <span className="go">Open simulator <span className="arrow">→</span></span>
-      </div>
-    </a>
-  );
+  return <a className="card" href={simulator.path}><div className="thumb"><Thumbnail kind={simulator.kind} /><span className="pill live">&bull; Playable</span></div><div className="card-body"><h3>{simulator.title}</h3><p>{simulator.description}</p><div className="tags">{simulator.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div><span className="go">Open simulator <span className="arrow">&rarr;</span></span></div></a>;
 }
 
 export default function App() {
-  return (
-    <main className="wrap">
-      <header className="hero">
-        <p className="eyebrow">▲ NIGST · P&amp;RS Division</p>
-        <h1><em>Simulation-based training</em> for surveyors.</h1>
-        <p>
-          Training simulators from the Photogrammetry &amp; Remote Sensing division,
-          National Institute for Geo-informatics Science &amp; Technology (NIGST).
-          Everything runs in the browser — nothing to install, no accounts, and
-          your progress stays on your own device.
-        </p>
-      </header>
-
-      <div className="section-head"><h2>Simulators</h2><span className="rule" /></div>
-      <div className="grid">{simulators.map((simulator) => <SimulatorCard key={simulator.title} simulator={simulator} />)}</div>
-
-      <footer>
-        <span>P&amp;RS Division · NIGST — Survey of India.</span>
-        <span className="spacer" />
-        <a href="https://github.com/opensourcegis/Simulations">Source on GitHub →</a>
-      </footer>
-    </main>
-  );
+  return <main className="wrap"><header className="hero"><p className="eyebrow">&#9650; NIGST &middot; P&amp;RS Division</p><h1><em>Simulation-based training</em> for surveyors.</h1><p>Training simulators from the Photogrammetry &amp; Remote Sensing division, National Institute for Geo-informatics Science &amp; Technology (NIGST). Everything runs in the browser &mdash; nothing to install, no accounts, and your progress stays on your own device.</p></header><div className="section-head"><h2>Simulators</h2><span className="rule" /></div><div className="grid">{simulators.map((simulator) => <SimulatorCard key={simulator.title} simulator={simulator} />)}</div><footer><span>P&amp;RS Division &middot; NIGST &mdash; Survey of India.</span><span className="spacer" /><a href="https://github.com/opensourcegis/Simulations">Source on GitHub &rarr;</a></footer></main>;
 }
