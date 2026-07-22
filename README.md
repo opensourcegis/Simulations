@@ -1,40 +1,29 @@
 # NIGST P&RS — Simulation-based Training
 
-Browser-based training simulators from the Photogrammetry & Remote Sensing division,
-National Institute for Geo-informatics Science & Technology (NIGST), Survey of India.
-Each simulator is a single HTML page — no build step, no dependencies, no accounts.
+React + Vite landing page for browser-based training simulators from the Photogrammetry & Remote Sensing division, National Institute for Geo-informatics Science & Technology (NIGST), Survey of India.
 
-Basemap tiles stream at runtime from OpenStreetMap, Esri World Imagery and Esri World
-Hillshade (attribution shown on the map). The Survey Mission Designer additionally samples
-real elevation from the AWS Terrain Tiles (Terrarium) dataset and fetches obstructions from
-the OSM Overpass API, falling back to seeded synthetic obstacles when offline. The imagery
-and terrain layers need an internet connection; the Plain layer works offline.
+The five simulator experiences remain standalone HTML applications under `games/`. The Vite production build copies them into `dist/games/`, so they continue to work alongside the React landing page.
 
-**Live site:** https://opensourcegis.github.io/Simulations/
-
-## Simulators
-
-| Simulator | Path |
-| --- | --- |
-| Survey Mission Designer | [`games/survey-mission-designer/`](games/survey-mission-designer/) |
-
-## Publishing
-
-The site is served straight from the repository root on the `main` branch. To turn it on:
-
-1. Go to **Settings → Pages**.
-2. Under **Build and deployment**, set **Source** to *Deploy from a branch*.
-3. Choose branch `main` and folder `/ (root)`, then **Save**.
-
-The first deploy takes a minute or two. `.nojekyll` is present so GitHub serves the files
-as-is rather than running them through Jekyll.
-
-## Local preview
-
-Any static file server works. For example:
+## Local development
 
 ```powershell
-python -m http.server 8000
+npm install
+npm run dev
 ```
 
-Then open http://localhost:8000/.
+To verify the production output:
+
+```powershell
+npm run build
+npm run preview
+```
+
+## GitHub Pages deployment
+
+The repository includes `.github/workflows/deploy-pages.yml`. Every push to `main` builds the Vite app and deploys `dist/` to GitHub Pages.
+
+In the repository’s GitHub settings, open **Pages** and set **Build and deployment → Source** to **GitHub Actions**. After the workflow completes, the site will be available at:
+
+`https://opensourcegis.github.io/Simulations/`
+
+The Vite base path is configured as `/Simulations/`, matching this repository’s GitHub Pages project URL.
