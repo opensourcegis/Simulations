@@ -568,7 +568,7 @@ function drawSource(){
       srcCtx.beginPath();srcCtx.moveTo(tp[0],tp[1]);srcCtx.lineTo(ip[0],ip[1]);srcCtx.stroke();
       const mx=(tp[0]+ip[0])/2, my=(tp[1]+ip[1])/2;
       srcCtx.font='600 10px system-ui';
-      const t='d on photo';
+      const t='point a on photo';
       const w=srcCtx.measureText(t).width+10;
       srcCtx.fillStyle='rgba(10,17,24,.85)';srcCtx.beginPath();srcCtx.roundRect(mx+6,my-9,w,16,4);srcCtx.fill();
       srcCtx.strokeStyle='#ff9d4d';srcCtx.lineWidth=1;srcCtx.stroke();
