@@ -4,6 +4,7 @@ import StructureFromMotion from './simulations/StructureFromMotion.jsx';
 import LidarRanging from './simulations/LidarRanging.jsx';
 import AdaptiveTIN from './simulations/AdaptiveTIN.jsx';
 import BlockAdjustment from './simulations/BlockAdjustment.jsx';
+import Boresight from './simulations/Boresight.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -16,6 +17,7 @@ const simulators = [
   { title: 'True Ortho-Rectification', category: 'Photogrammetry', level: 'Intermediate', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho', status: 'Original' },
   { title: 'True Ortho-Rectification — React', category: 'Photogrammetry', level: 'Intermediate', description: 'React migration workspace for the same rectification renderer, with the original interaction model preserved while the engine is split into React modules.', tags: ['React migration', 'Canvas engine', 'DSM vs DTM'], path: '?simulation=ortho', kind: 'ortho', status: 'React preview' },
   { title: 'Adaptive TIN Ground Filter', category: 'LiDAR', level: 'Intermediate', description: 'Classify ground vs. non-ground points in LiDAR point clouds using Axelsson’s adaptive triangulated irregular network (TIN) algorithm with customizable distance and angle thresholds.', tags: ['Axelsson algorithm', 'Delaunay TIN', 'Ground classification', 'Point cloud', 'Iterative filtering'], path: '?simulation=adaptive-tin', kind: 'tin', status: 'Native React' },
+  { title: 'Boresight & Lever-Arm', category: 'LiDAR', level: 'Advanced', description: 'Visualize direct-georeferencing sensor integration in 3D: the lever-arm offsets from the IMU to the GPS antenna, laser scanner and camera, plus the boresight rotational misalignment — and see how an uncalibrated boresight becomes a ground error.', tags: ['Direct georeferencing', 'Lever arm', 'Boresight', 'IMU / GNSS', 'Sensor fusion'], path: '?simulation=boresight', kind: 'boresight', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -28,6 +30,34 @@ function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
 }
 
 function Thumbnail({ kind }) {
+  if (kind === 'boresight') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Boresight and lever-arm sensor integration">
+      <defs><linearGradient id="bg-bor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0c1a29" /><stop offset="1" stopColor="#122f47" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-bor)" /><Grid id="bor" tint="rgba(255,255,255,.05)" />
+      {/* payload box */}
+      <g stroke="#1e1a0a" strokeWidth="2">
+        <polygon points="250,250 250,300 350,320 350,270" fill="#b58f3f" />
+        <polygon points="250,250 350,270 430,240 330,222" fill="#d6c446" />
+        <polygon points="350,270 350,320 430,290 430,240" fill="#c7ad3c" />
+      </g>
+      {/* IMU frame at box */}
+      <g strokeWidth="3"><line x1="300" y1="272" x2="356" y2="272" stroke="#e6463b" /><line x1="300" y1="272" x2="330" y2="248" stroke="#2ea05a" /><line x1="300" y1="272" x2="300" y2="220" stroke="#3c82f6" /></g>
+      <circle cx="300" cy="272" r="5" fill="#e8eff5" />
+      {/* GPS antenna + lever arm */}
+      <line x1="300" y1="272" x2="150" y2="96" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="8 6" />
+      <ellipse cx="150" cy="92" rx="30" ry="11" fill="none" stroke="#f59e0b" strokeWidth="3" /><circle cx="150" cy="92" r="4" fill="#f59e0b" />
+      {/* camera lever arm + tilted frame */}
+      <line x1="300" y1="272" x2="470" y2="210" stroke="#a78bfa" strokeWidth="2.5" strokeDasharray="8 6" />
+      <g strokeWidth="3" transform="rotate(12 470 210)"><line x1="470" y1="210" x2="516" y2="210" stroke="#e6463b" /><line x1="470" y1="210" x2="470" y2="166" stroke="#3c82f6" /></g>
+      <circle cx="470" cy="210" r="4" fill="#a78bfa" />
+      {/* laser ray to ground with boresight error */}
+      <line x1="356" y1="286" x2="356" y2="340" stroke="#7ee0c4" strokeWidth="2" strokeDasharray="5 5" />
+      <line x1="356" y1="286" x2="420" y2="342" stroke="#ff6a5a" strokeWidth="3" />
+      <line x1="356" y1="342" x2="420" y2="342" stroke="#f6c85f" strokeWidth="3" />
+      <text x="300" y="150" fill="#cfe0ef" fontSize="17" fontFamily="system-ui" fontWeight="600" transform="rotate(-32 300 150)">lever arm</text>
+      <text x="470" y="330" fill="#f6c85f" fontSize="15" fontFamily="system-ui" fontWeight="600" textAnchor="middle">boresight error</text>
+    </svg>
+  );
   if (kind === 'block') return (
     <svg viewBox="0 0 640 360" role="img" aria-label="Bundle Block Adjustment simulation">
       <defs><linearGradient id="bg-blk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#09121d" /><stop offset="1" stopColor="#0e2a3f" /></linearGradient></defs>
@@ -251,5 +281,6 @@ export default function App() {
   if (simulation === 'lidar-ranging') return <LidarRanging />;
   if (simulation === 'adaptive-tin') return <AdaptiveTIN />;
   if (simulation === 'block-adjustment') return <BlockAdjustment />;
+  if (simulation === 'boresight') return <Boresight />;
   return <Landing />;
 }
