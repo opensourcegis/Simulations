@@ -734,6 +734,91 @@ export default function BlockAdjustment() {
                 This multi-ray network locks all photos into a rigid block, reducing the minimum required GCPs for the entire block from <b>{stats.minGcpWithoutOverlap} down to just {stats.minGcpRequiredBlock} GCPs</b>!
               </p>
             </div>
+
+            {/* Sample Collinearity Equations & Step-by-Step Variable Calculations */}
+            <div style={{ marginTop: 14 }}>
+              <h3 style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.6px', color: '#475569', margin: '0 0 8px' }}>
+                📐 Collinearity Equations &amp; Worked Numerical Sample
+              </h3>
+
+              {/* Collinearity Equations Box */}
+              <div className="math-formula-box">
+                <div style={{ color: '#38bdf8', fontWeight: 600, marginBottom: 4 }}>
+                  Fundamental Collinearity Observation Equations:
+                </div>
+                <div>x - x₀ = -f · [ m₁₁(X - X_c) + m₁₂(Y - Y_c) + m₁₃(Z - Z_c) ] / [ m₃₁(X - X_c) + m₃₂(Y - Y_c) + m₃₃(Z - Z_c) ] + Δx</div>
+                <div>y - y₀ = -f · [ m₂₁(X - X_c) + m₂₂(Y - Y_c) + m₂₃(Z - Z_c) ] / [ m₃₁(X - X_c) + m₃₂(Y - Y_c) + m₃₃(Z - Z_c) ] + Δy</div>
+              </div>
+
+              {/* Live Arithmetic Calculation Breakdown Table */}
+              <div className="math-step-calc">
+                <strong>🧮 Live Variable &amp; Equation Arithmetic Breakdown:</strong>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Variable / Term</th>
+                      <th>Formula</th>
+                      <th>Calculated Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><b>EO Unknowns (N_EO)</b></td>
+                      <td>N_photos × 6 = {stats.numPhotos} × 6</td>
+                      <td><b>{stats.eoUnknowns} parameters</b> (3 position + 3 orientation per photo)</td>
+                    </tr>
+                    <tr>
+                      <td><b>IO Unknowns (N_IO)</b></td>
+                      <td>{selfCalibration ? 'Self-Calib (f, x₀, y₀, K₁, K₂, P₁, P₂)' : 'Known Lab Calibration'}</td>
+                      <td><b>{stats.ioUnknowns} parameters</b></td>
+                    </tr>
+                    <tr>
+                      <td><b>Tie Point Unknowns (N_Tie3D)</b></td>
+                      <td>N_tie × 3 = {stats.numTiePoints} × 3</td>
+                      <td><b>{stats.tiePtUnknowns} ground coords</b> (X, Y, Z per point)</td>
+                    </tr>
+                    <tr style={{ background: '#fef2f2', fontWeight: 600 }}>
+                      <td><b>TOTAL UNKNOWNS (N_unk)</b></td>
+                      <td>N_EO + N_IO + N_Tie3D = {stats.eoUnknowns} + {stats.ioUnknowns} + {stats.tiePtUnknowns}</td>
+                      <td><b style={{ color: '#ef4444' }}>{stats.totalUnknowns} Unknowns</b></td>
+                    </tr>
+                    <tr>
+                      <td><b>Tie Point Image Equations</b></td>
+                      <td>N_tie × avgRays × 2 = {stats.numTiePoints} × {stats.avgRaysPerTiePoint} × 2</td>
+                      <td><b>{stats.tiePointObsCount} equations</b> (2 per ray observation)</td>
+                    </tr>
+                    <tr>
+                      <td><b>GCP Observation Equations</b></td>
+                      <td>N_gcp × obsPerPhoto × 2 = {numGcps} × {Math.min(stats.numPhotos, Math.max(2, Math.round(stats.numPhotos * 0.4)))} × 2</td>
+                      <td><b>{stats.gcpObsCount} equations</b></td>
+                    </tr>
+                    <tr style={{ background: '#eff6ff', fontWeight: 600 }}>
+                      <td><b>TOTAL OBSERVATIONS (N_obs)</b></td>
+                      <td>N_Obs_Tie + N_Obs_GCP = {stats.tiePointObsCount} + {stats.gcpObsCount}</td>
+                      <td><b style={{ color: '#3b82f6' }}>{stats.totalObservations} Equations</b></td>
+                    </tr>
+                    <tr style={{ background: '#f0faf4', fontWeight: 700 }}>
+                      <td><b>REDUNDANCY (r = DOF)</b></td>
+                      <td>N_obs - N_unk = {stats.totalObservations} - {stats.totalUnknowns}</td>
+                      <td><b style={{ color: stats.redundancy >= 0 ? '#10b981' : '#ef4444' }}>+{stats.redundancy} Degrees of Freedom</b></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Numerical Worked Sample Box */}
+              <div style={{ marginTop: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}>
+                <strong style={{ color: '#0f172a' }}>📝 Sample Numerical Collinearity Calculation (Tie Point #1):</strong>
+                <div style={{ marginTop: 4, color: '#475569', lineHeight: 1.5 }}>
+                  For a vertical photo (ω=0°, φ=0°, κ=0°) at camera C1 (X_c=15.0m, Y_c=20.0m, Z_c=35.0m) and focal length f=35.0mm observing ground Tie Point (X=32.4m, Y=28.6m, Z=0.0m):
+                  <div style={{ fontFamily: 'monospace', background: '#ffffff', padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', marginTop: 4, color: '#0f172a' }}>
+                    <div>x = -35.0 × (32.4 - 15.0) / (-(0.0 - 35.0)) = -35.0 × (17.4 / 35.0) = <b>-17.40 mm</b></div>
+                    <div>y = -35.0 × (28.6 - 20.0) / (-(0.0 - 35.0)) = -35.0 × (8.6 / 35.0) = <b>-8.60 mm</b></div>
+                  </div>
+                  <i>When observed in 2 overlapping photos, this single tie point adds 4 image equations for 3 unknown ground coordinates (X,Y,Z), adding <b>+1 degree of freedom</b> to the bundle adjustment system!</i>
+                </div>
+              </div>
+            </div>
           </section>
 
           {/* Section 4: Interactive Parameter Controls */}

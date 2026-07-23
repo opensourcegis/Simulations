@@ -148,6 +148,48 @@
   transition: width 0.3s ease;
 }
 
+.math-formula-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: 'Fira Code', monospace, sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+.math-formula-box code {
+  color: #38bdf8;
+}
+.math-step-calc {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 12px;
+  color: #334155;
+}
+.math-step-calc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+.math-step-calc th,
+.math-step-calc td {
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+.math-step-calc th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
 .tin-btn {
   padding: 6px 12px;
   border: 1px solid #d6dee7;
