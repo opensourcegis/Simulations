@@ -266,6 +266,71 @@ function drawComb(ctx, o) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// MULTI-FREQUENCY: a ladder of modulation tones that together cover the whole
+// range with precision. The coarsest tone's half-wavelength spans the entire
+// measurement range (unambiguous); each finer tone repeats 6× more often,
+// adding precision while the coarser tones tell it which cycle it is in.
+// ---------------------------------------------------------------------------
+const LADDER_COLORS = ['#ff9f45', '#f6c85f', '#5ad1ff', '#7ee0c4'];
+function buildTones(n) { const t = []; for (let i = 0; i < n; i += 1) { const unamb = DMAX / (6 ** i); t.push({ f: C / (2 * unamb), unamb }); } return t; }
+
+function drawLadder(ctx, W, H, tones, R, activeTone, win) {
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, W, H);
+  const left = 112; const right = W - 16; const top = 28; const laneH = 40; const gap = 18;
+  const X = (r) => left + (r / DMAX) * (right - left);
+  const lastBottom = top + (tones.length - 1) * (laneH + gap) + laneH;
+
+  if (win) { ctx.fillStyle = 'rgba(126,224,196,.10)'; ctx.fillRect(X(win.lo), top - 6, Math.max(2, X(win.hi) - X(win.lo)), lastBottom - top + 12); }
+
+  ctx.fillStyle = '#8ea3b5'; ctx.font = '10.5px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText('phase each tone reads (0–360°) across the whole range — coarse ramps once, finer tones repeat', left - 4, 15);
+
+  tones.forEach((tone, i) => {
+    const y0 = top + i * (laneH + gap); const y1 = y0 + laneH; const col = LADDER_COLORS[i] || '#5ad1ff';
+    if (activeTone === i) { ctx.fillStyle = 'rgba(126,224,196,.09)'; ctx.fillRect(left, y0 - 4, right - left, laneH + 8); }
+    ctx.strokeStyle = 'rgba(140,163,181,.16)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, y1); ctx.lineTo(right, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(left, y0); ctx.lineTo(right, y0); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); let prev = null;
+    for (let px = 0; px <= right - left; px += 2) { const r = (px / (right - left)) * DMAX; const ph = (r / tone.unamb) % 1; const x = left + px; const y = y1 - ph * laneH; if (prev === null || ph < prev) ctx.moveTo(x, y); else ctx.lineTo(x, y); prev = ph; }
+    ctx.stroke();
+    const phR = (R / tone.unamb) % 1; const dy = y1 - phR * laneH;
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(R), dy, 4.5, 0, TAU); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.textAlign = 'right'; ctx.fillStyle = '#dbe9f2'; ctx.font = '600 11px system-ui'; ctx.fillText(`${(tone.f / 1e6).toFixed(tone.f < 1e6 ? 2 : 1)} MHz`, left - 12, y0 + 15);
+    ctx.fillStyle = '#8ea3b5'; ctx.font = '10px system-ui'; ctx.fillText(`λ/2 = ${tone.unamb >= 10 ? tone.unamb.toFixed(0) : tone.unamb.toFixed(1)} m`, left - 12, y0 + 30);
+    ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(140,163,181,.7)'; ctx.font = '9px system-ui'; ctx.fillText('360', left + 3, y0 + 9); ctx.fillText('0', left + 3, y1 - 2);
+  });
+
+  ctx.strokeStyle = 'rgba(126,224,196,.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(X(R), top - 6); ctx.lineTo(X(R), lastBottom + 20); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#8ea3b5'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  for (let d = 0; d <= DMAX; d += 50) { const x = X(d); ctx.strokeStyle = 'rgba(140,163,181,.25)'; ctx.beginPath(); ctx.moveTo(x, lastBottom + 16); ctx.lineTo(x, lastBottom + 20); ctx.stroke(); ctx.fillStyle = '#8ea3b5'; ctx.fillText(`${d}`, x, lastBottom + 32); }
+  ctx.textAlign = 'left'; ctx.fillText('true range (m)', right - 74, lastBottom + 32);
+}
+
+function drawNarrow(ctx, W, H, tones, R, win, activeTone, finalDone) {
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, W, H);
+  const left = 44; const right = W - 20; const y = H - 28;
+  const X = (r) => left + (r / DMAX) * (right - left);
+  const precision = tones[tones.length - 1].unamb / 60;
+  ctx.strokeStyle = 'rgba(140,163,181,.5)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+  ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  for (let d = 0; d <= DMAX; d += 50) { const x = X(d); ctx.strokeStyle = 'rgba(140,163,181,.2)'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 5); ctx.stroke(); ctx.fillStyle = '#8ea3b5'; ctx.fillText(`${d}`, x, y + 16); }
+  ctx.textAlign = 'left'; ctx.fillText('m', right - 6, y + 16);
+  const w = win || { lo: R - precision / 2, hi: R + precision / 2 };
+  const lo = Math.max(0, w.lo); const hi = Math.min(DMAX, w.hi);
+  const col = finalDone ? '#4ade80' : '#7ee0c4';
+  ctx.fillStyle = finalDone ? 'rgba(74,222,128,.16)' : 'rgba(126,224,196,.16)';
+  ctx.fillRect(X(lo), y - 44, Math.max(2, X(hi) - X(lo)), 44);
+  ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.strokeRect(X(lo), y - 44, Math.max(2, X(hi) - X(lo)), 44);
+  ctx.beginPath(); ctx.moveTo(X(R), y - 48); ctx.lineTo(X(R), y); ctx.stroke();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(R), y - 48, 4, 0, TAU); ctx.fill();
+  const width = hi - lo;
+  const lab = finalDone ? `resolved ≈ ${R.toFixed(2)} m  (±${(precision / 2).toFixed(2)} m)` : `tone ${activeTone + 1} · ${(tones[activeTone].f / 1e6).toFixed(activeTone === 0 ? 2 : 1)} MHz → window ${width < 10 ? width.toFixed(2) : width.toFixed(0)} m`;
+  ctx.font = '600 12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = col;
+  ctx.fillText(lab, clamp(X((lo + hi) / 2), 90, W - 90), y - 52); ctx.textAlign = 'left';
+}
+
 export default function LidarRanging() {
   const [mode, setMode] = useState('pulsed'); // 'pulsed' | 'phase'
   const [distance, setDistance] = useState(120);
@@ -274,21 +339,47 @@ export default function LidarRanging() {
   const [pulseWidth, setPulseWidth] = useState(10); // ns
   const [prf, setPrf] = useState(100); // kHz
   const [fMod, setFMod] = useState(13); // MHz (CW modulation frequency)
+  const [nTones, setNTones] = useState(3); // multi-frequency ladder size
   const [measured, setMeasured] = useState(null);
 
   const sceneRef = useRef(null); const chartRef = useRef(null); const combRef = useRef(null);
+  const ladderRef = useRef(null); const narrowRef = useRef(null);
   const params = useRef({}); const anim = useRef({ active: false, start: 0, prog: 0 });
   const combAnim = useRef({ playing: false, start: 0 });
-  params.current = { mode, distance, speed, continuous, pulseWidth, fMod };
+  const multiAnim = useRef({ playing: false, start: 0 });
+  params.current = { mode, distance, speed, continuous, pulseWidth, fMod, nTones };
 
   const fire = () => { anim.current = { active: true, start: performance.now(), prog: 0 }; };
   const playComb = () => { combAnim.current = { playing: true, start: performance.now() }; };
+  const playResolve = () => { multiAnim.current = { playing: true, start: performance.now() }; };
 
   useEffect(() => {
     let raf;
     const loop = (now) => {
       const p = params.current; const a = anim.current;
       const sc = sceneRef.current; const ch = chartRef.current;
+      if (p.mode === 'multi') {
+        const tones = buildTones(p.nTones); const n = tones.length;
+        const precision = tones[n - 1].unamb / 60;
+        const wEnd = (i) => (i + 1 < n ? tones[i + 1].unamb : precision);
+        const ma = multiAnim.current;
+        let activeTone = -1; let win = null; let finalDone = true;
+        if (ma.playing) {
+          finalDone = false;
+          const per = 1.15; const prog = (now - ma.start) / 1000; const stage = Math.floor(prog / per);
+          if (stage >= n) { ma.playing = false; win = { lo: p.distance - precision / 2, hi: p.distance + precision / 2 }; finalDone = true; }
+          else {
+            activeTone = stage;
+            const tIn = (prog - stage * per) / per; const e = tIn < 0.5 ? 2 * tIn * tIn : 1 - ((-2 * tIn + 2) ** 2) / 2;
+            const wStart = stage === 0 ? DMAX : wEnd(stage - 1); const cur = wStart + (wEnd(stage) - wStart) * e;
+            win = { lo: p.distance - cur / 2, hi: p.distance + cur / 2 };
+          }
+        }
+        const lr = ladderRef.current; const nr = narrowRef.current;
+        if (lr) drawLadder(lr.getContext('2d'), lr.width, lr.height, tones, p.distance, activeTone, win);
+        if (nr) drawNarrow(nr.getContext('2d'), nr.width, nr.height, tones, p.distance, win, activeTone, finalDone);
+        raf = requestAnimationFrame(loop); return;
+      }
       if (p.mode === 'pulsed') {
         if (a.active) {
           const dur = (0.7 + (p.distance / DMAX) * 3.0) / p.speed;
@@ -341,6 +432,10 @@ export default function LidarRanging() {
   const phiCoarseDeg = (distance / unambCoarse) * 360; // no wrap: distance < unambCoarse
   const coarseR = (phiCoarseDeg / 360) * unambCoarse; // = distance (coarse, unambiguous)
   const Ncalc = Math.round(coarseR / unamb - frac);
+  // Multi-frequency ladder readouts
+  const tones = buildTones(nTones);
+  const ladderH = 28 + nTones * (40 + 18) + 24;
+  const finePrecision = tones[nTones - 1].unamb / 60;
 
   return (
     <div className="sim-app">
@@ -348,7 +443,7 @@ export default function LidarRanging() {
         <a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a>
         <div className="title-block">
           <h1>LiDAR Ranging <span className="native-badge">Native React</span></h1>
-          <span className="sub">Two ways to turn light into distance: pulse timing and continuous-wave phase</span>
+          <span className="sub">Turning light into distance: pulse timing, continuous-wave phase, and multi-frequency modulation</span>
         </div>
         <span className="score-chip">c &#8776; <b>3&times;10&#8312; m/s</b></span>
       </header>
@@ -356,6 +451,7 @@ export default function LidarRanging() {
       <div className="rng-modes">
         <button className={`rng-seg ${mode === 'pulsed' ? 'on' : ''}`} onClick={() => setMode('pulsed')}>Pulsed &mdash; time of flight</button>
         <button className={`rng-seg ${mode === 'phase' ? 'on' : ''}`} onClick={() => setMode('phase')}>Continuous wave &mdash; phase</button>
+        <button className={`rng-seg ${mode === 'multi' ? 'on' : ''}`} onClick={() => setMode('multi')}>Multi-frequency &mdash; full range</button>
       </div>
 
       {mode === 'pulsed' ? (
@@ -418,7 +514,7 @@ export default function LidarRanging() {
             </section>
           </div>
         </div>
-      ) : (
+      ) : mode === 'phase' ? (
         <div className="sim-layout">
           <div className="sim-col">
             <section className="sim-panel">
@@ -474,6 +570,58 @@ export default function LidarRanging() {
                 The coarse reading only has to be accurate to within <b>±λ/4 = {(unamb / 2).toFixed(1)} m</b> — just enough to pick the right cyan tick above. The fine tone then supplies the precise fraction (≈ {(phasePrecision * 100).toFixed(1)} cm per degree). <b>Higher fine f → finer precision but more candidate cycles to disambiguate.</b>
               </div>
               <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>Pulsed vs phase.</b> Pulsed timing handles long, unambiguous ranges directly; continuous-wave phase gives millimetre-level precision but must resolve N — often with several modulation frequencies, coarse-to-fine.</div>
+            </section>
+          </div>
+        </div>
+      ) : (
+        <div className="sim-layout">
+          <div className="sim-col">
+            <section className="sim-panel">
+              <h2><span className="stepno">1</span> Modulation ladder <small>&mdash; each tone&rsquo;s phase across the whole range</small></h2>
+              <canvas ref={ladderRef} className="rng-canvas" width={660} height={ladderH} />
+              <div className="control-grid">
+                <label>Target distance R <b>{distance} m</b><input type="range" min="10" max={DMAX} step="1" value={distance} onChange={(e) => setDistance(Number(e.target.value))} /></label>
+                <label>Modulation tones <b>{nTones}</b><input type="range" min="2" max="4" step="1" value={nTones} onChange={(e) => setNTones(Number(e.target.value))} /></label>
+              </div>
+              <div className="rng-legend">
+                <span><i className="rng-swatch" style={{ background: '#ff9f45' }} /> coarse (covers whole range)</span>
+                <span><i className="rng-swatch" style={{ background: '#5ad1ff' }} /> fine (precise)</span>
+                <span>read the dot on each ramp at R = <b style={{ fontFamily: 'monospace', color: '#16202c' }}>{distance} m</b></span>
+              </div>
+            </section>
+
+            <section className="sim-panel">
+              <h2><span className="stepno">2</span> Coarse-to-fine narrowing <small>&mdash; each tone shrinks the window</small></h2>
+              <div className="rng-fire" style={{ marginTop: 0, marginBottom: 8 }}>
+                <button className="rng-btn ghost" onClick={playResolve}>▶ Resolve coarse → fine</button>
+                <span className="rng-chk">the coarse tone locates R across the whole range; finer tones refine it</span>
+              </div>
+              <canvas ref={narrowRef} className="rng-canvas" width={660} height={110} />
+            </section>
+          </div>
+
+          <div className="sim-col">
+            <section className="sim-panel">
+              <h2><span className="stepno">3</span> Why several modulation frequencies?</h2>
+              <div className="rng-note">
+                A single tone can&rsquo;t do both jobs: a <b>low</b> frequency has a long λ/2 that spans the whole range (so its phase is <b>unambiguous</b>) but reads range coarsely, while a <b>high</b> frequency reads finely but its phase <b>wraps</b> many times. Sending a <b>ladder of frequencies</b> gets both — the coarse tone says roughly where you are, and each finer tone sharpens it while the coarser one tells it which cycle it is in.
+              </div>
+              <div className="rng-sub">The tone ladder</div>
+              {tones.map((t, i) => (
+                <div className="readouts" key={i} style={{ gridTemplateColumns: '1.1fr 1fr 1fr', marginBottom: 6 }}>
+                  <div><span>{i === 0 ? 'coarse' : i === nTones - 1 ? 'finest' : `tone ${i + 1}`}</span><b style={{ color: LADDER_COLORS[i] }}>{(t.f / 1e6).toFixed(t.f < 1e6 ? 2 : 1)} MHz</b></div>
+                  <div><span>unambiguous λ/2</span><b>{t.unamb >= 10 ? t.unamb.toFixed(0) : t.unamb.toFixed(1)} m</b></div>
+                  <div><span>phase at R</span><b>{(((distance / t.unamb) % 1) * 360).toFixed(0)}°</b></div>
+                </div>
+              ))}
+              <div className="readouts" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
+                <div><span>whole range covered</span><b>0 – {DMAX} m</b></div>
+                <div><span>final precision</span><b className="orange">± {(finePrecision / 2).toFixed(2)} m</b></div>
+              </div>
+              <div className="rng-note">
+                Here the coarsest tone (<b>{(tones[0].f / 1e6).toFixed(2)} MHz</b>, λ/2 = {tones[0].unamb.toFixed(0)} m) is unambiguous across the entire <b>0–{DMAX} m</b> range, and the {nTones} tones together pin the target to about <b>±{(finePrecision / 2).toFixed(2)} m</b> — a range-to-precision ratio of roughly <b>{Math.round(DMAX / finePrecision).toLocaleString()}:1</b>. Add tones for finer results.
+              </div>
+              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>In practice</b> this is how phase-based rangefinders and AMCW LiDAR reach millimetre precision over long ranges: two or more modulation frequencies (or a synthetic “beat” wavelength), measured coarse-to-fine.</div>
             </section>
           </div>
         </div>
