@@ -3,6 +3,7 @@ import OrthoRectification from './simulations/OrthoRectification.jsx';
 import StructureFromMotion from './simulations/StructureFromMotion.jsx';
 import LidarRanging from './simulations/LidarRanging.jsx';
 import AdaptiveTIN from './simulations/AdaptiveTIN.jsx';
+import BlockAdjustment from './simulations/BlockAdjustment.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -11,6 +12,7 @@ const simulators = [
   { title: 'Survey Mission Designer', category: 'Flight planning', level: 'Beginner', description: 'Plan a drone survey over terrain, place control points and obstructions, and explore the trade-offs behind a robust flight plan.', tags: ['Flight planning', 'Terrain', 'Coverage'], path: 'games/survey-mission-designer/', kind: 'survey' },
   { title: 'Aerial Triangulation', category: 'Photogrammetry', level: 'Intermediate', description: 'Build an image block, measure tie points, and see how bundle adjustment turns overlapping photographs into a connected survey.', tags: ['Image block', 'Tie points', 'Bundle adjustment'], path: 'games/aerial-triangulation/', kind: 'triangulation' },
   { title: 'Structure from Motion', category: 'Photogrammetry', level: 'Advanced', description: 'Match the same corner of a 3D object across photographs and watch triangulation and resection recover each camera’s position and orientation.', tags: ['Feature matching', 'Camera pose', '3D reconstruction'], path: '?simulation=sfm', kind: 'sfm', status: 'Native React' },
+  { title: 'Bundle Block Adjustment', category: 'Photogrammetry', level: 'Advanced', description: 'Explore Interior & Exterior Orientation parameters, degrees of freedom, collinearity equations, and see how photo overlap & tie points reduce GCP requirements.', tags: ['IO & EO Parameters', 'Collinearity equations', 'Tie Points & GCPs', 'Redundancy & DOF', 'Least-squares bundle'], path: '?simulation=block-adjustment', kind: 'block', status: 'Native React' },
   { title: 'True Ortho-Rectification', category: 'Photogrammetry', level: 'Intermediate', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho', status: 'Original' },
   { title: 'True Ortho-Rectification — React', category: 'Photogrammetry', level: 'Intermediate', description: 'React migration workspace for the same rectification renderer, with the original interaction model preserved while the engine is split into React modules.', tags: ['React migration', 'Canvas engine', 'DSM vs DTM'], path: '?simulation=ortho', kind: 'ortho', status: 'React preview' },
   { title: 'Adaptive TIN Ground Filter', category: 'LiDAR', level: 'Intermediate', description: 'Classify ground vs. non-ground points in LiDAR point clouds using Axelsson’s adaptive triangulated irregular network (TIN) algorithm with customizable distance and angle thresholds.', tags: ['Axelsson algorithm', 'Delaunay TIN', 'Ground classification', 'Point cloud', 'Iterative filtering'], path: '?simulation=adaptive-tin', kind: 'tin', status: 'Native React' },
@@ -26,6 +28,36 @@ function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
 }
 
 function Thumbnail({ kind }) {
+  if (kind === 'block') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Bundle Block Adjustment simulation">
+      <defs><linearGradient id="bg-blk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#09121d" /><stop offset="1" stopColor="#0e2a3f" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-blk)" /><Grid id="blk" tint="rgba(255,255,255,.05)" />
+      {/* Flight lines */}
+      <line x1="100" y1="110" x2="540" y2="110" stroke="#38bdf8" strokeWidth="3" strokeDasharray="8 6" />
+      <line x1="100" y1="210" x2="540" y2="210" stroke="#38bdf8" strokeWidth="3" strokeDasharray="8 6" />
+      {/* Overlap Zone Heatmap */}
+      <rect x="180" y="80" width="280" height="160" fill="rgba(16,185,129,.2)" stroke="#10b981" strokeWidth="2" strokeDasharray="6 4" />
+      {/* Cameras */}
+      <g fill="#38bdf8" stroke="#ffffff" strokeWidth="2">
+        <circle cx="160" cy="110" r="8" /><circle cx="320" cy="110" r="8" /><circle cx="480" cy="110" r="8" />
+        <circle cx="160" cy="210" r="8" /><circle cx="320" cy="210" r="8" /><circle cx="480" cy="210" r="8" />
+      </g>
+      {/* Rays to GCPs */}
+      <g stroke="rgba(245,158,11,.6)" strokeWidth="2">
+        <line x1="160" y1="110" x2="220" y2="290" /><line x1="320" y1="110" x2="220" y2="290" />
+        <line x1="320" y1="110" x2="420" y2="290" /><line x1="480" y1="110" x2="420" y2="290" />
+      </g>
+      {/* GCP Markers */}
+      <g fill="#f59e0b" stroke="#ffffff" strokeWidth="2">
+        <circle cx="220" cy="290" r="9" /><circle cx="420" cy="290" r="9" />
+      </g>
+      {/* Tie Points */}
+      <g fill="#34d399">
+        <circle cx="280" cy="160" r="5" /><circle cx="360" cy="160" r="5" /><circle cx="320" cy="180" r="5" />
+      </g>
+      <text x="320" y="340" fill="#38bdf8" fontSize="16" fontFamily="system-ui" fontWeight="600" textAnchor="middle">Bundle Block Adjustment (r = N_obs - N_unk)</text>
+    </svg>
+  );
   if (kind === 'tin') return (
     <svg viewBox="0 0 640 360" role="img" aria-label="Adaptive TIN ground classification">
       <defs><linearGradient id="bg-tin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#081826" /><stop offset="1" stopColor="#0e2a3f" /></linearGradient></defs>
@@ -218,5 +250,6 @@ export default function App() {
   if (simulation === 'sfm') return <StructureFromMotion />;
   if (simulation === 'lidar-ranging') return <LidarRanging />;
   if (simulation === 'adaptive-tin') return <AdaptiveTIN />;
+  if (simulation === 'block-adjustment') return <BlockAdjustment />;
   return <Landing />;
 }
