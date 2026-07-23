@@ -107,6 +107,51 @@ export default function BlockAdjustment() {
   const animTimeRef = useRef(0);
   const canvasRef = useRef(null);
 
+  // Drag-to-rotate state
+  const isDraggingRef = useRef(false);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
+
+  // Wire pointer events on the canvas for drag-rotate & scroll-zoom
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onPointerDown = (e) => {
+      isDraggingRef.current = true;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      canvas.setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e) => {
+      if (!isDraggingRef.current || !view3D) return;
+      const dx = e.clientX - lastPointerRef.current.x;
+      const dy = e.clientY - lastPointerRef.current.y;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      setYawAngle((prev) => (prev + dx * 0.6 + 360) % 360);
+      setPitchAngle((prev) => Math.max(10, Math.min(85, prev - dy * 0.4)));
+    };
+    const onPointerUp = () => {
+      isDraggingRef.current = false;
+    };
+    const onWheel = (e) => {
+      e.preventDefault();
+      setZoomScale((prev) => Math.max(0.6, Math.min(2.0, prev - e.deltaY * 0.001)));
+    };
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointerleave', onPointerUp);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointerleave', onPointerUp);
+      canvas.removeEventListener('wheel', onWheel);
+    };
+  }, [view3D]);
+
   // Calculate mathematical parameters balance for full block
   const stats = useMemo(() => {
     return computeBlockParams(
