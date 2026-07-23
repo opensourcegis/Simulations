@@ -455,7 +455,7 @@ export default function LidarRanging() {
       </div>
 
       {mode === 'pulsed' ? (
-        <div className="sim-layout">
+        <div className="sim-layout" key="pulsed">
           <div className="sim-col">
             <section className="sim-panel">
               <h2><span className="stepno">1</span> Fire a pulse <small>&mdash; watch it travel out and the wave return</small></h2>
@@ -515,7 +515,7 @@ export default function LidarRanging() {
           </div>
         </div>
       ) : mode === 'phase' ? (
-        <div className="sim-layout">
+        <div className="sim-layout" key="phase">
           <div className="sim-col">
             <section className="sim-panel">
               <h2><span className="stepno">1</span> Continuous modulated wave <small>&mdash; it runs to the target and back</small></h2>
@@ -574,7 +574,7 @@ export default function LidarRanging() {
           </div>
         </div>
       ) : (
-        <div className="sim-layout">
+        <div className="sim-layout" key="multi">
           <div className="sim-col">
             <section className="sim-panel">
               <h2><span className="stepno">1</span> Modulation ladder <small>&mdash; each tone&rsquo;s phase across the whole range</small></h2>
