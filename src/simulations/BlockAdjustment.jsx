@@ -307,15 +307,20 @@ export default function BlockAdjustment() {
             ctx.moveTo(pf0.px, pf0.py); ctx.lineTo(pf1.px, pf1.py); ctx.lineTo(pf2.px, pf2.py); ctx.lineTo(pf3.px, pf3.py);
             ctx.closePath(); ctx.fill(); ctx.stroke();
 
-            const pxAxis = project3D(XL + pw / 2 - 2, YL, ZL - fDistance);
-            const pyAxis = project3D(XL, YL + ph / 2 - 2, ZL - fDistance);
+            // Image Plane Axes x_a, y_a — use proper 3D midpoints so they sit on the plane
+            const midLeft  = project3D(XL - pw / 2, YL, ZL - fDistance);  // midpoint of left edge
+            const midRight = project3D(XL + pw / 2, YL, ZL - fDistance);  // midpoint of right edge
+            const midTop   = project3D(XL, YL - ph / 2, ZL - fDistance);  // midpoint of top edge
+            const midBot   = project3D(XL, YL + ph / 2, ZL - fDistance);  // midpoint of bottom edge
 
             ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 1.2;
-            ctx.beginPath(); ctx.moveTo(pf0.px, (pf0.py + pf3.py) / 2); ctx.lineTo(pf1.px, (pf1.py + pf2.py) / 2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo((pf0.px + pf1.px) / 2, pf0.py); ctx.lineTo((pf3.px + pf2.px) / 2, pf3.py); ctx.stroke();
+            // x_a axis (left edge midpoint → right edge midpoint)
+            ctx.beginPath(); ctx.moveTo(midLeft.px, midLeft.py); ctx.lineTo(midRight.px, midRight.py); ctx.stroke();
+            // y_a axis (top edge midpoint → bottom edge midpoint)
+            ctx.beginPath(); ctx.moveTo(midTop.px, midTop.py); ctx.lineTo(midBot.px, midBot.py); ctx.stroke();
 
             ctx.fillStyle = '#93c5fd'; ctx.font = '600 10px system-ui';
-            ctx.fillText('x_a', pxAxis.px + 4, pxAxis.py); ctx.fillText('y_a', pyAxis.px, pyAxis.py + 10);
+            ctx.fillText('x_a', midRight.px + 4, midRight.py); ctx.fillText('y_a', midBot.px, midBot.py + 10);
 
             ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.arc(pOrigin.px, pOrigin.py, 3.5, 0, Math.PI * 2); ctx.fill();
             ctx.fillText('o (Principal Point)', pOrigin.px - 45, pOrigin.py + 12);
