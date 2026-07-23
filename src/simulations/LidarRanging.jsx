@@ -200,6 +200,43 @@ function drawPhaseChart(ctx, { phi, theta }) {
   ctx.fillStyle = '#8ea3b5'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText('phasor', cx, cy + r + 15); ctx.textAlign = 'left';
 }
 
+// Ambiguity-resolution number line: the fine tone allows a comb of candidate
+// ranges (every λ/2); the coarse tone's unambiguous estimate picks the right
+// one, which is exactly how the integer N is found.
+const COMB_W = 640; const COMB_H = 150;
+function drawComb(ctx, { unambFine, fracFine, coarseR, N }) {
+  ctx.clearRect(0, 0, COMB_W, COMB_H);
+  ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, COMB_W, COMB_H);
+  const left = 44; const right = COMB_W - 20; const baseY = COMB_H - 30;
+  const X = (m) => left + (m / DMAX) * (right - left);
+
+  ctx.fillStyle = '#8ea3b5'; ctx.font = '10.5px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText('cyan: possible ranges from fine phase (spaced λ/2)', left, 15);
+  ctx.fillStyle = '#ffae4d'; ctx.fillText('orange: coarse estimate selects one', left + 316, 15);
+
+  ctx.strokeStyle = 'rgba(140,163,181,.5)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(left, baseY); ctx.lineTo(right, baseY); ctx.stroke();
+  ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+  for (let d = 0; d <= DMAX; d += 50) { const x = X(d); ctx.strokeStyle = 'rgba(140,163,181,.2)'; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke(); ctx.fillStyle = '#8ea3b5'; ctx.fillText(`${d}`, x, baseY + 17); }
+  ctx.textAlign = 'left'; ctx.fillText('m', right - 6, baseY + 17);
+
+  // coarse estimate + its uncertainty band (±λ_fine/4): exactly one candidate lands inside
+  const bandHalf = unambFine * 0.5;
+  const bx0 = X(Math.max(0, coarseR - bandHalf)); const bx1 = X(Math.min(DMAX, coarseR + bandHalf));
+  ctx.fillStyle = 'rgba(255,174,77,.14)'; ctx.fillRect(bx0, baseY - 66, bx1 - bx0, 66);
+  ctx.strokeStyle = '#ffae4d'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(X(coarseR), baseY - 70); ctx.lineTo(X(coarseR), baseY); ctx.stroke();
+  ctx.fillStyle = '#ffae4d'; ctx.beginPath(); ctx.moveTo(X(coarseR), baseY - 70); ctx.lineTo(X(coarseR) - 5, baseY - 80); ctx.lineTo(X(coarseR) + 5, baseY - 80); ctx.closePath(); ctx.fill();
+  ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`coarse R ≈ ${coarseR.toFixed(0)} m`, X(coarseR), baseY - 84); ctx.textAlign = 'left';
+
+  const maxN = Math.floor((DMAX - fracFine * unambFine) / unambFine);
+  for (let n = 0; n <= maxN; n += 1) {
+    const Rn = (n + fracFine) * unambFine; const x = X(Rn); const hit = n === N;
+    ctx.strokeStyle = hit ? '#4ade80' : 'rgba(90,209,255,.65)'; ctx.lineWidth = hit ? 2.6 : 1.2;
+    ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY - (hit ? 52 : 18)); ctx.stroke();
+    if (hit) { ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.arc(x, baseY - 52, 3.5, 0, TAU); ctx.fill(); ctx.font = '700 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`N=${n}`, x, baseY - 58); ctx.textAlign = 'left'; }
+  }
+}
+
 export default function LidarRanging() {
   const [mode, setMode] = useState('pulsed'); // 'pulsed' | 'phase'
   const [distance, setDistance] = useState(120);
@@ -210,7 +247,7 @@ export default function LidarRanging() {
   const [fMod, setFMod] = useState(13); // MHz (CW modulation frequency)
   const [measured, setMeasured] = useState(null);
 
-  const sceneRef = useRef(null); const chartRef = useRef(null);
+  const sceneRef = useRef(null); const chartRef = useRef(null); const combRef = useRef(null);
   const params = useRef({}); const anim = useRef({ active: false, start: 0, prog: 0 });
   params.current = { mode, distance, speed, continuous, pulseWidth, fMod };
 
@@ -246,11 +283,20 @@ export default function LidarRanging() {
   const tof = tofNs(distance); const oneWay = tof / 2;
   const rangeRes = C * (pulseWidth * 1e-9) / 2;
   const rMax = C / (2 * prf * 1e3);
-  // Phase readouts
+  // Phase readouts (fine tone)
   const f = fMod * 1e6; const lambda = C / f; const unamb = lambda / 2;
   const ratio = distance / unamb; const N = Math.floor(ratio); const frac = ratio - N;
   const phiDeg = frac * 360; const rPhase = frac * unamb; // ambiguous (phase-only) range
   const phasePrecision = unamb / 360; // metres per degree of phase
+  // Coarse tone used to resolve N: λ/2 spans the whole scene, so it is unambiguous.
+  const F_COARSE = 0.45e6; const lambdaCoarse = C / F_COARSE; const unambCoarse = lambdaCoarse / 2;
+  const phiCoarseDeg = (distance / unambCoarse) * 360; // no wrap: distance < unambCoarse
+  const coarseR = (phiCoarseDeg / 360) * unambCoarse; // = distance (coarse, unambiguous)
+  const Ncalc = Math.round(coarseR / unamb - frac);
+
+  useEffect(() => {
+    if (mode === 'phase' && combRef.current) drawComb(combRef.current.getContext('2d'), { unambFine: unamb, fracFine: frac, coarseR, N: Ncalc });
+  }, [mode, distance, fMod, unamb, frac, coarseR, Ncalc]);
 
   return (
     <div className="sim-app">
@@ -363,17 +409,23 @@ export default function LidarRanging() {
               <div className="equation big">R = (Δφ / 2π) · (λ / 2) = <b>{rPhase.toFixed(2)} m</b> <span style={{ color: '#7d8fa1' }}>+ N · {unamb.toFixed(1)} m</span></div>
               <div className="rng-note"><b>Phase gives the fraction of a wavelength.</b> The receiver compares the returned modulation to the transmitted reference and measures the phase lag Δφ. That lag pins the distance to a fraction of λ/2 — here <b>{(phiDeg / 360).toFixed(3)}</b> of {unamb.toFixed(1)} m = <b>{rPhase.toFixed(2)} m</b> — with very fine precision (≈ {(phasePrecision * 100).toFixed(1)} cm per degree).</div>
 
-              <div className="rng-sub">The ambiguity: how many whole cycles?</div>
+              <div className="rng-sub">How is N calculated? — a second, coarse tone</div>
+              <div className="rng-note">
+                Phase alone repeats every <b>λ/2 = {unamb.toFixed(1)} m</b>, so it can&rsquo;t tell {rPhase.toFixed(1)} m from {(rPhase + unamb).toFixed(1)} m from {(rPhase + 2 * unamb).toFixed(1)} m… To find <b>N</b>, the sensor adds a <b>coarse modulation tone</b> whose half-wavelength is longer than the whole measurement range, so its phase is <b>unambiguous</b> — a rough distance that tells you which fine cycle you&rsquo;re in.
+              </div>
+              <canvas ref={combRef} className="rng-canvas" width={COMB_W} height={COMB_H} />
+              <div className="equation big" style={{ marginTop: 10 }}>coarse f = 0.45 MHz → λ/2 = {unambCoarse.toFixed(0)} m → R<sub>coarse</sub> ≈ {coarseR.toFixed(1)} m</div>
+              <div className="equation big">N = round( R<sub>coarse</sub> / (λ/2) − Δφ/360° ) = round( {(coarseR / unamb).toFixed(2)} − {(frac).toFixed(3)} ) = <b>{Ncalc}</b></div>
+              <div className="equation big">R = (N + Δφ/360°) · λ/2 = ({Ncalc} + {(frac).toFixed(3)}) · {unamb.toFixed(2)} = <b>{((Ncalc + frac) * unamb).toFixed(2)} m</b></div>
               <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-                <div><span>phase-only R</span><b>{rPhase.toFixed(2)} m</b></div>
-                <div><span>whole cycles N</span><b>{N}</b></div>
-                <div><span>true R = (N+φ/2π)·λ/2</span><b className="orange">{((N + frac) * unamb).toFixed(1)} m</b></div>
+                <div><span>coarse R (fixes N)</span><b>{coarseR.toFixed(0)} m</b></div>
+                <div><span>whole cycles N</span><b>{Ncalc}</b></div>
+                <div><span>fine R (precise)</span><b className="orange">{((Ncalc + frac) * unamb).toFixed(2)} m</b></div>
               </div>
               <div className="rng-note">
-                The phase repeats every <b>λ/2 = {unamb.toFixed(1)} m</b>, so on its own Δφ can&rsquo;t tell {rPhase.toFixed(1)} m from {(rPhase + unamb).toFixed(1)} m from {(rPhase + 2 * unamb).toFixed(1)} m… The real distance is the phase fraction plus <b>N = {N}</b> whole half-wavelengths.
-                <br /><b>Lower f → longer λ → larger unambiguous range but coarser precision.</b> Real sensors transmit two or more modulation frequencies: a low one to fix N and a high one for fine precision.
+                The coarse reading only has to be accurate to within <b>±λ/4 = {(unamb / 2).toFixed(1)} m</b> — just enough to pick the right cyan tick above. The fine tone then supplies the precise fraction (≈ {(phasePrecision * 100).toFixed(1)} cm per degree). <b>Higher fine f → finer precision but more candidate cycles to disambiguate.</b>
               </div>
-              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>Pulsed vs phase.</b> Pulsed timing handles long, unambiguous ranges directly; continuous-wave phase gives millimetre-level precision at short range but must resolve the cycle ambiguity.</div>
+              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>Pulsed vs phase.</b> Pulsed timing handles long, unambiguous ranges directly; continuous-wave phase gives millimetre-level precision but must resolve N — often with several modulation frequencies, coarse-to-fine.</div>
             </section>
           </div>
         </div>
