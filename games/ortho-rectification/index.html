@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>True Ortho-Rectification — Relief Displacement to Map Geometry</title>
+<meta name="description" content="Learn true ortho-rectification by doing it: a tilted central-perspective aerial photo where roofs image as quadrilaterals and the ground grid keystones, probe the geometry (d = r·h/H) with a back-trace onto the photo, link the image to a DTM or DSM, and project onto the datum. Roofs become true rectangles, façades disappear, occlusions are masked or filled from neighbouring photos.">
+<style>
+  :root {
+    --bg:#eef2f6; --panel:#fff; --panel-2:#f5f8fa;
+    --line:#d6dee7; --line-soft:#e5ebf1;
+    --text:#16202c; --text-dim:#56677a; --text-faint:#7d8fa1;
+    --accent:#0f8a4d; --accent-wash:rgba(15,138,77,.09);
+    --bad:#c62828; --bad-wash:rgba(198,40,40,.08);
+    --warn:#b06a00; --warn-wash:rgba(176,106,0,.10);
+    --info:#1565c0; --info-wash:rgba(21,101,192,.07);
+    --orange:#e37400;
+    --radius:12px; --radius-sm:8px; --shadow:0 10px 34px rgba(22,32,44,.16);
+    --font:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SF Mono","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;background:radial-gradient(1200px 600px at 15% -10%,rgba(21,101,192,.07) 0%,transparent 55%),var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;cursor:pointer}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--info);outline-offset:2px;border-radius:4px}
+  .app{max-width:1520px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;min-height:100%}
+  .topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;box-shadow:0 1px 2px rgba(22,32,44,.05)}
+  .back-link{color:var(--text-dim);text-decoration:none;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;white-space:nowrap}
+  .back-link:hover{color:var(--text);border-color:var(--text-faint)}
+  .title-block{display:flex;flex-direction:column;margin-right:auto;min-width:0}
+  .title-block h1{margin:0;font-size:16px;font-weight:650;letter-spacing:.2px}
+  .title-block .sub{font-size:12.5px;color:var(--text-faint)}
+  .btn{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:7px 15px;font-size:13px;color:var(--text-dim);white-space:nowrap}
+  .btn:hover{border-color:var(--text-faint);color:var(--text)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .btn.primary:hover{filter:brightness(1.08);color:#fff}
+  .score-chip{font-size:12px;color:var(--text-dim);border:1px dashed var(--line);border-radius:999px;padding:5px 12px;white-space:nowrap}
+  .score-chip b{color:var(--accent)}
+  .layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+  @media(max-width:1060px){.layout{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:14px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 2px rgba(22,32,44,.05)}
+  .panel h3{margin:0 0 9px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .panel h3 .stepno{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:var(--accent);color:#fff;font-size:10.5px;flex:none;transform:translateY(2px)}
+  .panel h3 .lt{font-weight:400;text-transform:none;letter-spacing:0}
+  canvas.scene{width:100%;height:auto;display:block;border-radius:var(--radius-sm);border:1px solid var(--line-soft);background:#0e1620}
+  #srcCanvas{cursor:crosshair} #secCanvas{cursor:grab} #secCanvas.grab{cursor:grabbing}
+  .ctl-row{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap;margin-top:9px}
+  .sl{flex:1;min-width:190px;font-size:12.5px;color:var(--text-dim)}
+  .sl b{color:var(--text);font-family:var(--mono);font-weight:600;float:right}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-dim);cursor:pointer;white-space:nowrap}
+  .chk input{accent-color:var(--accent)}
+  .zbtns{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .zbtns button{border:0;background:var(--panel-2);padding:5px 12px;font-family:var(--mono);font-size:12px;color:var(--text-dim);border-right:1px solid var(--line)}
+  .zbtns button:last-child{border-right:0}
+  .zbtns button:hover{background:var(--info-wash);color:var(--info)}
+  .hint{font-size:11px;color:var(--text-faint)}
+  .probe-read{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:9px}
+  @media(max-width:560px){.probe-read{grid-template-columns:1fr 1fr}}
+  .stat{border:1px solid var(--line-soft);border-radius:var(--radius-sm);background:var(--panel-2);padding:6px 9px}
+  .stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--text-faint)}
+  .stat .v{font-size:15px;font-weight:650;font-family:var(--mono)}
+  .stat .v small{font-size:11px;color:var(--text-faint);font-weight:400}
+  .eqn{font-family:var(--mono);font-size:12.5px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line-soft);border-radius:var(--radius-sm);padding:8px 11px;margin-top:8px;line-height:1.7}
+  .eqn b{color:var(--text)} .eqn .hl{color:var(--orange);font-weight:700}
+  .elev-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .elev-cell{border:2px solid transparent;border-radius:10px;padding:5px;cursor:pointer;transition:border-color .12s}
+  .elev-cell:hover{border-color:var(--line)}
+  .elev-cell.on{border-color:var(--accent);background:var(--accent-wash)}
+  .elev-cell canvas{width:100%;height:auto;display:block;border-radius:6px}
+  .elev-cell .cap{font-size:11.5px;text-align:center;margin-top:5px;color:var(--text-dim)}
+  .elev-cell .cap b{color:var(--text)}
+  .ramp-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-faint);margin-top:8px}
+  .ramp{flex:1;height:9px;border-radius:5px;border:1px solid var(--line);background:linear-gradient(90deg,#3c6b39,#7ba15a,#c9bd7a,#c98f56,#e8e8e8)}
+  .modes{display:flex;flex-direction:column;gap:7px}
+  .mode{display:flex;align-items:flex-start;gap:9px;text-align:left;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);padding:8px 11px;font-size:12.5px;color:var(--text-dim)}
+  .mode:hover{border-color:var(--text-faint)}
+  .mode.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:var(--accent-wash)}
+  .mode .dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);flex:none;margin-top:3px}
+  .mode.on .dot{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 2.5px #fff inset}
+  .mode b{color:var(--text);display:block;font-size:13px}
+  .note{font-size:12.5px;color:var(--text-dim)} .note b{color:var(--text)}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--info);background:var(--panel-2);border-radius:var(--radius-sm);padding:8px 11px;font-size:12.5px;color:var(--text-dim);margin-top:9px}
+  .callout.good{border-left-color:var(--accent)} .callout.warn{border-left-color:var(--warn)}
+  .overlay{position:fixed;inset:0;background:rgba(22,32,44,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
+  .overlay.open{display:flex}
+  .modal{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);max-width:640px;width:100%;max-height:88vh;overflow-y:auto;padding:22px 24px}
+  .modal h2{margin:0 0 6px;font-size:19px} .modal h4{margin:14px 0 4px;font-size:13.5px}
+  .modal p,.modal li{font-size:13.5px;color:var(--text-dim)} .modal p{margin:7px 0}
+  .modal ol,.modal ul{margin:6px 0;padding-left:20px}
+  .modal .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  .qopts{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px}
+  .qopt{text-align:left;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);padding:10px 12px;font-size:13.5px}
+  .qopt:hover{border-color:var(--text-faint)}
+  .qopt.right{border-color:var(--accent);background:var(--accent-wash);color:var(--accent);font-weight:600}
+  .qopt.wrong{border-color:var(--bad);background:var(--bad-wash);color:var(--bad)}
+  .qopt:disabled{cursor:default}
+  .qfeedback{font-size:13px;color:var(--text-dim);border-left:3px solid var(--info);background:var(--panel-2);padding:8px 11px;border-radius:var(--radius-sm);margin-top:10px}
+  .qprog{font-size:12px;color:var(--text-faint);font-family:var(--mono)}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <a class="back-link" href="../../">← All simulators</a>
+    <div class="title-block">
+      <h1>True Ortho-Rectification</h1>
+      <span class="sub">Tilted perspective → elevation model → projection onto the datum → square roofs, no façades</span>
+    </div>
+    <span class="score-chip" id="scoreChip">Concept check: <b>—</b></span>
+    <button class="btn" id="btnHelp">How it works</button>
+    <button class="btn primary" id="btnQuiz">Concept check ▶</button>
+  </div>
+
+  <div class="layout">
+    <!-- ============ LEFT ============ -->
+    <div class="col">
+      <div class="panel">
+        <h3><span class="stepno">1</span> Source aerial photo <span class="lt">— tilted central perspective</span></h3>
+        <canvas class="scene" id="srcCanvas" width="640" height="640"></canvas>
+        <div class="ctl-row">
+          <label class="sl">Flying height H <b id="hVal">100 m</b><input type="range" id="hSlider" min="70" max="240" step="5" value="100"></label>
+          <label class="sl">Camera easting <b id="camVal">200 m</b><input type="range" id="camSlider" min="120" max="280" step="5" value="200"></label>
+        </div>
+        <div class="ctl-row">
+          <label class="sl">Tilt ω (roll) <b id="omVal">0°</b><input type="range" id="omSlider" min="-14" max="14" step="1" value="0"></label>
+          <label class="sl">Tilt φ (pitch) <b id="phVal">0°</b><input type="range" id="phSlider" min="-14" max="14" step="1" value="0"></label>
+        </div>
+        <div class="ctl-row">
+          <div class="zbtns" id="srcZoom"><button data-z="out">−</button><button data-z="in">+</button><button data-z="fit">fit</button></div>
+          <span class="hint">zoom <b id="srcZoomVal" style="font-family:var(--mono)">1.0×</b> · dbl-click / ctrl+scroll · drag to pan · click to probe</span>
+          <label class="chk"><input type="checkbox" id="chkGrid" checked> 50 m map grid</label>
+          <label class="chk"><input type="checkbox" id="chkFoot" checked> footprints</label>
+        </div>
+        <div class="callout" id="srcNote"></div>
+      </div>
+
+      <div class="panel">
+        <h3><span class="stepno">2</span> Geometry at the probe <span class="lt">— side view, drawn to scale</span></h3>
+        <canvas class="scene" id="secCanvas" width="640" height="380"></canvas>
+        <div class="ctl-row">
+          <div class="zbtns" id="secZoom"><button data-z="out">−</button><button data-z="in">+</button><button data-z="fit">fit</button></div>
+          <span class="hint">zoom <b id="secZoomVal" style="font-family:var(--mono)">1.0×</b> · ctrl+scroll or drag to pan</span>
+        </div>
+        <div class="probe-read">
+          <div class="stat"><div class="k">radial r</div><div class="v" id="pR">—</div></div>
+          <div class="stat"><div class="k">height h</div><div class="v" id="pH">—</div></div>
+          <div class="stat"><div class="k">flying H</div><div class="v" id="pFly">—</div></div>
+          <div class="stat"><div class="k">displacement d</div><div class="v" id="pD" style="color:var(--orange)">—</div></div>
+        </div>
+        <div class="eqn" id="pEqn">d = r · h / H</div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT ============ -->
+    <div class="col">
+      <div class="panel">
+        <h3><span class="stepno">3</span> Elevation models <span class="lt">— what links image to ground</span></h3>
+        <div class="elev-pair">
+          <div class="elev-cell" id="cellDtm"><canvas id="dtmCanvas" width="300" height="300"></canvas><div class="cap"><b>DTM</b> — bare earth</div></div>
+          <div class="elev-cell" id="cellDsm"><canvas id="dsmCanvas" width="300" height="300"></canvas><div class="cap"><b>DSM</b> — earth + buildings</div></div>
+        </div>
+        <div class="ramp-row"><span>0 m</span><span class="ramp"></span><span>60 m</span></div>
+      </div>
+
+      <div class="panel">
+        <h3><span class="stepno">4</span> Rectify — project onto the datum</h3>
+        <div class="modes" id="modes">
+          <button class="mode" data-mode="datum"><span class="dot"></span><span><b>No elevation — datum plane</b>
+            Z = 0 everywhere. Tilt is removed but all relief displacement stays.</span></button>
+          <button class="mode" data-mode="dtm"><span class="dot"></span><span><b>DTM — conventional orthophoto</b>
+            Terrain is corrected; buildings are not in the DTM, so roofs stay displaced and façades stay smeared.</span></button>
+          <button class="mode on" data-mode="dsm"><span class="dot"></span><span><b>DSM — TRUE orthophoto</b>
+            Every roof returns to its footprint as a true rectangle. Façades vanish; hidden ground becomes occlusion.</span></button>
+        </div>
+        <div class="ctl-row">
+          <label class="chk" id="wrapOcc"><input type="checkbox" id="chkOcc" checked> occlusion mask</label>
+          <label class="chk" id="wrapFill"><input type="checkbox" id="chkFill"> fill from neighbouring photos</label>
+          <label class="chk"><input type="checkbox" id="chkOGrid" checked> 50 m map grid</label>
+        </div>
+        <canvas class="scene" id="orthoCanvas" width="640" height="640" style="margin-top:10px"></canvas>
+        <div class="ctl-row"><span class="note" id="orthoStat">—</span></div>
+        <div class="callout" id="orthoNote">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="helpOverlay"><div class="modal">
+  <h2>From tilted photograph to map</h2>
+  <p>An aerial photo is a <b>central perspective</b> taken through one lens point, and it is never perfectly vertical —
+  there is always a little tilt (ω, φ). Two separate distortions follow:</p>
+  <ul>
+    <li><b>Tilt / perspective.</b> Because the photo plane is not parallel to the ground, a square on the ground images as a
+    <b>keystoned quadrilateral</b>. That is why the 50 m grid converges and why roofs are not rectangles in the photo.</li>
+    <li><b>Relief displacement.</b> Anything above the datum is imaged further from the <b>nadir</b> than its true map position,
+    by <span style="font-family:var(--mono)">d = r·h/H</span>.</li>
+  </ul>
+  <h4>Rectification is an inverse problem</h4>
+  <p>For every cell of the output map we ask <i>“what colour belongs at (X, Y)?”</i>. We take the elevation <b>Z</b> at that cell
+  from the elevation model, then the collinearity equations tell us exactly which image pixel saw (X, Y, Z). Both the tilt and the
+  relief are undone at once — provided the elevation surface is right:</p>
+  <ul>
+    <li><b>Datum</b> — Z = 0. Tilt is removed, relief displacement is not.</li>
+    <li><b>DTM</b> — terrain corrected. Buildings are absent from a DTM, so a roof pixel is projected down to the <i>ground</i> beside
+    the building: roofs stay displaced, façades stay smeared. The classic conventional orthophoto.</li>
+    <li><b>DSM</b> — the roof cell carries the roof’s own Z, so each roof returns to its footprint as a <b>true rectangle</b>. A façade
+    is vertical: it owns zero map area, so it <b>disappears</b>. This is the true orthophoto.</li>
+  </ul>
+  <h4>Occlusion</h4>
+  <p>The camera never saw ground hidden behind a tall building. A <b>visibility test</b> masks those cells; without it, façade pixels
+  are copied into the gap and the building ghosts. Production pipelines <b>fill from neighbouring overlapping photos</b> that did see
+  that ground — which is why true ortho demands high overlap.</p>
+  <div class="modal-actions"><button class="btn primary" id="btnHelpClose">Got it</button></div>
+</div></div>
+
+<div class="overlay" id="quizOverlay"><div class="modal">
+  <div style="display:flex;align-items:baseline;gap:10px"><h2 style="margin-right:auto">Concept check</h2><span class="qprog" id="qProg"></span></div>
+  <div id="quizBody"></div>
+  <div class="modal-actions"><button class="btn" id="btnQuizQuit">Close</button><button class="btn primary hide" id="btnQuizNext">Next ▶</button></div>
+</div></div>
+
+<script>
+'use strict';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const DEG=Math.PI/180;
+
+// ============================================================
+//  World (metres). Datum Z = 0.
+// ============================================================
+const WORLD=400, IMG=640, CXP=IMG/2, CYP=IMG/2, F=145;
+
+function terrain(x,y){
+  const hill=22*Math.exp(-(((x-300)**2)+((y-110)**2))/(2*72*72));
+  return Math.max(0, hill + 1.5*Math.sin(x/70) + 1.5*Math.cos(y/85) + 3 - 1.5);
+}
+const BUILDINGS=[
+  {x:150,y:150,w:34,d:26,h:46,roof:'#b0654a'},
+  {x: 92,y:236,w:42,d:22,h:18,roof:'#8a8f98'},
+  {x:212,y:118,w:26,d:30,h:26,roof:'#a75c43'},
+  {x:250,y:236,w:30,d:24,h:14,roof:'#7f8a94'},
+  {x: 96,y: 96,w:24,d:20,h:11,roof:'#9a6a4e'},
+  {x:186,y:288,w:48,d:20,h:22,roof:'#6e7a86'},
+  {x:298,y:186,w:22,d:18,h:12,roof:'#a8836a'},
+  {x: 60,y:170,w:20,d:16,h: 9,roof:'#93705a'},
+];
+// Each building sits on a FLAT pad at its centre terrain height, and that is
+// exactly how it is drawn. The DSM must agree, otherwise the rectifier samples
+// a roof plane the renderer never drew and roof edges smear by ~r·ΔZ/H.
+BUILDINGS.forEach(b=>{ b.zb=terrain(b.x+b.w/2,b.y+b.d/2); b.zt=b.zb+b.h; });
+function buildingAt(x,y){for(const b of BUILDINGS) if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.d) return b; return null;}
+const dtmAt=(x,y)=>terrain(x,y);
+const dsmAt=(x,y)=>{const b=buildingAt(x,y);return b?b.zt:terrain(x,y);};
+const DSMGRID=new Float32Array((WORLD+1)*(WORLD+1));
+for(let j=0;j<=WORLD;j++)for(let i=0;i<=WORLD;i++)DSMGRID[j*(WORLD+1)+i]=dsmAt(i,j);
+const dsmFast=(x,y)=>DSMGRID[clamp(Math.round(y),0,WORLD)*(WORLD+1)+clamp(Math.round(x),0,WORLD)];
+// terrain-only grid (smooth surface, 1 m lookup is plenty)
+const TERGRID=new Float32Array((WORLD+1)*(WORLD+1));
+for(let j=0;j<=WORLD;j++)for(let i=0;i<=WORLD;i++)TERGRID[j*(WORLD+1)+i]=terrain(i,j);
+const terFast=(x,y)=>TERGRID[clamp(Math.round(y),0,WORLD)*(WORLD+1)+clamp(Math.round(x),0,WORLD)];
+
+// Exact ray/axis-aligned-box overlap (slab method), returning the FULL
+// parameter interval [t0,t1] the ray spends inside the prism. Buildings are
+// prisms, so occlusion against them is solved analytically instead of marched,
+// removing the discretisation fringe at silhouettes entirely.
+// Returning the interval (not just the entry) matters: a ray starting just
+// beside a prism enters at t≈0 yet still passes right through it.
+const _rng={t0:0,t1:0};
+function boxRange(px,py,pz,dx,dy,dz,xmin,xmax,ymin,ymax,zmin,zmax){
+  let t0=-Infinity,t1=Infinity;
+  const P=[px,py,pz],D=[dx,dy,dz],MN=[xmin,ymin,zmin],MX=[xmax,ymax,zmax];
+  for(let i=0;i<3;i++){
+    if(Math.abs(D[i])<1e-12){ if(P[i]<MN[i]||P[i]>MX[i]) return null; continue; }
+    let ta=(MN[i]-P[i])/D[i], tb=(MX[i]-P[i])/D[i];
+    if(ta>tb){const s=ta;ta=tb;tb=s;}
+    if(ta>t0)t0=ta;
+    if(tb<t1)t1=tb;
+    if(t0>t1) return null;
+  }
+  _rng.t0=t0; _rng.t1=t1; return _rng;
+}
+const TER_MAX=(()=>{let m=0;for(let i=0;i<TERGRID.length;i++)if(TERGRID[i]>m)m=TERGRID[i];return m;})();
+// exact (un-quantised) DSM for the output cell height — keeps footprint edges
+// crisp at the 0.625 m output resolution
+const surfZ=(x,y,mode)=>mode==='datum'?0:mode==='dtm'?terrain(x,y):dsmAt(x,y);
+
+// ============================================================
+//  Full collinearity camera with rotation (ω, φ, κ)
+// ============================================================
+function rotM(o,p,k){
+  const co=Math.cos(o),so=Math.sin(o),cp=Math.cos(p),sp=Math.sin(p),ck=Math.cos(k),sk=Math.sin(k);
+  const Mo=[[1,0,0],[0,co,so],[0,-so,co]], Mp=[[cp,0,-sp],[0,1,0],[sp,0,cp]], Mk=[[ck,sk,0],[-sk,ck,0],[0,0,1]];
+  const mul=(A,B)=>{const C=[[0,0,0],[0,0,0],[0,0,0]];for(let i=0;i<3;i++)for(let j=0;j<3;j++)C[i][j]=A[i][0]*B[0][j]+A[i][1]*B[1][j]+A[i][2]*B[2][j];return C;};
+  return mul(Mk,mul(Mp,Mo));
+}
+function makeCam(X,Y,H,om,ph,ka){ return {X,Y,Z:H,om,ph,ka,M:rotM(om,ph,ka)}; }
+// world → image px.  With M = I this reduces to px = CXP + F(X−Xc)/(H−Z).
+function project(cam,X,Y,Z){
+  const M=cam.M, dx=X-cam.X, dy=Y-cam.Y, dz=Z-cam.Z;
+  const u=M[0][0]*dx+M[0][1]*dy+M[0][2]*dz;
+  const v=M[1][0]*dx+M[1][1]*dy+M[1][2]*dz;
+  const w=M[2][0]*dx+M[2][1]*dy+M[2][2]*dz;
+  if(w>=-1e-6) return null;                       // behind the lens
+  return [CXP - F*u/w, CYP - F*v/w];
+}
+// image px → world ray direction (unit-ish, pointing away from the lens)
+function pixelDir(cam,px,py){
+  // px−CXP = −F·u/w  ⇒  (u,v,w) ∝ w·(−a,−b,1); taking w = −1 gives (a,b,−1)
+  const a=(px-CXP)/F, b=(py-CYP)/F, M=cam.M;
+  const dc=[a,b,-1];                              // exact inverse of project()
+  return [ M[0][0]*dc[0]+M[1][0]*dc[1]+M[2][0]*dc[2],
+           M[0][1]*dc[0]+M[1][1]*dc[1]+M[2][1]*dc[2],
+           M[0][2]*dc[0]+M[1][2]*dc[1]+M[2][2]*dc[2] ];
+}
+// Where does a ray from the lens first meet the chosen surface?
+// Buildings are solved exactly (ray/prism); terrain is refined by bisection,
+// so the probe and the occlusion test agree to millimetres.
+function landOn(cam,dir,mode){
+  const L=Math.hypot(dir[0],dir[1],dir[2]), d=[dir[0]/L,dir[1]/L,dir[2]/L];
+  if(mode==='datum'){
+    const t=(0-cam.Z)/d[2];
+    return {X:cam.X+d[0]*t, Y:cam.Y+d[1]*t, Z:0, t};
+  }
+  // exact building entry (DSM only)
+  let tB=Infinity;
+  if(mode==='dsm'){
+    for(const b of BUILDINGS){
+      const r=boxRange(cam.X,cam.Y,cam.Z,d[0],d[1],d[2],
+        b.x,b.x+b.w,b.y,b.y+b.d,-10,b.zt);
+      if(r && r.t1>0.5){ const t=Math.max(r.t0,0); if(t<tB) tB=t; }
+    }
+  }
+  // terrain: march coarsely to bracket, then bisect
+  let tT=Infinity, prev=0.5;
+  const above=t=>cam.Z+d[2]*t - terFast(cam.X+d[0]*t, cam.Y+d[1]*t);
+  for(let t=1;t<1200;t+=1.0){
+    const x=cam.X+d[0]*t, y=cam.Y+d[1]*t, z=cam.Z+d[2]*t;
+    if(z<-6) break;
+    if(x<-250||x>WORLD+250||y<-250||y>WORLD+250) break;
+    if(above(t)<=0){
+      let lo=prev, hi=t;
+      for(let i=0;i<28;i++){ const m=(lo+hi)/2; if(above(m)>0) lo=m; else hi=m; }
+      tT=(lo+hi)/2; break;
+    }
+    prev=t;
+  }
+  let t=Math.min(tB,tT);
+  if(!isFinite(t)) t=(0-cam.Z)/d[2];
+  return {X:cam.X+d[0]*t, Y:cam.Y+d[1]*t, Z:cam.Z+d[2]*t, t};
+}
+// Conservative visibility march. `bias` is how far the (dilated) surface must
+// rise above the ray to count as blocking — smaller/negative blocks more
+// readily. The fill path passes a stricter bias, because copying a wrong pixel
+// from a neighbouring photo produces a visible ghost.
+// Is (x,y,z) visible from the lens?
+//   • buildings — solved EXACTLY as ray/prism intersections (no fringe)
+//   • terrain   — marched, but it is smooth so 3 m steps are ample
+// `pad` grows the prisms; the fill path passes a small positive pad so it only
+// borrows a pixel from a neighbour that clearly saw the ground.
+function visibleFrom(cam,x,y,z,pad,ownB){
+  pad=pad||0;
+  const dx=cam.X-x, dy=cam.Y-y, dz=cam.Z-z;
+  const segLen=Math.hypot(dx,dy,dz);
+  if(segLen<1e-6) return true;
+  const tEps=Math.min(0.05, 0.25/segLen);   // numerical touch only
+  for(const b of BUILDINGS){
+    if(b===ownB) continue;                  // a cell never occludes itself
+    const r=boxRange(x,y,z,dx,dy,dz,
+      b.x-pad, b.x+b.w+pad, b.y-pad, b.y+b.d+pad, -10, b.zt+pad);
+    // blocked if the ray is inside the prism anywhere before reaching the lens
+    if(r && r.t1>tEps && r.t0<1-1e-6) return false;
+  }
+  const horiz=Math.hypot(dx,dy);
+  if(horiz>1 && z<TER_MAX){
+    const steps=Math.max(3,Math.ceil(horiz/3));
+    const tS=Math.min(0.3,2.0/horiz);
+    for(let k=1;k<steps;k++){
+      const t=k/steps; if(t<tS) continue;
+      const pz=z+dz*t;
+      if(pz>TER_MAX) break;                 // above every hill — nothing left to block
+      if(terFast(x+dx*t,y+dy*t)>pz+0.15) return false;
+    }
+  }
+  return true;
+}
+
+// ============================================================
+//  State
+// ============================================================
+const state={ H:100, camX:200, camY:200, om:0, ph:0, ka:0,
+              mode:'dsm', occ:true, fill:false, grid:true, ogrid:true, foot:true,
+              probe:{x:167,y:163} };
+const cam1=()=>makeCam(state.camX,state.camY,state.H,state.om,state.ph,state.ka);
+// four neighbouring exposures, one air-base away in each direction
+function neighbours(){
+  const B=Math.max(70, state.H*0.9);
+  return [[ B,0],[-B,0],[0, B],[0,-B]].map(([dx,dy])=>
+    makeCam(clamp(state.camX+dx,20,WORLD-20), clamp(state.camY+dy,20,WORLD-20), state.H, state.om, state.ph, state.ka));
+}
+
+// ============================================================
+//  Rendering a view of the vector city
+// ============================================================
+const srcCanvas=document.getElementById('srcCanvas'), srcCtx=srcCanvas.getContext('2d');
+const srcOff=document.createElement('canvas'); srcOff.width=IMG; srcOff.height=IMG;
+let srcData=null;
+let nbCams=[], nbData=[], nbDirty=true;
+
+const RAMP=[[0,[60,107,57]],[.3,[123,161,90]],[.6,[201,189,122]],[.85,[201,143,86]],[1,[232,232,232]]];
+function hypso(z,zMax){
+  const t=clamp(z/zMax,0,1);
+  for(let i=0;i<RAMP.length-1;i++) if(t<=RAMP[i+1][0]){
+    const a=RAMP[i],b=RAMP[i+1],f=(t-a[0])/(b[0]-a[0]);
+    return a[1].map((v,k)=>Math.round(v+(b[1][k]-v)*f));
+  }
+  return RAMP[RAMP.length-1][1];
+}
+function shadeMix(hex,k){
+  const n=parseInt(hex.slice(1),16);
+  return `rgb(${clamp(Math.round(((n>>16)&255)*k),0,255)},${clamp(Math.round(((n>>8)&255)*k),0,255)},${clamp(Math.round((n&255)*k),0,255)})`;
+}
+
+function renderView(cam,ctx,opts){
+  opts=opts||{};
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#16222e'; ctx.fillRect(0,0,IMG,IMG);
+  const P=(x,y,z)=>project(cam,x,y,z);
+  const poly=(pts,fill,stroke,lw)=>{
+    if(pts.some(p=>!p)) return;
+    ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+    if(fill){ctx.fillStyle=fill;ctx.fill();}
+    if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||1;ctx.stroke();}
+  };
+  // ground tiles (terrain-following, 20 m) — rendered well beyond the map
+  // extent so a tilted photo never shows an empty void at its far edge
+  for(let gy=-200;gy<WORLD+200;gy+=20) for(let gx=-200;gx<WORLD+200;gx+=20){
+    const c=hypso(terrain(gx+10,gy+10),60);
+    const k=((gx+gy)/20)%2?1.0:.93;
+    poly([P(gx,gy,terrain(gx,gy)),P(gx+20,gy,terrain(gx+20,gy)),
+          P(gx+20,gy+20,terrain(gx+20,gy+20)),P(gx,gy+20,terrain(gx,gy+20))],
+      `rgb(${Math.round(c[0]*k)},${Math.round(c[1]*k)},${Math.round(c[2]*k)})`);
+  }
+  // roads
+  const road=(pts,w,col)=>{
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+    let started=false;
+    pts.forEach(q=>{const p=P(q[0],q[1],terrain(q[0],q[1])+.15); if(!p)return; started?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); started=true;});
+    ctx.strokeStyle=col;ctx.lineWidth=w;ctx.stroke();
+  };
+  const r1=[],r2=[];
+  for(let x=-200;x<=WORLD+200;x+=6) r1.push([x,210]);
+  for(let y=-200;y<=WORLD+200;y+=6) r2.push([140,y]);
+  road(r1,15,'#5c584f'); road(r1,11,'#8d887c');
+  road(r2,13,'#5c584f'); road(r2,9,'#8d887c');
+  ctx.setLineDash([9,9]); road(r1,1.7,'rgba(240,235,210,.9)'); ctx.setLineDash([]);
+  // 50 m map grid — keystones under tilt, proving the perspective distortion
+  if(opts.grid){
+    ctx.strokeStyle='rgba(120,200,255,.42)'; ctx.lineWidth=1.1;
+    for(let g=0;g<=WORLD;g+=50){
+      for(const axis of [0,1]){
+        ctx.beginPath(); let st=false;
+        for(let t=0;t<=WORLD;t+=5){
+          const x=axis?t:g, y=axis?g:t;
+          const p=P(x,y,terrain(x,y)+.1); if(!p) continue;
+          st?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); st=true;
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  // footprints
+  if(opts.foot){
+    ctx.setLineDash([6,5]);
+    for(const b of BUILDINGS)
+      poly([P(b.x,b.y,terrain(b.x,b.y)+.2),P(b.x+b.w,b.y,terrain(b.x+b.w,b.y)+.2),
+            P(b.x+b.w,b.y+b.d,terrain(b.x+b.w,b.y+b.d)+.2),P(b.x,b.y+b.d,terrain(b.x,b.y+b.d)+.2)],
+        null,'rgba(255,255,255,.85)',1.6);
+    ctx.setLineDash([]);
+  }
+  // buildings — painter's algorithm: FARTHEST from the lens first, so a nearer
+  // building correctly hides the one behind it
+  const sorted=BUILDINGS.slice().sort((a,b)=>{
+    const da=Math.hypot(a.x+a.w/2-cam.X,a.y+a.d/2-cam.Y,a.zt-cam.Z);
+    const db=Math.hypot(b.x+b.w/2-cam.X,b.y+b.d/2-cam.Y,b.zt-cam.Z);
+    return db-da;
+  });
+  for(const b of sorted){
+    const zb=b.zb, zt=b.zt;                     // flat pad — matches the DSM exactly
+    const c=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.d],[b.x,b.y+b.d]];
+    const base=c.map(q=>P(q[0],q[1],zb)), top=c.map(q=>P(q[0],q[1],zt));
+    if(base.some(p=>!p)||top.some(p=>!p)) continue;
+    for(let i=0;i<4;i++){
+      const j=(i+1)%4, shade=[.52,.68,.44,.60][i];
+      poly([base[i],base[j],top[j],top[i]],shadeMix(b.roof,shade),'rgba(20,16,12,.5)',.8);
+      const floors=Math.max(2,Math.round(b.h/5));
+      ctx.strokeStyle='rgba(255,235,205,.30)';ctx.lineWidth=1;
+      for(let k=1;k<floors;k++){
+        const t=k/floors; ctx.beginPath();
+        ctx.moveTo(base[i][0]+(top[i][0]-base[i][0])*t, base[i][1]+(top[i][1]-base[i][1])*t);
+        ctx.lineTo(base[j][0]+(top[j][0]-base[j][0])*t, base[j][1]+(top[j][1]-base[j][1])*t);
+        ctx.stroke();
+      }
+    }
+    poly(top,b.roof,'rgba(25,15,10,.65)',1.3);
+    const rc=P(b.x+b.w*.3,b.y+b.d*.35,zt), rc2=P(b.x+b.w*.72,b.y+b.d*.62,zt);
+    if(rc){ctx.fillStyle=shadeMix(b.roof,1.35);ctx.fillRect(rc[0]-3,rc[1]-3,6,6);}
+    if(rc2){ctx.fillStyle=shadeMix(b.roof,.7);ctx.beginPath();ctx.arc(rc2[0],rc2[1],3.4,0,7);ctx.fill();}
+  }
+  const vg=ctx.createRadialGradient(CXP,CYP,IMG*.4,CXP,CYP,IMG*.72);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(6,10,6,.22)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,IMG,IMG);
+}
+function renderSources(){
+  const c=srcOff.getContext('2d');
+  renderView(cam1(),c,{grid:state.grid,foot:state.foot});
+  srcData=c.getImageData(0,0,IMG,IMG);
+  nbDirty=true;
+}
+function ensureNeighbours(){
+  if(!nbDirty) return;
+  nbCams=neighbours(); nbData=[];
+  const cv=document.createElement('canvas'); cv.width=IMG; cv.height=IMG;
+  const cx=cv.getContext('2d');
+  for(const c of nbCams){ renderView(c,cx,{grid:false,foot:false}); nbData.push(cx.getImageData(0,0,IMG,IMG)); }
+  nbDirty=false;
+}
+
+// ---------- source view zoom / pan ----------
+const sview={z:1,ox:0,oy:0};
+function clampSView(){const vw=IMG/sview.z;sview.ox=clamp(sview.ox,0,IMG-vw);sview.oy=clamp(sview.oy,0,IMG-vw);}
+function setSrcZoom(z,ax,ay){
+  const z0=sview.z; z=clamp(z,1,12);
+  if(ax==null){ax=IMG/2;ay=IMG/2;}
+  const u=ax/z0+sview.ox, v=ay/z0+sview.oy;
+  sview.z=z; sview.ox=u-ax/z; sview.oy=v-ay/z; clampSView();
+  document.getElementById('srcZoomVal').textContent=z.toFixed(1)+'×';
+  drawSource();
+}
+const V=p=>p?[(p[0]-sview.ox)*sview.z,(p[1]-sview.oy)*sview.z]:null;
+
+function drawSource(){
+  srcCtx.setTransform(1,0,0,1,0,0); srcCtx.clearRect(0,0,IMG,IMG);
+  srcCtx.imageSmoothingEnabled=sview.z<3;
+  srcCtx.setTransform(sview.z,0,0,sview.z,-sview.ox*sview.z,-sview.oy*sview.z);
+  srcCtx.drawImage(srcOff,0,0);
+  srcCtx.setTransform(1,0,0,1,0,0);
+  const cam=cam1();
+  // nadir
+  const nd=V(project(cam,cam.X,cam.Y,0));
+  if(nd){
+    srcCtx.strokeStyle='#ffd23f';srcCtx.lineWidth=2;
+    srcCtx.beginPath();srcCtx.arc(nd[0],nd[1],9,0,7);srcCtx.stroke();
+    srcCtx.beginPath();srcCtx.moveTo(nd[0]-14,nd[1]);srcCtx.lineTo(nd[0]+14,nd[1]);
+    srcCtx.moveTo(nd[0],nd[1]-14);srcCtx.lineTo(nd[0],nd[1]+14);srcCtx.stroke();
+    srcCtx.fillStyle='#ffd23f';srcCtx.font='600 11px system-ui';srcCtx.fillText('nadir ⊕',nd[0]+12,nd[1]-10);
+  }
+  // probe: back-trace from the true map position to the recorded roof pixel
+  const pr=probeInfo();
+  if(pr&&pr.imgPt){
+    const ip=V(pr.imgPt), tp=V(project(cam,pr.X,pr.Y,terrain(pr.X,pr.Y)));
+    if(tp){
+      srcCtx.strokeStyle='#5fd07a';srcCtx.lineWidth=2;srcCtx.setLineDash([4,3]);
+      srcCtx.beginPath();srcCtx.arc(tp[0],tp[1],6,0,7);srcCtx.stroke();srcCtx.setLineDash([]);
+      srcCtx.strokeStyle='rgba(255,157,77,.95)';srcCtx.lineWidth=2;
+      srcCtx.beginPath();srcCtx.moveTo(tp[0],tp[1]);srcCtx.lineTo(ip[0],ip[1]);srcCtx.stroke();
+      const mx=(tp[0]+ip[0])/2, my=(tp[1]+ip[1])/2;
+      srcCtx.font='600 10px system-ui';
+      const t='d on photo';
+      const w=srcCtx.measureText(t).width+10;
+      srcCtx.fillStyle='rgba(10,17,24,.85)';srcCtx.beginPath();srcCtx.roundRect(mx+6,my-9,w,16,4);srcCtx.fill();
+      srcCtx.strokeStyle='#ff9d4d';srcCtx.lineWidth=1;srcCtx.stroke();
+      srcCtx.fillStyle='#ff9d4d';srcCtx.fillText(t,mx+11,my+3);
+    }
+    srcCtx.strokeStyle='#3fa9f5';srcCtx.lineWidth=2;
+    srcCtx.beginPath();srcCtx.arc(ip[0],ip[1],8,0,7);srcCtx.stroke();
+    srcCtx.beginPath();srcCtx.moveTo(ip[0]-11,ip[1]);srcCtx.lineTo(ip[0]+11,ip[1]);
+    srcCtx.moveTo(ip[0],ip[1]-11);srcCtx.lineTo(ip[0],ip[1]+11);srcCtx.stroke();
+  }
+}
+
+// ============================================================
+//  Probe
+// ============================================================
+function probeInfo(){
+  const cam=cam1(), b=buildingAt(state.probe.x,state.probe.y);
+  const zg=terrain(state.probe.x,state.probe.y), Z=zg+(b?b.h:0);
+  const imgPt=project(cam,state.probe.x,state.probe.y,Z);
+  if(!imgPt) return null;
+  const dir=pixelDir(cam,imgPt[0],imgPt[1]);
+  const t0=(0-cam.Z)/dir[2];
+  const datumX=cam.X+dir[0]*t0, datumY=cam.Y+dir[1]*t0;
+  return {X:state.probe.x,Y:state.probe.y,Z,h:Z,zg,b,imgPt,dir,datumX,datumY,
+          r:Math.hypot(datumX-cam.X,datumY-cam.Y),
+          rTrue:Math.hypot(state.probe.x-cam.X,state.probe.y-cam.Y)};
+}
+function srcCanvasPx(e){const r=srcCanvas.getBoundingClientRect();return [(e.clientX-r.left)*IMG/r.width,(e.clientY-r.top)*IMG/r.height];}
+let srcDrag=null;
+srcCanvas.addEventListener('pointerdown',e=>{const[cx,cy]=srcCanvasPx(e);srcDrag={cx,cy,ox:sview.ox,oy:sview.oy,moved:false};try{srcCanvas.setPointerCapture(e.pointerId);}catch(_){}});
+srcCanvas.addEventListener('pointermove',e=>{
+  if(!srcDrag)return; const[cx,cy]=srcCanvasPx(e);
+  if(Math.hypot(cx-srcDrag.cx,cy-srcDrag.cy)>6)srcDrag.moved=true;
+  if(srcDrag.moved&&sview.z>1){sview.ox=srcDrag.ox-(cx-srcDrag.cx)/sview.z;sview.oy=srcDrag.oy-(cy-srcDrag.cy)/sview.z;clampSView();drawSource();}
+});
+srcCanvas.addEventListener('pointerup',e=>{
+  if(!srcDrag)return; const wasDrag=srcDrag.moved&&sview.z>1; srcDrag=null; if(wasDrag)return;
+  const[cx,cy]=srcCanvasPx(e);
+  const px=cx/sview.z+sview.ox, py=cy/sview.z+sview.oy;
+  const hit=landOn(cam1(),pixelDir(cam1(),px,py),'dsm');
+  state.probe={x:clamp(hit.X,0,WORLD),y:clamp(hit.Y,0,WORLD)};
+  gview.auto=true; drawSource(); drawSection(); drawElevPair();
+});
+srcCanvas.addEventListener('dblclick',e=>{const[cx,cy]=srcCanvasPx(e);setSrcZoom(e.shiftKey?sview.z/1.8:sview.z*1.8,cx,cy);});
+srcCanvas.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();const[cx,cy]=srcCanvasPx(e);setSrcZoom(sview.z*(e.deltaY<0?1.25:1/1.25),cx,cy);},{passive:false});
+document.getElementById('srcZoom').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.z==='in')setSrcZoom(sview.z*1.6); else if(b.dataset.z==='out')setSrcZoom(sview.z/1.6);
+  else{sview.z=1;sview.ox=0;sview.oy=0;document.getElementById('srcZoomVal').textContent='1.0×';drawSource();}
+});
+
+// ============================================================
+//  Geometry side view (isotropic, zoomable)
+// ============================================================
+const secCanvas=document.getElementById('secCanvas'), xc=secCanvas.getContext('2d');
+const XW=secCanvas.width, XH=secCanvas.height;
+const gview={z:1,cs:0,cz:0,auto:true};
+
+function drawSection(){
+  xc.setTransform(1,0,0,1,0,0); xc.clearRect(0,0,XW,XH);
+  xc.fillStyle='#0e1620'; xc.fillRect(0,0,XW,XH);
+  const pr=probeInfo();
+  if(!pr){xc.fillStyle='#5b6b7a';xc.font='12px system-ui';xc.fillText('probe outside the photo',20,XH/2);return;}
+  const cam=cam1();
+  let ux=pr.X-cam.X, uy=pr.Y-cam.Y;
+  const rr=Math.hypot(ux,uy)||1; ux/=rr; uy/=rr;
+  const sDisp=Math.hypot(pr.datumX-cam.X,pr.datumY-cam.Y);
+  // where the rectifier actually puts this pixel, for the SELECTED surface
+  const land=landOn(cam,pr.dir,state.mode);
+  const sLand=(land.X-cam.X)*ux+(land.Y-cam.Y)*uy;
+
+  const gx0=52,gx1=XW-14,gy0=XH-54,gy1=28;
+  const sLo=-40, sHi=Math.max(sDisp,sLand,rr)*1.18+40, zTop=state.H+22;
+  if(gview.auto){ gview.cs=(sLo+sHi)/2; gview.cz=zTop/2; }
+  const base=Math.min((gx1-gx0)/(sHi-sLo),(gy0-gy1)/zTop);
+  const sc=base*gview.z;                                  // ISOTROPIC px per metre
+  const cxp=(gx0+gx1)/2, cyp=(gy0+gy1)/2;
+  const sx=s=>cxp+(s-gview.cs)*sc, zy=z=>cyp-(z-gview.cz)*sc;
+
+  const pill=(x,y,txt,col,align)=>{
+    xc.font='600 11px system-ui';
+    const w=xc.measureText(txt).width+12;
+    let lx=align==='center'?x-w/2:align==='right'?x-w:x;
+    lx=clamp(lx,4,XW-w-4); const ly=clamp(y,16,XH-6);
+    xc.fillStyle='rgba(10,17,24,.9)';xc.beginPath();xc.roundRect(lx,ly-13,w,18,5);xc.fill();
+    xc.strokeStyle=col;xc.lineWidth=1;xc.stroke();
+    xc.fillStyle=col;xc.fillText(txt,lx+6,ly+1);
+  };
+  xc.save(); xc.beginPath(); xc.rect(gx0-40,0,gx1-gx0+56,XH); xc.clip();
+
+  // height axis
+  xc.font='9.5px system-ui';xc.textAlign='right';
+  const step=state.H>160?40:20;
+  for(let z=0;z<=state.H;z+=step){
+    const y=zy(z); if(y<gy1-14||y>gy0+8) continue;
+    xc.strokeStyle='rgba(120,150,175,.12)';xc.lineWidth=1;
+    if(z>0){xc.beginPath();xc.moveTo(gx0,y);xc.lineTo(gx1,y);xc.stroke();}
+    xc.strokeStyle='rgba(140,163,181,.75)';xc.beginPath();xc.moveTo(gx0-4,y);xc.lineTo(gx0,y);xc.stroke();
+    xc.fillStyle='#8ea3b5';xc.fillText(z+' m',gx0-7,y+3);
+  }
+  xc.textAlign='left';
+
+  // surfaces
+  const N=200, prof=(fn)=>{
+    xc.beginPath(); let st=false;
+    for(let i=0;i<=N;i++){
+      const s=sLo+(sHi-sLo)*i/N, x=cam.X+ux*s, y=cam.Y+uy*s;
+      const z=(x<0||x>WORLD||y<0||y>WORLD)?0:fn(x,y);
+      st?xc.lineTo(sx(s),zy(z)):xc.moveTo(sx(s),zy(z)); st=true;
+    }
+  };
+  prof((x,y)=>dsmFast(x,y)); xc.lineTo(sx(sHi),zy(0)); xc.lineTo(sx(sLo),zy(0)); xc.closePath();
+  xc.fillStyle='rgba(110,145,110,.25)';xc.fill();
+  prof((x,y)=>dsmFast(x,y)); xc.strokeStyle=state.mode==='dsm'?'#9fe89f':'#8fd08f';
+  xc.lineWidth=state.mode==='dsm'?3:2; xc.stroke();
+  prof(terrain); xc.setLineDash([6,4]); xc.strokeStyle=state.mode==='dtm'?'#ffd98a':'#e0c07a';
+  xc.lineWidth=state.mode==='dtm'?3:2; xc.stroke(); xc.setLineDash([]);
+  xc.strokeStyle=state.mode==='datum'?'#a9ccea':'#7fa3c0'; xc.lineWidth=state.mode==='datum'?3:2;
+  xc.beginPath();xc.moveTo(sx(sLo),zy(0));xc.lineTo(sx(sHi),zy(0));xc.stroke();
+
+  // camera + tilted photo plane
+  const camPx=[sx(0),zy(state.H)];
+  // optical axis in this vertical plane
+  const M=cam.M, axW=[-M[2][0],-M[2][1],-M[2][2]];
+  let axS=axW[0]*ux+axW[1]*uy, axZ=axW[2];
+  const aL=Math.hypot(axS,axZ)||1; axS/=aL; axZ/=aL;
+  const fDist=Math.max(12,state.H*0.16);
+  const pc=[0+axS*fDist, state.H+axZ*fDist];             // photo centre in (s,z)
+  const pdir=[-axZ,axS];                                  // along the photo plane
+  const half=Math.max(46,state.H*0.55);
+  const pA=[pc[0]-pdir[0]*half,pc[1]-pdir[1]*half], pB=[pc[0]+pdir[0]*half,pc[1]+pdir[1]*half];
+  xc.strokeStyle='#e8f4ff';xc.lineWidth=3;xc.lineCap='round';
+  xc.beginPath();xc.moveTo(sx(pA[0]),zy(pA[1]));xc.lineTo(sx(pB[0]),zy(pB[1]));xc.stroke();
+  pill(sx(pA[0])-6,zy(pA[1])+2,'the photo (tilted)','#cfe0ef','right');
+  // camera body
+  xc.fillStyle='#1d2a38';xc.strokeStyle='#5f7387';xc.lineWidth=1.4;
+  xc.fillRect(camPx[0]-17,camPx[1]-20,34,18);xc.strokeRect(camPx[0]-17,camPx[1]-20,34,18);
+  xc.fillStyle='#9db4c9';xc.font='600 9px system-ui';xc.textAlign='center';
+  xc.fillText('camera',camPx[0],camPx[1]-8);xc.textAlign='left';
+  xc.fillStyle='#e8f4ff';xc.beginPath();xc.arc(camPx[0],camPx[1],2.6,0,7);xc.fill();
+  // nadir plumb
+  xc.setLineDash([2,4]);xc.strokeStyle='rgba(255,210,63,.8)';xc.lineWidth=1.2;
+  xc.beginPath();xc.moveTo(camPx[0],camPx[1]);xc.lineTo(sx(0),zy(0));xc.stroke();xc.setLineDash([]);
+  xc.fillStyle='#ffd23f';xc.font='600 10px system-ui';xc.fillText('⊕ nadir',sx(0)-20,zy(0)+15);
+
+  // intersect a (s,z) ray with the photo plane
+  const pierce=(P2)=>{
+    const r=[P2[0]-0,P2[1]-state.H];
+    const den=r[0]*pdir[1]-r[1]*pdir[0];
+    if(Math.abs(den)<1e-9) return null;
+    const q=[pc[0]-0,pc[1]-state.H];
+    const t=(q[0]*pdir[1]-q[1]*pdir[0])/den;
+    return [0+r[0]*t, state.H+r[1]*t];
+  };
+  const Pp2=[rr,pr.h], Tp2=[rr,0], Dp2=[sDisp,0], Lp2=[sLand,land.Z];
+  const aPix=pierce(Pp2), aPixT=pierce(Tp2);
+
+  // rays
+  xc.strokeStyle='#ff5a3c';xc.lineWidth=2.2;
+  xc.beginPath();xc.moveTo(camPx[0],camPx[1]);xc.lineTo(sx(Pp2[0]),zy(Pp2[1]));xc.stroke();
+  xc.setLineDash([5,4]);
+  xc.beginPath();xc.moveTo(sx(Pp2[0]),zy(Pp2[1]));xc.lineTo(sx(Dp2[0]),zy(0));xc.stroke();
+  xc.setLineDash([]);
+  // back-trace ray: lens → true map position (its own pixel on the photo)
+  xc.strokeStyle='rgba(95,208,122,.85)';xc.lineWidth=1.6;xc.setLineDash([3,3]);
+  xc.beginPath();xc.moveTo(camPx[0],camPx[1]);xc.lineTo(sx(Tp2[0]),zy(0));xc.stroke();xc.setLineDash([]);
+  // vertical drop
+  xc.strokeStyle='#5fd07a';xc.lineWidth=2;xc.setLineDash([3,3]);
+  xc.beginPath();xc.moveTo(sx(Pp2[0]),zy(Pp2[1]));xc.lineTo(sx(Tp2[0]),zy(0));xc.stroke();xc.setLineDash([]);
+  // displacement on the ground
+  xc.strokeStyle='#ff9d4d';xc.lineWidth=2.6;
+  xc.beginPath();xc.moveTo(sx(Tp2[0]),zy(0)+9);xc.lineTo(sx(Dp2[0]),zy(0)+9);xc.stroke();
+  xc.beginPath();xc.moveTo(sx(Dp2[0]),zy(0)+9);xc.lineTo(sx(Dp2[0])-7,zy(0)+5);xc.lineTo(sx(Dp2[0])-7,zy(0)+13);xc.closePath();
+  xc.fillStyle='#ff9d4d';xc.fill();
+  // the image-space displacement, measured ON the photo
+  if(aPix&&aPixT){
+    xc.strokeStyle='#ff9d4d';xc.lineWidth=3;
+    xc.beginPath();xc.moveTo(sx(aPix[0]),zy(aPix[1]));xc.lineTo(sx(aPixT[0]),zy(aPixT[1]));xc.stroke();
+  }
+  // where the rectifier lands this pixel with the CURRENT surface
+  const okDsm=state.mode==='dsm';
+  xc.strokeStyle=okDsm?'#5fd07a':'#ff5a3c';xc.lineWidth=2;
+  xc.beginPath();xc.arc(sx(Lp2[0]),zy(Lp2[1]),8,0,7);xc.stroke();
+
+  const dot=(p,col,r)=>{xc.fillStyle=col;xc.beginPath();xc.arc(p[0],p[1],r||4.5,0,7);xc.fill();
+    xc.strokeStyle='rgba(255,255,255,.85)';xc.lineWidth=1.2;xc.stroke();};
+  if(aPix) dot([sx(aPix[0]),zy(aPix[1])],'#ff9d4d',4);
+  if(aPixT) dot([sx(aPixT[0]),zy(aPixT[1])],'#5fd07a',3.6);
+  if(pr.b){
+    dot([sx(rr),zy(pr.zg)],'#e0c07a',3.6);
+    xc.fillStyle='#e0c07a';xc.font='600 9.5px system-ui';xc.textAlign='right';
+    xc.fillText('DTM '+pr.zg.toFixed(1)+' m',sx(rr)-9,zy(pr.zg)-5);xc.textAlign='left';
+  }
+  dot([sx(Pp2[0]),zy(Pp2[1])],'#3fa9f5'); dot([sx(Tp2[0]),zy(0)],'#5fd07a'); dot([sx(Dp2[0]),zy(0)],'#ff5a3c');
+
+  // labels
+  if(aPix) pill(sx(aPix[0])+9,zy(aPix[1])-8,'pixel a','#ff9d4d');
+  if(aPixT) pill(sx(aPixT[0])-9,zy(aPixT[1])+16,"pixel a′ (true position)",'#5fd07a','right');
+  const pTxt='P — roof, what pixel a saw';
+  if(sx(Pp2[0])>XW-330) pill(sx(Pp2[0])-10,zy(Pp2[1])-8,pTxt,'#3fa9f5','right');
+  else pill(sx(Pp2[0])+10,zy(Pp2[1])-8,pTxt,'#3fa9f5');
+  pill(sx(Tp2[0])-8,zy(0)-30,'true map position','#5fd07a',sx(Tp2[0])>XW/2?'right':'left');
+  pill((sx(Tp2[0])+sx(Dp2[0]))/2,zy(0)+30,'d = '+(sDisp-rr).toFixed(1)+' m','#ff9d4d','center');
+  const resid=Math.hypot(land.X-pr.X,land.Y-pr.Y);
+  pill(sx(Lp2[0])+11,zy(Lp2[1])+(okDsm?-16:26),
+    okDsm?'rectified here ✓ (error 0.0 m)':`rectified here with ${state.mode.toUpperCase()} — off by ${resid.toFixed(1)} m`,
+    okDsm?'#5fd07a':'#ff5a3c');
+  xc.restore();
+
+  xc.fillStyle='#7d8fa1';xc.font='9.5px system-ui';
+  xc.fillText('drawn to scale (isotropic) — the ray is one straight line through the lens',gx0+2,16);
+
+  // readouts
+  document.getElementById('pR').innerHTML=sDisp.toFixed(0)+' <small>m</small>';
+  document.getElementById('pH').innerHTML=pr.h.toFixed(1)+' <small>m</small>';
+  document.getElementById('pFly').innerHTML=state.H+' <small>m</small>';
+  document.getElementById('pD').innerHTML=(sDisp-rr).toFixed(1)+' <small>m</small>';
+  const hSplit=pr.b
+    ? `h = DTM ${pr.zg.toFixed(1)} + building ${pr.b.h.toFixed(1)} = <b>${pr.h.toFixed(1)} m</b> (DSM)`
+    : `h = DTM terrain = <b>${pr.h.toFixed(1)} m</b> (no building, DSM = DTM)`;
+  document.getElementById('pEqn').innerHTML=
+    `${hSplit}<br>d = r·h/H = ${sDisp.toFixed(0)} × ${pr.h.toFixed(1)} / ${state.H} = <span class="hl">${(sDisp*pr.h/state.H).toFixed(1)} m</span>`+
+    `<br>Rectifying with <b>${state.mode.toUpperCase()}</b>: the ray through pixel a meets that surface at ${resid<0.5?'the footprint — <b style="color:#0f8a4d">exactly right</b>':`<b style="color:#c62828">${resid.toFixed(1)} m away</b> from the footprint`}.`;
+}
+// geometry zoom / pan
+let secDrag=null;
+secCanvas.addEventListener('pointerdown',e=>{secDrag={x:e.clientX,y:e.clientY,cs:gview.cs,cz:gview.cz};secCanvas.classList.add('grab');try{secCanvas.setPointerCapture(e.pointerId);}catch(_){}});
+secCanvas.addEventListener('pointermove',e=>{
+  if(!secDrag)return;
+  const r=secCanvas.getBoundingClientRect(), k=XW/r.width;
+  const pr=probeInfo(); if(!pr)return;
+  const cam=cam1(), rr=Math.hypot(pr.X-cam.X,pr.Y-cam.Y)||1;
+  const sDisp=Math.hypot(pr.datumX-cam.X,pr.datumY-cam.Y);
+  const sLo=-40,sHi=Math.max(sDisp,rr)*1.18+40,zTop=state.H+22;
+  const base=Math.min((XW-14-52)/(sHi-sLo),(XH-54-28)/zTop), sc=base*gview.z;
+  gview.auto=false;
+  gview.cs=secDrag.cs-(e.clientX-secDrag.x)*k/sc;
+  gview.cz=secDrag.cz+(e.clientY-secDrag.y)*k/sc;
+  drawSection();
+});
+window.addEventListener('pointerup',()=>{secDrag=null;secCanvas.classList.remove('grab');});
+secCanvas.addEventListener('wheel',e=>{
+  if(!e.ctrlKey&&!e.metaKey)return; e.preventDefault();
+  gview.z=clamp(gview.z*(e.deltaY<0?1.25:1/1.25),1,10); gview.auto=false;
+  document.getElementById('secZoomVal').textContent=gview.z.toFixed(1)+'×'; drawSection();
+},{passive:false});
+document.getElementById('secZoom').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.z==='in'){gview.z=clamp(gview.z*1.5,1,10);gview.auto=false;}
+  else if(b.dataset.z==='out'){gview.z=clamp(gview.z/1.5,1,10);gview.auto=false;}
+  else{gview.z=1;gview.auto=true;}
+  document.getElementById('secZoomVal').textContent=gview.z.toFixed(1)+'×'; drawSection();
+});
+
+// ============================================================
+//  Elevation model panels
+// ============================================================
+const dtmCanvas=document.getElementById('dtmCanvas'), dsmCanvas=document.getElementById('dsmCanvas');
+function drawElevModel(canvas,fn){
+  const ctx=canvas.getContext('2d'), S=canvas.width, img=ctx.createImageData(S,S);
+  for(let py=0;py<S;py++)for(let px=0;px<S;px++){
+    const c=hypso(fn(px/S*WORLD,py/S*WORLD),60), i=(py*S+px)*4;
+    img.data[i]=c[0];img.data[i+1]=c[1];img.data[i+2]=c[2];img.data[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+}
+function drawElevPair(){
+  drawElevModel(dtmCanvas,dtmAt); drawElevModel(dsmCanvas,dsmAt);
+  for(const cv of [dtmCanvas,dsmCanvas]){
+    const ctx=cv.getContext('2d'), S=cv.width;
+    const px=state.probe.x/WORLD*S, py=state.probe.y/WORLD*S;
+    ctx.strokeStyle='#3fa9f5';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(px-9,py);ctx.lineTo(px+9,py);ctx.moveTo(px,py-9);ctx.lineTo(px,py+9);ctx.stroke();
+  }
+  document.getElementById('cellDtm').classList.toggle('on',state.mode==='dtm');
+  document.getElementById('cellDsm').classList.toggle('on',state.mode==='dsm');
+}
+
+// ============================================================
+//  THE RECTIFIER
+// ============================================================
+const orthoCanvas=document.getElementById('orthoCanvas'), oc=orthoCanvas.getContext('2d');
+let orthoTimer=null;
+function sampleSrc(data,px,py){
+  const x=Math.round(px),y=Math.round(py);
+  if(x<0||x>=IMG||y<0||y>=IMG) return null;
+  const i=(y*IMG+x)*4; return [data.data[i],data.data[i+1],data.data[i+2]];
+}
+function computeOrtho(stride){
+  const t0=performance.now();
+  const out=oc.createImageData(IMG,IMG);
+  const c1=cam1(), mode=state.mode;
+  const doOcc=mode==='dsm'&&state.occ, doFill=state.fill;
+  if(doFill) ensureNeighbours();
+  let occN=0,fillN=0,noCov=0,tot=0;
+  for(let py=0;py<IMG;py+=stride){
+    const Y=py/IMG*WORLD;
+    for(let px=0;px<IMG;px+=stride){
+      const X=px/IMG*WORLD;
+      const Z=surfZ(X,Y,mode);
+      const ownB=mode==='dsm'?buildingAt(X,Y):null;
+      let col=null; tot++;
+      const occluded=doOcc&&!visibleFrom(c1,X,Y,Z,0,ownB);
+      if(!occluded){
+        const ip=project(c1,X,Y,Z);
+        if(ip) col=sampleSrc(srcData,ip[0],ip[1]);
+      } else occN++;
+      if(!col&&doFill){
+        for(let n=0;n<nbCams.length;n++){
+          // padded prisms: only fill from a neighbour that CLEARLY saw this
+          // ground, otherwise we paste its façade in and the building ghosts
+          if(!visibleFrom(nbCams[n],X,Y,Z,0.8,ownB)) continue;
+          const ip2=project(nbCams[n],X,Y,Z); if(!ip2) continue;
+          const s2=sampleSrc(nbData[n],ip2[0],ip2[1]);
+          if(s2){col=s2;fillN++;break;}
+        }
+      }
+      if(!col){
+        if(occluded){const hat=((px+py)%14)<7; col=hat?[52,58,66]:[36,40,46];}
+        else {noCov++; col=[24,30,38];}
+      }
+      for(let dy=0;dy<stride&&py+dy<IMG;dy++)for(let dx=0;dx<stride&&px+dx<IMG;dx++){
+        const i=((py+dy)*IMG+(px+dx))*4;
+        out.data[i]=col[0];out.data[i+1]=col[1];out.data[i+2]=col[2];out.data[i+3]=255;
+      }
+    }
+  }
+  oc.putImageData(out,0,0);
+  const k=IMG/WORLD;
+  // 50 m map grid — perfectly square here, proving the output is undistorted
+  if(state.ogrid){
+    oc.strokeStyle='rgba(120,200,255,.5)';oc.lineWidth=1.1;
+    for(let g=0;g<=WORLD;g+=50){
+      oc.beginPath();oc.moveTo(g*k,0);oc.lineTo(g*k,IMG);oc.stroke();
+      oc.beginPath();oc.moveTo(0,g*k);oc.lineTo(IMG,g*k);oc.stroke();
+    }
+  }
+  if(state.foot){
+    oc.strokeStyle='rgba(255,255,255,.9)';oc.lineWidth=1.6;oc.setLineDash([6,5]);
+    for(const b of BUILDINGS) oc.strokeRect(b.x*k,b.y*k,b.w*k,b.d*k);
+    oc.setLineDash([]);
+  }
+  const ms=performance.now()-t0;
+  document.getElementById('orthoStat').innerHTML=
+    `computed in ${ms.toFixed(0)} ms · `+
+    (doOcc?`occluded <b>${(occN/tot*100).toFixed(1)}%</b> · `:'')+
+    (doFill?`filled from neighbours <b>${(fillN/tot*100).toFixed(1)}%</b> · `:'')+
+    `outside this photo <b>${(noCov/tot*100).toFixed(1)}%</b>`;
+  const notes={
+    datum:'Tilt has been removed — the 50 m grid is square again — but <b>relief displacement remains</b>: roofs still sit off their dashed footprints and façades are still smeared. Rectifying onto a flat datum is not orthorectification.',
+    dtm:'Terrain is corrected and the grid is square, but buildings are not in a DTM: each roof pixel is projected down to the <i>ground</i> beside the building, so roofs stay displaced and façades stay visible. <b>The classic conventional orthophoto.</b>',
+    dsm:state.occ
+      ? 'Every roof is back on its dashed footprint as a <b>true rectangle</b> and the façades have <b>disappeared</b> — a wall is vertical, so it owns zero map area. Hatched zones are ground this photo never saw.'
+      : 'Without the visibility test, façade pixels are copied into ground the camera never saw and the building <b>ghosts</b>. Turn the occlusion mask back on.'
+  };
+  document.getElementById('orthoNote').innerHTML=notes[mode];
+  document.getElementById('orthoNote').className='callout '+(mode==='dsm'&&state.occ?'good':mode==='dsm'?'warn':'');
+}
+function scheduleOrtho(fast){
+  if(orthoTimer)clearTimeout(orthoTimer);
+  computeOrtho(fast?4:2);
+  orthoTimer=setTimeout(()=>computeOrtho(1),150);
+}
+
+// ============================================================
+//  Controls
+// ============================================================
+function updateSrcNote(){
+  const tilted=Math.abs(state.om)>1e-9||Math.abs(state.ph)>1e-9;
+  document.getElementById('srcNote').innerHTML = tilted
+    ? `<b>The photo is tilted, so the 50 m grid keystones and every roof images as a quadrilateral — not a rectangle.</b>
+       On top of that, roofs shift radially from the nadir ⊕. Zoom in and <b>click any roof</b> to probe it.`
+    : `<b>A truly vertical photo (ω = φ = 0):</b> the 50 m grid stays square and roofs image as rectangles — so the
+       <i>only</i> distortion here is <b>relief displacement</b>, pushing every roof radially away from the nadir ⊕.
+       Add tilt below to make the grid keystone as well. Zoom in and <b>click any roof</b> to probe it.`;
+}
+function refreshAll(fast){
+  renderSources(); drawSource(); drawSection(); drawElevPair(); updateSrcNote(); scheduleOrtho(fast);
+}
+document.getElementById('hSlider').addEventListener('input',e=>{
+  state.H=+e.target.value; document.getElementById('hVal').textContent=state.H+' m';
+  gview.auto=true; refreshAll(true);
+});
+document.getElementById('camSlider').addEventListener('input',e=>{
+  state.camX=+e.target.value; document.getElementById('camVal').textContent=state.camX+' m';
+  gview.auto=true; refreshAll(true);
+});
+document.getElementById('omSlider').addEventListener('input',e=>{
+  state.om=(+e.target.value)*DEG; document.getElementById('omVal').textContent=e.target.value+'°'; refreshAll(true);
+});
+document.getElementById('phSlider').addEventListener('input',e=>{
+  state.ph=(+e.target.value)*DEG; document.getElementById('phVal').textContent=e.target.value+'°'; refreshAll(true);
+});
+document.getElementById('chkGrid').addEventListener('change',e=>{state.grid=e.target.checked;renderSources();drawSource();});
+document.getElementById('chkFoot').addEventListener('change',e=>{state.foot=e.target.checked;renderSources();drawSource();scheduleOrtho(false);});
+document.getElementById('chkOGrid').addEventListener('change',e=>{state.ogrid=e.target.checked;scheduleOrtho(false);});
+document.getElementById('modes').addEventListener('click',e=>{
+  const b=e.target.closest('.mode');if(!b)return;
+  state.mode=b.dataset.mode;
+  [...document.querySelectorAll('.mode')].forEach(m=>m.classList.toggle('on',m===b));
+  syncOccUI();drawElevPair();drawSection();scheduleOrtho(false);
+});
+const pickMode=md=>{ state.mode=md;
+  [...document.querySelectorAll('.mode')].forEach(m=>m.classList.toggle('on',m.dataset.mode===md));
+  syncOccUI();drawElevPair();drawSection();scheduleOrtho(false); };
+document.getElementById('cellDtm').addEventListener('click',()=>pickMode('dtm'));
+document.getElementById('cellDsm').addEventListener('click',()=>pickMode('dsm'));
+document.getElementById('chkOcc').addEventListener('change',e=>{state.occ=e.target.checked;syncOccUI();scheduleOrtho(false);});
+document.getElementById('chkFill').addEventListener('change',e=>{state.fill=e.target.checked;scheduleOrtho(false);});
+function syncOccUI(){
+  const isDsm=state.mode==='dsm';
+  document.getElementById('wrapOcc').style.opacity=isDsm?1:.38;
+  document.getElementById('chkOcc').disabled=!isDsm;
+}
+document.getElementById('btnHelp').addEventListener('click',()=>document.getElementById('helpOverlay').classList.add('open'));
+document.getElementById('btnHelpClose').addEventListener('click',()=>document.getElementById('helpOverlay').classList.remove('open'));
+
+// ============================================================
+//  Quiz
+// ============================================================
+const QUIZ=[
+  {q:'Raise the tilt sliders and the 50 m grid squares image as keystoned quadrilaterals. What causes that?',
+   opts:['Relief displacement','Camera tilt (ω, φ) — the photo plane is not parallel to the ground','Earth curvature','Lens vignetting'],r:1,
+   why:'Tilt makes the image a true perspective of the ground plane, so parallel lines converge. Relief displacement is a separate, radial effect caused by height.'},
+  {q:'A roof images as a quadrilateral, yet in the true orthophoto it is an exact rectangle. Why?',
+   opts:['The rectifier smooths the edges','The output is a map projection — every cell is mapped to its true (X,Y), removing tilt and relief together','Rectangles are drawn on afterwards','The DSM stores rectangles'],r:1,
+   why:'Rectification asks “what belongs at (X,Y)?” for every output cell, so the result is in map geometry by construction — orthogonal, uniform scale.'},
+  {q:'Rectifying with a DTM, where does a roof pixel end up?',
+   opts:['On the building footprint','Projected down onto the ground beside the building, still displaced','Deleted as an outlier','Exactly at the nadir'],r:1,
+   why:'A DTM has no buildings, so the ray through that pixel is intersected with bare earth — landing beyond the footprint. That residual is what makes buildings lean in a conventional ortho.'},
+  {q:'Why do façades disappear in a true orthophoto?',
+   opts:['They are painted over','A vertical wall has no footprint area in a map projection — nowhere to go','The DSM filters them','The camera cannot image façades'],r:1,
+   why:'Seen from directly above, a vertical surface collapses to a line of zero width, so it occupies no map cells.'},
+  {q:'d = r·h/H. Which change REDUCES relief displacement?',
+   opts:['Flying higher (larger H)','Taller buildings','Points further from the nadir','More camera tilt'],r:0,
+   why:'Displacement scales with r·h and inversely with H — try the flying-height slider and watch d fall.'},
+];
+let quiz=null;
+document.getElementById('btnQuiz').addEventListener('click',()=>{quiz={i:0,score:0,answered:false};document.getElementById('quizOverlay').classList.add('open');renderQuiz();});
+function renderQuiz(){
+  const q=QUIZ[quiz.i];
+  document.getElementById('qProg').textContent=`${quiz.i+1} / ${QUIZ.length} · score ${quiz.score}`;
+  document.getElementById('btnQuizNext').classList.add('hide');
+  const body=document.getElementById('quizBody');
+  body.innerHTML=`<p style="font-size:14.5px;color:var(--text)">${q.q}</p>
+    <div class="qopts">${q.opts.map((o,i)=>`<button class="qopt" data-i="${i}">${o}</button>`).join('')}</div><div id="qfb"></div>`;
+  body.querySelectorAll('.qopt').forEach(b=>b.addEventListener('click',()=>{
+    if(quiz.answered)return; quiz.answered=true;
+    const pick=+b.dataset.i, ok=pick===q.r; if(ok)quiz.score++;
+    body.querySelectorAll('.qopt').forEach((bb,bi)=>{bb.disabled=true;
+      if(bi===q.r)bb.classList.add('right'); else if(bi===pick)bb.classList.add('wrong');});
+    document.getElementById('qfb').innerHTML=`<div class="qfeedback"><b>${ok?'Correct.':'Not quite.'}</b> ${q.why}</div>`;
+    document.getElementById('qProg').textContent=`${quiz.i+1} / ${QUIZ.length} · score ${quiz.score}`;
+    const nx=document.getElementById('btnQuizNext');
+    nx.classList.remove('hide'); nx.textContent=quiz.i===QUIZ.length-1?'See result ▶':'Next ▶';
+  }));
+}
+document.getElementById('btnQuizNext').addEventListener('click',()=>{
+  if(quiz.i===QUIZ.length-1){
+    const pct=Math.round(quiz.score/QUIZ.length*100);
+    document.getElementById('scoreChip').innerHTML=`Concept check: <b>${pct}%</b>`;
+    document.getElementById('quizBody').innerHTML=
+      `<p style="font-size:15px;color:var(--text)"><b>${quiz.score} / ${QUIZ.length}</b> correct — ${pct}%.</p>
+       <p>${pct>=80?'You have the geometry. Try raising the tilt and watching the grid keystone, then rectify.':'Switch between datum → DTM → DSM while watching one roof against its dashed footprint.'}</p>`;
+    document.getElementById('btnQuizNext').classList.add('hide'); return;
+  }
+  quiz.i++; quiz.answered=false; renderQuiz();
+});
+document.getElementById('btnQuizQuit').addEventListener('click',()=>document.getElementById('quizOverlay').classList.remove('open'));
+
+// ============================================================
+//  Boot
+// ============================================================
+syncOccUI(); refreshAll(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aerial Triangulation Lab — Tie Point &amp; Bundle Adjustment Trainer</title>
+<meta name="description" content="Learn aerial triangulation by doing it: measure tie points across three overlapping aerial photos, then run a bundle adjustment that recovers the camera positions and attitudes. Scored on tie point quality, distribution and checkpoint accuracy.">
+<style>
+  :root {
+    --bg: #eef2f6;
+    --panel: #ffffff;
+    --panel-2: #f5f8fa;
+    --line: #d6dee7;
+    --line-soft: #e5ebf1;
+    --text: #16202c;
+    --text-dim: #56677a;
+    --text-faint: #7d8fa1;
+    --accent: #0f8a4d;
+    --accent-wash: rgba(15, 138, 77, .09);
+    --warn: #b06a00;
+    --warn-wash: rgba(176, 106, 0, .10);
+    --bad: #c62828;
+    --bad-wash: rgba(198, 40, 40, .08);
+    --info: #1565c0;
+    --info-wash: rgba(21, 101, 192, .07);
+    --orange: #e37400;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 10px 34px rgba(22, 32, 44, .16);
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 15% -10%, rgba(21, 101, 192, .07) 0%, transparent 55%), var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--info);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .app {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 100%;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    box-shadow: 0 1px 2px rgba(22, 32, 44, .05);
+  }
+  .back-link {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .back-link:hover { color: var(--text); border-color: var(--text-faint); }
+  .title-block { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+  .title-block h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+  .title-block .sub { font-size: 12.5px; color: var(--text-faint); }
+
+  .btn {
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    border-radius: 999px;
+    padding: 7px 15px;
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--text-faint); color: var(--text); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .btn.primary:hover { filter: brightness(1.08); color: #fff; }
+  .btn.primary:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn.danger-ghost { color: var(--bad); }
+
+  .best-chip {
+    font-size: 12px; color: var(--text-dim);
+    border: 1px dashed var(--line);
+    border-radius: 999px; padding: 5px 12px;
+    white-space: nowrap;
+  }
+  .best-chip b { color: var(--accent); }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .photos {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .photo-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(22, 32, 44, .05);
+  }
+  .photo-head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 8px 12px 7px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .photo-head h2 { margin: 0; font-size: 13.5px; font-weight: 650; }
+  .photo-head .meta { font-size: 11.5px; color: var(--text-faint); margin-left: auto; font-family: var(--mono); }
+  .photo-body { position: relative; }
+  .photo-body canvas.photo {
+    display: block; width: 100%; aspect-ratio: 1 / 1;
+    cursor: crosshair;
+    background: #dde3d5;
+  }
+  .photo-body.locked canvas.photo { cursor: default; }
+
+  .loupe {
+    position: absolute;
+    width: 148px; height: 148px;
+    border: 2px solid rgba(255,255,255,.95);
+    border-radius: 50%;
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    pointer-events: none;
+    overflow: hidden;
+    display: none;
+    z-index: 5;
+    background: #000;
+  }
+  .loupe canvas { display: block; width: 148px; height: 148px; }
+
+  .photo-foot {
+    display: flex; gap: 8px; align-items: center;
+    padding: 6px 12px;
+    font-size: 11.5px; color: var(--text-faint);
+    border-top: 1px solid var(--line-soft);
+  }
+
+  /* ---------- Side panel ---------- */
+  .side {
+    display: flex; flex-direction: column; gap: 12px;
+    position: sticky; top: 14px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    box-shadow: 0 1px 2px rgba(22, 32, 44, .05);
+  }
+  .panel h3 {
+    margin: 0 0 8px;
+    font-size: 11.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-faint);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h3 .count {
+    background: var(--accent-wash); color: var(--accent);
+    border-radius: 999px; padding: 0 8px;
+    font-size: 11px; letter-spacing: 0;
+  }
+
+  .step-list { margin: 0; padding: 0 0 0 2px; list-style: none; font-size: 12.5px; color: var(--text-dim); }
+  .step-list li { display: flex; gap: 8px; padding: 3px 0; }
+  .step-list .n {
+    flex: none; width: 17px; height: 17px; margin-top: 2px;
+    border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line);
+    font-size: 10.5px; font-weight: 700; color: var(--text-faint);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .step-list li.done .n { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* tie point list */
+  .tp-list { display: flex; flex-direction: column; gap: 5px; max-height: 240px; overflow-y: auto; }
+  .tp-row {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 5px 8px;
+    font-size: 12.5px;
+    cursor: pointer;
+    background: var(--panel);
+  }
+  .tp-row:hover { border-color: var(--text-faint); }
+  .tp-row.active { border-color: var(--orange); background: rgba(227, 116, 0, .07); }
+  .tp-row .tp-id { font-weight: 700; font-family: var(--mono); font-size: 12px; }
+  .tp-row .chips { display: flex; gap: 3px; margin-left: auto; }
+  .tp-row .chip {
+    width: 20px; height: 17px; border-radius: 4px;
+    font-size: 10px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text-faint);
+  }
+  .tp-row .chip.on { background: var(--info-wash); border-color: var(--info); color: var(--info); }
+  .tp-row .qual {
+    font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 4px;
+  }
+  .tp-row .qual.good { background: var(--accent-wash); color: var(--accent); }
+  .tp-row .qual.fair { background: var(--warn-wash); color: var(--warn); }
+  .tp-row .qual.bad  { background: var(--bad-wash); color: var(--bad); }
+  .tp-row .del {
+    border: 0; background: none; color: var(--text-faint);
+    font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+  }
+  .tp-row .del:hover { color: var(--bad); background: var(--bad-wash); }
+  .tp-empty { font-size: 12.5px; color: var(--text-faint); font-style: italic; padding: 4px 0; }
+
+  .tp-actions { display: flex; gap: 8px; margin-top: 9px; }
+  .btn.small { padding: 5px 11px; font-size: 12px; }
+
+  /* coverage grid */
+  .cov-wrap { display: flex; gap: 10px; align-items: center; }
+  .cov-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 44px);
+    grid-template-rows: repeat(3, 30px);
+    gap: 3px;
+  }
+  .cov-cell {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--panel-2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--text-faint); font-weight: 600;
+  }
+  .cov-cell.on { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+  .cov-note { font-size: 11.5px; color: var(--text-faint); flex: 1; }
+  .cov-labels { display: grid; grid-template-columns: repeat(2, 44px); gap: 3px; margin-top: 3px; }
+  .cov-labels span { font-size: 9.5px; color: var(--text-faint); text-align: center; letter-spacing: .3px; }
+
+  canvas#mapCanvas { width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--line-soft); display: block; }
+  .map-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 11px; color: var(--text-dim); }
+  .map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .map-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+
+  /* ---------- Block geometry (2D + 3D) ---------- */
+  .geo-head { display: flex; align-items: center; gap: 12px 14px; flex-wrap: wrap; margin-bottom: 12px; }
+  .geo-head h3 {
+    font-size: 12.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-faint);
+  }
+  .geo-subhead {
+    font-size: 11px; font-weight: 600; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: .6px; margin-bottom: 7px;
+  }
+  .geo-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .geo-grid { grid-template-columns: 1fr; } }
+  .geo-3d, .geo-2d {
+    border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
+    background: var(--panel-2); padding: 10px 11px 11px;
+  }
+  #scene3d {
+    width: 100%; height: 460px; display: block; cursor: grab;
+    touch-action: none; border-radius: 6px;
+    background: linear-gradient(180deg, #eef4fa 0%, #e6eee6 100%);
+    border: 1px solid var(--line-soft);
+  }
+  #scene3d:active { cursor: grabbing; }
+  .geo-note { font-size: 11.5px; color: var(--text-faint); margin-top: 7px; line-height: 1.4; }
+
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .seg button {
+    border: 0; background: var(--panel-2); padding: 6px 13px;
+    font-size: 12.5px; color: var(--text-dim); border-right: 1px solid var(--line);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { background: var(--info-wash); color: var(--info); font-weight: 600; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-dim); cursor: pointer; }
+  .chk input { accent-color: var(--accent); }
+  .geo-hint { font-size: 11.5px; color: var(--text-faint); margin-left: auto; }
+
+  .stat-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stat {
+    border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    padding: 6px 9px;
+  }
+  .stat .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .7px; color: var(--text-faint); }
+  .stat .v { font-size: 15px; font-weight: 650; font-family: var(--mono); }
+  .stat .v small { font-size: 11px; color: var(--text-faint); font-weight: 400; }
+
+  /* ---------- Modals ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(22, 32, 44, .45);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 18px;
+    z-index: 50;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--panel);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    max-width: 640px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 22px 24px;
+  }
+  .modal h2 { margin: 0 0 6px; font-size: 19px; }
+  .modal h4 { margin: 16px 0 5px; font-size: 13.5px; }
+  .modal p, .modal li { font-size: 13.5px; color: var(--text-dim); }
+  .modal p { margin: 6px 0; }
+  .modal ul, .modal ol { margin: 6px 0; padding-left: 20px; }
+  .modal .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+  .kbd {
+    font-family: var(--mono); font-size: 11.5px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px;
+  }
+  .callout {
+    border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    background: var(--panel-2); border-radius: var(--radius-sm);
+    padding: 8px 12px; font-size: 13px; color: var(--text-dim); margin: 10px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+
+  /* results */
+  .grade-row { display: flex; align-items: center; gap: 16px; margin: 4px 0 12px; }
+  .grade-badge {
+    width: 64px; height: 64px; flex: none;
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; font-weight: 800; color: #fff;
+  }
+  .grade-badge.gA { background: #0f8a4d; }
+  .grade-badge.gB { background: #4d9636; }
+  .grade-badge.gC { background: #b06a00; }
+  .grade-badge.gD { background: #c05621; }
+  .grade-badge.gF { background: #c62828; }
+  .grade-row .score-big { font-size: 26px; font-weight: 750; }
+  .grade-row .score-big small { font-size: 14px; color: var(--text-faint); font-weight: 400; }
+  .grade-row .verdict { font-size: 13px; color: var(--text-dim); }
+
+  .break-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 4px; }
+  .break-table td { padding: 4px 2px; border-bottom: 1px solid var(--line-soft); color: var(--text-dim); }
+  .break-table td:last-child { text-align: right; font-family: var(--mono); font-weight: 600; color: var(--text); }
+  .break-table tr.penalty td { color: var(--bad); }
+  .break-table tr.total td { border-bottom: 0; font-weight: 700; color: var(--text); padding-top: 7px; }
+
+  .bar-track { height: 5px; background: var(--panel-2); border-radius: 3px; margin-top: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 10px 0; }
+  .metric-grid .stat .v { font-size: 14px; }
+
+  .tips { margin: 8px 0 0; }
+  .tips li { margin: 3px 0; }
+
+  /* run progress */
+  .runbox { text-align: center; padding: 8px 0; }
+  .runbox .iterline { font-family: var(--mono); font-size: 13px; color: var(--text-dim); margin-top: 8px; }
+  .prog-track { height: 8px; background: var(--panel-2); border-radius: 5px; overflow: hidden; margin-top: 14px; }
+  .prog-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--info), var(--accent)); transition: width .1s linear; }
+
+  @media (max-width: 1150px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { position: static; }
+    .photos { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <a class="back-link" href="../../">← All simulators</a>
+    <div class="title-block">
+      <h1>Aerial Triangulation Lab</h1>
+      <span class="sub">Measure tie points · run the bundle adjustment · pass checkpoint QA</span>
+    </div>
+    <span class="best-chip" id="bestChip">Best: <b>—</b></span>
+    <button class="btn" id="btnHelp">How it works</button>
+    <button class="btn danger-ghost" id="btnReset">Reset block</button>
+    <button class="btn primary" id="btnRun">Run adjustment ▶</button>
+  </div>
+
+  <div class="layout">
+
+    <div class="photos" id="photos"><!-- photo cards injected --></div>
+
+    <div class="side">
+
+      <div class="panel">
+        <h3>Workflow</h3>
+        <ol class="step-list" id="stepList">
+          <li data-step="0"><span class="n">1</span><span>Study the three overlapping photos. Green targets are surveyed ground control (already measured).</span></li>
+          <li data-step="1"><span class="n">2</span><span>Click the <b>same feature</b> in two or three photos to build each tie point. Aim for 6+ points.</span></li>
+          <li data-step="2"><span class="n">3</span><span>Cover all six von Gruber zones in the coverage grid.</span></li>
+          <li data-step="3"><span class="n">4</span><span>Run the bundle adjustment and pass checkpoint QA.</span></li>
+        </ol>
+      </div>
+
+      <div class="panel">
+        <h3>Tie points <span class="count" id="tpCount">0</span></h3>
+        <div class="tp-list" id="tpList"></div>
+        <div class="tp-actions">
+          <button class="btn small" id="btnNewTp">＋ New tie point</button>
+          <button class="btn small" id="btnClearTp">Clear all</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Overlap coverage</h3>
+        <div class="cov-wrap">
+          <div>
+            <div class="cov-grid" id="covGrid"></div>
+            <div class="cov-labels"><span>Model 1–2</span><span>Model 2–3</span></div>
+          </div>
+          <div class="cov-note">Von Gruber rule: distribute tie points top, middle and bottom of every stereo overlap. Points in the triple overlap count for both models.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Block status</h3>
+        <div class="stat-strip">
+          <div class="stat"><div class="k">Tie points</div><div class="v" id="stTp">0 <small>/ 6 rec.</small></div></div>
+          <div class="stat"><div class="k">3-ray points</div><div class="v" id="stTriple">0</div></div>
+          <div class="stat"><div class="k">Zones covered</div><div class="v" id="stCov">0 <small>/ 6</small></div></div>
+          <div class="stat"><div class="k">σ₀ (RMSE)</div><div class="v" id="stRmse">—</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="panel geo-panel">
+    <div class="geo-head">
+      <h3>Block geometry — camera stations &amp; rays</h3>
+      <div class="seg" id="viewSeg">
+        <button data-view="before">Before</button>
+        <button data-view="after">After</button>
+        <button data-view="both" class="on">Before + After</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="showTruth"> show ground truth</label>
+      <span class="geo-hint">drag the 3D view to orbit</span>
+    </div>
+    <div class="geo-grid">
+      <div class="geo-3d">
+        <div class="geo-subhead">3D perspective — projection centres, attitudes &amp; light rays</div>
+        <canvas id="scene3d"></canvas>
+        <div class="map-legend">
+          <span><i style="background:#8b98a6"></i> nav estimate (before)</span>
+          <span><i style="background:#1565c0"></i> adjusted (after)</span>
+          <span><i style="background:#0f8a4d"></i> control</span>
+          <span><i style="background:#e37400"></i> tie point</span>
+          <span><i style="background:#7b1fa2"></i> checkpoint</span>
+        </div>
+        <div class="geo-note" id="geoNote"></div>
+      </div>
+      <div class="geo-2d">
+        <div class="geo-subhead">Top-down block plan</div>
+        <canvas id="mapCanvas" width="820" height="600"></canvas>
+        <div class="map-legend">
+          <span><i style="background:#1565c0"></i> camera (current)</span>
+          <span><i style="background:#9fb0c2"></i> nav estimate</span>
+          <span><i style="background:#0f8a4d"></i> control point</span>
+          <span><i style="background:#e37400"></i> tie point</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ======== intro / help modal ======== -->
+<div class="overlay" id="helpOverlay">
+  <div class="modal">
+    <h2>Aerial Triangulation Lab</h2>
+    <p>
+      Your survey aircraft flew one strip and took <b>three overlapping photos</b> (60% forward
+      overlap). The navigation system recorded only <i>rough</i> camera positions and attitudes —
+      good enough to start with, far too poor to make a map from. <b>Aerial triangulation (AT)</b>
+      is how photogrammetrists fix that: measure points connecting the photos, then let a
+      <b>bundle adjustment</b> solve for the true camera positions and orientations.
+    </p>
+
+    <h4>Your job as the AT operator</h4>
+    <ol>
+      <li><b>Measure tie points.</b> Pick a sharp feature (building corner, road intersection, lone
+        tree) and click it in <b>every photo where it appears</b>. Each completed point ties the
+        photos together with light rays.</li>
+      <li><b>Follow the von Gruber pattern.</b> Spread points over the top, middle and bottom of
+        each stereo overlap — the coverage grid tracks this. Points in the triple overlap
+        (seen in all 3 photos) are the strongest.</li>
+      <li><b>Ground control is done for you.</b> The three green ▲ targets are signalized ground
+        control points (GCPs) with surveyed coordinates, already measured in the images. They
+        anchor the block to the ground.</li>
+      <li><b>Run the bundle adjustment.</b> Watch the camera estimates and image footprints being
+        pulled into place as the least-squares solution converges.</li>
+    </ol>
+
+    <h4>How you are scored</h4>
+    <ul>
+      <li><b>Tie point accuracy</b> — do your clicked rays truly intersect? (ray residual in metres)</li>
+      <li><b>Distribution</b> — all six von Gruber zones covered?</li>
+      <li><b>Redundancy</b> — 3-ray points in the triple overlap</li>
+      <li><b>Checkpoint QA</b> — after adjustment, four hidden surveyed checkpoints are computed
+        from your solution and compared to truth, exactly like production AT quality control.</li>
+    </ul>
+
+    <div class="callout">
+      <b>Tips:</b> a magnifier loupe follows your cursor for precise clicking. Click a marker to
+      re-select its tie point; click again elsewhere to move the measurement. Mismatched points
+      (clicking different features) become <i>blunders</i> that drag the whole block — exactly as
+      in real AT.
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn primary" id="btnHelpClose">Start measuring</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== pre-run warnings ======== -->
+<div class="overlay" id="warnOverlay">
+  <div class="modal">
+    <h2>Pre-flight check</h2>
+    <div id="warnBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnWarnBack">Keep measuring</button>
+      <button class="btn primary" id="btnWarnRun">Run anyway ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== run progress ======== -->
+<div class="overlay" id="runOverlay">
+  <div class="modal" style="max-width:430px">
+    <h2>Bundle adjustment</h2>
+    <div class="runbox">
+      <p>Iterating resection ⇄ intersection over all rays…</p>
+      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+      <div class="iterline" id="iterLine">iteration 0 / 40</div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== results ======== -->
+<div class="overlay" id="resOverlay">
+  <div class="modal">
+    <h2>Adjustment report</h2>
+    <div class="grade-row">
+      <div class="grade-badge" id="gradeBadge">–</div>
+      <div>
+        <div class="score-big"><span id="scoreVal">0</span><small> / 100</small></div>
+        <div class="verdict" id="verdictLine"></div>
+      </div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="stat"><div class="k">σ₀ image RMSE</div><div class="v" id="rRmse">—</div></div>
+      <div class="stat"><div class="k">Checkpoint RMSE</div><div class="v" id="rCheck">—</div></div>
+      <div class="stat"><div class="k">Median tie residual</div><div class="v" id="rMed">—</div></div>
+      <div class="stat"><div class="k">Blunders</div><div class="v" id="rBlun">—</div></div>
+    </div>
+
+    <table class="break-table" id="breakTable"></table>
+
+    <h4 style="margin-top:14px">Reviewer notes</h4>
+    <ul class="tips" id="tipsList"></ul>
+
+    <div class="modal-actions">
+      <button class="btn" id="btnRefine">Refine tie points</button>
+      <button class="btn" id="btnRestart">Start over</button>
+      <button class="btn primary" id="btnCloseRes">View block</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Aerial Triangulation Lab
+   Three synthetic aerial photos rendered from one shared "world" scene
+   through a collinearity camera model. The user measures tie points;
+   a resection-intersection bundle adjustment recovers the cameras.
+   ===================================================================== */
+
+// ---------------- camera model ----------------
+const F = 2000;                 // focal length, internal px
+const IMG = 1000;               // internal image size
+const CXX = IMG / 2, CYY = IMG / 2;
+
+function rotM(o, p, k) {
+  const co = Math.cos(o), so = Math.sin(o);
+  const cp = Math.cos(p), sp = Math.sin(p);
+  const ck = Math.cos(k), sk = Math.sin(k);
+  const Mo = [[1,0,0],[0,co,so],[0,-so,co]];
+  const Mp = [[cp,0,-sp],[0,1,0],[sp,0,cp]];
+  const Mk = [[ck,sk,0],[-sk,ck,0],[0,0,1]];
+  return mul3(Mk, mul3(Mp, Mo));
+}
+function mul3(A, B) {
+  const C = [[0,0,0],[0,0,0],[0,0,0]];
+  for (let i=0;i<3;i++) for (let j=0;j<3;j++)
+    C[i][j] = A[i][0]*B[0][j] + A[i][1]*B[1][j] + A[i][2]*B[2][j];
+  return C;
+}
+function camM(cam) { return cam.M || (cam.M = rotM(cam.o, cam.p, cam.k)); }
+
+function project(cam, X, Y, Z) {
+  const M = camM(cam);
+  const dx = X-cam.X, dy = Y-cam.Y, dz = Z-cam.Z;
+  const u = M[0][0]*dx + M[0][1]*dy + M[0][2]*dz;
+  const v = M[1][0]*dx + M[1][1]*dy + M[1][2]*dz;
+  const w = M[2][0]*dx + M[2][1]*dy + M[2][2]*dz;
+  return [CXX - F*u/w, CYY + F*v/w];
+}
+function pixelRay(cam, px, py) {
+  const M = camM(cam);
+  const x = px - CXX, y = CYY - py;
+  const d = [
+    M[0][0]*x + M[1][0]*y - M[2][0]*F,
+    M[0][1]*x + M[1][1]*y - M[2][1]*F,
+    M[0][2]*x + M[1][2]*y - M[2][2]*F,
+  ];
+  const n = Math.hypot(d[0], d[1], d[2]);
+  return [d[0]/n, d[1]/n, d[2]/n];
+}
+function triangulate(rays) {
+  const A = [[0,0,0],[0,0,0],[0,0,0]], b = [0,0,0];
+  for (const {C, d} of rays) {
+    for (let i=0;i<3;i++) for (let j=0;j<3;j++) {
+      const m = (i===j?1:0) - d[i]*d[j];
+      A[i][j] += m; b[i] += m*C[j];
+    }
+  }
+  return solveN(A, b, 3);
+}
+function rayDist(C, d, X) {
+  const v = [X[0]-C[0], X[1]-C[1], X[2]-C[2]];
+  const t = v[0]*d[0] + v[1]*d[1] + v[2]*d[2];
+  return Math.hypot(X[0]-C[0]-t*d[0], X[1]-C[1]-t*d[1], X[2]-C[2]-t*d[2]);
+}
+function solveN(Ain, bin, n) {
+  const A = Ain.map(r => r.slice()), b = bin.slice();
+  for (let c=0;c<n;c++) {
+    let piv = c;
+    for (let r=c+1;r<n;r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c],A[piv]] = [A[piv],A[c]]; [b[c],b[piv]] = [b[piv],b[c]];
+    if (Math.abs(A[c][c]) < 1e-12) return null;
+    for (let r=c+1;r<n;r++) {
+      const f = A[r][c]/A[c][c];
+      for (let j=c;j<n;j++) A[r][j] -= f*A[c][j];
+      b[r] -= f*b[c];
+    }
+  }
+  const x = new Array(n).fill(0);
+  for (let r=n-1;r>=0;r--) {
+    let s = b[r];
+    for (let j=r+1;j<n;j++) s -= A[r][j]*x[j];
+    x[r] = s/A[r][r];
+  }
+  return x;
+}
+
+// ---------------- block definition ----------------
+// True cameras (used to render the photos — hidden from the solver)
+const TRUE_CAMS = [
+  { X:400, Y:498, Z:1004, o: 0.010, p:-0.006, k: 0.035 },
+  { X:600, Y:505, Z: 996, o:-0.008, p: 0.009, k:-0.045 },
+  { X:800, Y:494, Z:1006, o: 0.007, p:-0.010, k: 0.055 },
+];
+// Navigation errors: position ok-ish, attitude poor (what AT must fix)
+const NAV_ERR = [
+  { dX:  8, dY: -6, dZ:  5, dO: 0.028, dP:-0.021, dK: 0.026 },
+  { dX: -7, dY:  9, dZ: -6, dO:-0.024, dP: 0.026, dK:-0.030 },
+  { dX:  5, dY: -8, dZ:  4, dO: 0.020, dP: 0.024, dK: 0.022 },
+];
+const PHOTO_NAMES = ['Photo 1 · west', 'Photo 2 · centre', 'Photo 3 · east'];
+const PHOTO_IDS = ['IMG_2417', 'IMG_2418', 'IMG_2419'];
+
+const GCPS = [
+  { id:'GCP A', P:[420, 620, 0] },
+  { id:'GCP B', P:[600, 340, 0] },
+  { id:'GCP C', P:[790, 590, 0] },
+];
+const CHECKPOINTS = [[470,400,0],[560,600,0],[700,450,0],[770,650,0]];
+
+// von Gruber coverage zones: 2 stereo models x 3 bands
+const MODELS = [ {x0:350, x1:650}, {x0:550, x1:850} ];
+const BANDS  = [ {y0:250, y1:417}, {y0:417, y1:583}, {y0:583, y1:750} ];
+
+const inFrame = (px, py) => px >= 25 && px <= IMG-25 && py >= 25 && py <= IMG-25;
+
+// deterministic pseudo-noise for GCP image measurements
+function detNoise(i) { const s = Math.sin(i*127.1)*43758.5453; return (s - Math.floor(s)) - 0.5; }
+
+// GCP image measurements (auto-provided)
+const gcpMeas = GCPS.map((g, gi) => {
+  const meas = [];
+  TRUE_CAMS.forEach((cam, ci) => {
+    const [px, py] = project(cam, g.P[0], g.P[1], g.P[2]);
+    if (inFrame(px, py))
+      meas.push({ cam: ci, px: px + detNoise(gi*7+ci)*1.5, py: py + detNoise(gi*13+ci+3)*1.5 });
+  });
+  return meas;
+});
+
+// ---------------- world scene ----------------
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+const SCENE = (() => {
+  const rnd = mulberry32(20260721);
+  const fields = [
+    { pts:[[80,250],[520,250],[540,430],[60,450]],     c:'#b7bd7e' },
+    { pts:[[520,250],[900,250],[880,420],[540,430]],   c:'#a3b06d' },
+    { pts:[[900,250],[1160,250],[1160,470],[880,420]], c:'#c0b482' },
+    { pts:[[60,450],[540,430],[520,640],[80,660]],     c:'#9db075' },
+    { pts:[[540,430],[880,420],[900,620],[520,640]],   c:'#b3ab72' },
+    { pts:[[880,420],[1160,470],[1160,660],[900,620]], c:'#a8b57f' },
+    { pts:[[80,660],[520,640],[540,750],[70,750]],     c:'#c2b98a' },
+    { pts:[[520,640],[900,620],[920,750],[540,750]],   c:'#9fae6b' },
+    { pts:[[900,620],[1160,660],[1160,750],[920,750]], c:'#b5ba85' },
+  ];
+  // ground texture speckles (world-anchored so they match across photos)
+  const speckles = [];
+  for (let i=0;i<900;i++) {
+    speckles.push({
+      x: 60 + rnd()*1100, y: 250 + rnd()*500,
+      r: 0.5 + rnd()*1.6,
+      c: rnd() < 0.5 ? 'rgba(60,70,40,.18)' : 'rgba(255,255,235,.20)',
+    });
+  }
+  // faint plough lines inside fields
+  const plough = [];
+  fields.forEach((f, fi) => {
+    const [a,b,c,d] = f.pts;
+    const n = 7;
+    for (let i=1;i<n;i++) {
+      const t = i/n;
+      plough.push({
+        x1: a[0]+(d[0]-a[0])*t, y1: a[1]+(d[1]-a[1])*t,
+        x2: b[0]+(c[0]-b[0])*t, y2: b[1]+(c[1]-b[1])*t,
+        v: fi % 2 === 0,
+      });
+    }
+  });
+  const roads = [
+    { pts:[[100,520],[380,505],[500,500],[640,470],[760,520],[1100,505]], w:9, c:'#b6ad9d', edge:'#8f8878' },
+    { pts:[[490,250],[500,500],[512,750]], w:7, c:'#b6ad9d', edge:'#8f8878' },
+    { pts:[[748,260],[760,520],[772,750]], w:7, c:'#b6ad9d', edge:'#8f8878' },
+    { pts:[[420,620],[450,650],[560,660],[588,682]], w:4, c:'#c9bd9c', edge:'#a89f83' },
+  ];
+  const pond = { pts:[[576,676],[622,668],[654,690],[648,722],[604,730],[572,706]], c:'#7d9bb0', edge:'#5f7f96' };
+  const buildings = [
+    { x:398, y:296, w:26, d:14, ht: 8, rot: 0.12, roof:'#b0654a' },
+    { x:428, y:312, w:14, d:12, ht: 6, rot: 0.12, roof:'#9a9ba3' },
+    { x:558, y:328, w:22, d:16, ht: 9, rot:-0.25, roof:'#a75c43' },
+    { x:452, y:648, w:16, d:10, ht: 5, rot: 0.55, roof:'#8f9199' },
+    { x:700, y:318, w:24, d:13, ht: 8, rot: 0.30, roof:'#b0654a' },
+    { x:722, y:642, w:30, d:15, ht:10, rot:-0.10, roof:'#8d5a43' },
+    { x:200, y:400, w:20, d:12, ht: 7, rot: 0.2,  roof:'#a75c43' },
+    { x:960, y:610, w:22, d:14, ht: 8, rot:-0.4,  roof:'#9a9ba3' },
+    { x:1010,y:340, w:18, d:12, ht: 6, rot: 0.1,  roof:'#b0654a' },
+    { x:640, y:452, w:10, d:10, ht:12, rot: 0.0,  roof:'#7f8a94' },  // water tank tower
+  ];
+  const trees = [
+    { x:380, y:470, r:7, ht:9 }, { x:610, y:540, r:8, ht:10 },
+    { x:830, y:700, r:8, ht:9 }, { x:820, y:360, r:7, ht:8 },
+    { x:340, y:560, r:6, ht:8 }, { x:905, y:480, r:7, ht:9 },
+  ];
+  for (let i=0;i<46;i++) {
+    const x = 70 + rnd()*1080, y = 258 + rnd()*484;
+    // keep clear of landmark features and roads
+    if (Math.abs(y-505) < 22 && x > 90 && x < 1110) continue;
+    trees.push({ x, y, r: 3.5 + rnd()*3.5, ht: 5 + rnd()*5 });
+  }
+  return { fields, speckles, plough, roads, pond, buildings, trees };
+})();
+
+// per-photo look (exposure/tint/grain differ frame to frame)
+const PHOTO_FX = [
+  { tint:'rgba(255,244,214,0.05)', dark: 0.00 },
+  { tint:'rgba(214,228,255,0.05)', dark: 0.03 },
+  { tint:'rgba(255,232,232,0.04)', dark: 0.015 },
+];
+
+function renderPhoto(cam, fx, seed) {
+  const cv = document.createElement('canvas');
+  cv.width = IMG; cv.height = IMG;
+  const ctx = cv.getContext('2d');
+  const rnd = mulberry32(seed);
+
+  ctx.fillStyle = '#a9ad86';
+  ctx.fillRect(0, 0, IMG, IMG);
+
+  const path = (pts, z) => {
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const q = project(cam, p[0], p[1], z || 0);
+      i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
+    });
+  };
+
+  // fields
+  for (const f of SCENE.fields) {
+    path(f.pts, 0); ctx.closePath();
+    ctx.fillStyle = f.c; ctx.fill();
+  }
+  // plough lines
+  ctx.lineWidth = 1.6;
+  for (const l of SCENE.plough) {
+    const a = project(cam, l.x1, l.y1, 0), b = project(cam, l.x2, l.y2, 0);
+    ctx.strokeStyle = l.v ? 'rgba(80,88,52,.13)' : 'rgba(255,255,240,.10)';
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  }
+  // speckles
+  for (const s of SCENE.speckles) {
+    const q = project(cam, s.x, s.y, 0);
+    ctx.fillStyle = s.c;
+    ctx.beginPath(); ctx.arc(q[0], q[1], s.r*2, 0, 7); ctx.fill();
+  }
+  // pond
+  path(SCENE.pond.pts, 0); ctx.closePath();
+  ctx.fillStyle = SCENE.pond.c; ctx.fill();
+  ctx.strokeStyle = SCENE.pond.edge; ctx.lineWidth = 2; ctx.stroke();
+  // roads
+  for (const r of SCENE.roads) {
+    path(r.pts, 0);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = r.edge; ctx.lineWidth = r.w*2 + 3; ctx.stroke();
+    path(r.pts, 0);
+    ctx.strokeStyle = r.c; ctx.lineWidth = r.w*2; ctx.stroke();
+  }
+  // shadows (fixed sun from NW)
+  const shDX = 0.9, shDY = 0.55;
+  ctx.fillStyle = 'rgba(30,36,20,.30)';
+  for (const b of SCENE.buildings) {
+    const cs = Math.cos(b.rot), sn = Math.sin(b.rot);
+    const cor = [[-b.w/2,-b.d/2],[b.w/2,-b.d/2],[b.w/2,b.d/2],[-b.w/2,b.d/2]]
+      .map(([u,v]) => [b.x + u*cs - v*sn + b.ht*shDX, b.y + u*sn + v*cs + b.ht*shDY]);
+    path(cor, 0); ctx.closePath(); ctx.fill();
+  }
+  for (const t of SCENE.trees) {
+    const q = project(cam, t.x + t.ht*shDX*0.7, t.y + t.ht*shDY*0.7, 0);
+    ctx.beginPath(); ctx.ellipse(q[0], q[1], t.r*2*0.9, t.r*2*0.6, 0.5, 0, 7); ctx.fill();
+  }
+  // buildings: walls then roof (roof projected at z=ht -> real relief displacement)
+  for (const b of SCENE.buildings) {
+    const cs = Math.cos(b.rot), sn = Math.sin(b.rot);
+    const cor = [[-b.w/2,-b.d/2],[b.w/2,-b.d/2],[b.w/2,b.d/2],[-b.w/2,b.d/2]]
+      .map(([u,v]) => [b.x + u*cs - v*sn, b.y + u*sn + v*cs]);
+    const base = cor.map(p => project(cam, p[0], p[1], 0));
+    const roof = cor.map(p => project(cam, p[0], p[1], b.ht));
+    ctx.fillStyle = 'rgba(70,60,50,.85)';
+    for (let i=0;i<4;i++) {
+      const j = (i+1) % 4;
+      ctx.beginPath();
+      ctx.moveTo(base[i][0], base[i][1]); ctx.lineTo(base[j][0], base[j][1]);
+      ctx.lineTo(roof[j][0], roof[j][1]); ctx.lineTo(roof[i][0], roof[i][1]);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.beginPath();
+    roof.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
+    ctx.closePath();
+    ctx.fillStyle = b.roof; ctx.fill();
+    ctx.strokeStyle = 'rgba(40,30,25,.5)'; ctx.lineWidth = 1.2; ctx.stroke();
+    // ridge line
+    const m0 = [(roof[0][0]+roof[3][0])/2, (roof[0][1]+roof[3][1])/2];
+    const m1 = [(roof[1][0]+roof[2][0])/2, (roof[1][1]+roof[2][1])/2];
+    ctx.beginPath(); ctx.moveTo(m0[0], m0[1]); ctx.lineTo(m1[0], m1[1]);
+    ctx.strokeStyle = 'rgba(255,240,220,.4)'; ctx.stroke();
+  }
+  // trees
+  for (const t of SCENE.trees) {
+    const q = project(cam, t.x, t.y, t.ht);
+    const rp = t.r * F / (cam.Z - t.ht);
+    const g = ctx.createRadialGradient(q[0]-rp*0.3, q[1]-rp*0.3, rp*0.15, q[0], q[1], rp);
+    g.addColorStop(0, '#6f8f4c'); g.addColorStop(1, '#3c5a2e');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(q[0], q[1], rp, 0, 7); ctx.fill();
+  }
+  // GCP targets: signalized white panels with black cross
+  GCPS.forEach((gcp) => {
+    const [gx, gy] = gcp.P;
+    const q = project(cam, gx, gy, 0);
+    if (q[0] < -30 || q[0] > IMG+30 || q[1] < -30 || q[1] > IMG+30) return;
+    const s = 2.6 * F / cam.Z;   // panel half-size ~2.6 m
+    ctx.save();
+    ctx.translate(q[0], q[1]);
+    ctx.fillStyle = '#f4f2ea';
+    ctx.fillRect(-s*2, -s*2, s*4, s*4);
+    ctx.strokeStyle = '#22292e'; ctx.lineWidth = Math.max(2, s*0.8);
+    ctx.beginPath();
+    ctx.moveTo(-s*1.6, -s*1.6); ctx.lineTo(s*1.6, s*1.6);
+    ctx.moveTo(s*1.6, -s*1.6); ctx.lineTo(-s*1.6, s*1.6);
+    ctx.stroke();
+    ctx.restore();
+  });
+  // photo grain
+  ctx.globalAlpha = 0.05;
+  for (let i=0;i<2600;i++) {
+    ctx.fillStyle = rnd() < 0.5 ? '#000' : '#fff';
+    ctx.fillRect(rnd()*IMG, rnd()*IMG, 1.4, 1.4);
+  }
+  ctx.globalAlpha = 1;
+  // exposure difference + vignette
+  ctx.fillStyle = fx.tint; ctx.fillRect(0, 0, IMG, IMG);
+  if (fx.dark) { ctx.fillStyle = `rgba(10,14,8,${fx.dark})`; ctx.fillRect(0, 0, IMG, IMG); }
+  const vg = ctx.createRadialGradient(CXX, CYY, IMG*0.42, CXX, CYY, IMG*0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(8,12,6,.22)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, IMG, IMG);
+  return cv;
+}
+
+// ---------------- state ----------------
+const state = {
+  tps: [],            // {id, meas:{ci:{x,y}}, qual:null|number}
+  nextId: 1,
+  activeId: null,
+  phase: 'edit',      // edit | running | done
+  cams: null,         // working camera estimates
+  navCams: null,      // frozen initial estimates
+  results: null,
+};
+
+function freshCams() {
+  return TRUE_CAMS.map((c, i) => {
+    const e = NAV_ERR[i];
+    const cc = {
+      X: c.X + e.dX, Y: c.Y + e.dY, Z: c.Z + e.dZ,
+      o: c.o + e.dO, p: c.p + e.dP, k: c.k + e.dK, M: null,
+    };
+    cc.o0 = cc.o; cc.p0 = cc.p; cc.k0 = cc.k;
+    cc.gX = cc.X; cc.gY = cc.Y; cc.gZ = cc.Z;
+    return cc;
+  });
+}
+state.cams = freshCams();
+state.navCams = freshCams();
+
+// ---------------- photo UI ----------------
+const photoBases = TRUE_CAMS.map((c, i) => renderPhoto(c, PHOTO_FX[i], 777 + i));
+const photosEl = document.getElementById('photos');
+const photoCtxs = [];
+
+TRUE_CAMS.forEach((cam, ci) => {
+  const card = document.createElement('div');
+  card.className = 'photo-card';
+  card.innerHTML = `
+    <div class="photo-head"><h2>${PHOTO_NAMES[ci]}</h2><span class="meta">${PHOTO_IDS[ci]}</span></div>
+    <div class="photo-body" data-ci="${ci}">
+      <canvas class="photo" width="${IMG}" height="${IMG}"></canvas>
+      <div class="loupe"><canvas width="148" height="148"></canvas></div>
+    </div>
+    <div class="photo-foot">${ci === 0 ? 'Overlaps Photo 2 on its east side' : ci === 1 ? 'Overlaps both neighbours · triple zone in the middle' : 'Overlaps Photo 2 on its west side'}</div>`;
+  photosEl.appendChild(card);
+  const cnv = card.querySelector('canvas.photo');
+  photoCtxs.push(cnv.getContext('2d'));
+
+  const body = card.querySelector('.photo-body');
+  const loupe = card.querySelector('.loupe');
+  const loupeCtx = loupe.querySelector('canvas').getContext('2d');
+
+  const toInternal = (e) => {
+    const r = cnv.getBoundingClientRect();
+    return [ (e.clientX - r.left) * IMG / r.width, (e.clientY - r.top) * IMG / r.height ];
+  };
+
+  cnv.addEventListener('click', (e) => {
+    if (state.phase !== 'edit') return;
+    const [ix, iy] = toInternal(e);
+    // hit-test existing markers of other tie points -> select
+    for (const tp of state.tps) {
+      const m = tp.meas[ci];
+      if (m && tp.id !== state.activeId && Math.hypot(m.x-ix, m.y-iy) < 15) {
+        state.activeId = tp.id;
+        refresh();
+        return;
+      }
+    }
+    let tp = state.tps.find(t => t.id === state.activeId);
+    if (!tp) {
+      tp = { id: state.nextId++, meas: {}, qual: null };
+      state.tps.push(tp);
+      state.activeId = tp.id;
+    }
+    tp.meas[ci] = { x: ix, y: iy };
+    tp.qual = null;
+    refresh();
+  });
+
+  cnv.addEventListener('mousemove', (e) => {
+    const [ix, iy] = toInternal(e);
+    const r = cnv.getBoundingClientRect();
+    const lx = e.clientX - r.left, ly = e.clientY - r.top;
+    loupe.style.display = 'block';
+    loupe.style.left = Math.min(r.width - 158, Math.max(4, lx + 22)) + 'px';
+    loupe.style.top  = Math.max(4, ly - 170) + 'px';
+    loupeCtx.imageSmoothingEnabled = false;
+    loupeCtx.clearRect(0, 0, 148, 148);
+    loupeCtx.drawImage(cnv, ix - 18.5, iy - 18.5, 37, 37, 0, 0, 148, 148);
+    loupeCtx.strokeStyle = 'rgba(255,80,0,.9)';
+    loupeCtx.lineWidth = 1;
+    loupeCtx.beginPath();
+    loupeCtx.moveTo(74, 58); loupeCtx.lineTo(74, 90);
+    loupeCtx.moveTo(58, 74); loupeCtx.lineTo(90, 74);
+    loupeCtx.stroke();
+  });
+  cnv.addEventListener('mouseleave', () => { loupe.style.display = 'none'; });
+});
+
+function qualClass(q) { return q == null ? null : q < 1.2 ? 'good' : q < 3 ? 'fair' : 'bad'; }
+function qualColor(q) { return q == null ? '#1565c0' : q < 1.2 ? '#0f8a4d' : q < 3 ? '#b06a00' : '#c62828'; }
+
+function drawMarker(ctx, x, y, color, label, active) {
+  ctx.save();
+  ctx.lineWidth = active ? 2.6 : 2;
+  ctx.strokeStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(x, y, active ? 13 : 11, 0, 7); ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, active ? 11 : 9, 0, 7); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y-6); ctx.lineTo(x, y+6);
+  ctx.moveTo(x-6, y); ctx.lineTo(x+6, y);
+  ctx.lineWidth = 1.4; ctx.stroke();
+  // label
+  ctx.font = '700 15px Consolas, monospace';
+  const w = ctx.measureText(label).width + 8;
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  ctx.fillRect(x + 12, y - 22, w, 18);
+  ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.strokeRect(x + 12, y - 22, w, 18);
+  ctx.fillStyle = color;
+  ctx.fillText(label, x + 16, y - 8);
+  ctx.restore();
+}
+
+function drawPhotos() {
+  TRUE_CAMS.forEach((cam, ci) => {
+    const ctx = photoCtxs[ci];
+    ctx.drawImage(photoBases[ci], 0, 0);
+    // GCP measurement flags
+    gcpMeas.forEach((meas, gi) => {
+      const m = meas.find(mm => mm.cam === ci);
+      if (!m) return;
+      const c = '#0f8a4d';
+      ctx.save();
+      ctx.strokeStyle = c; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(m.px, m.py - 16); ctx.lineTo(m.px - 9, m.py + 8); ctx.lineTo(m.px + 9, m.py + 8);
+      ctx.closePath(); ctx.stroke();
+      ctx.font = '700 14px Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,.92)';
+      const label = GCPS[gi].id;
+      const w = ctx.measureText(label).width + 8;
+      ctx.fillRect(m.px + 12, m.py - 2, w, 17);
+      ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.strokeRect(m.px + 12, m.py - 2, w, 17);
+      ctx.fillStyle = c; ctx.fillText(label, m.px + 16, m.py + 11);
+      ctx.restore();
+    });
+    // tie point markers
+    for (const tp of state.tps) {
+      const m = tp.meas[ci];
+      if (!m) continue;
+      const active = tp.id === state.activeId && state.phase === 'edit';
+      const col = active ? '#e37400' : qualColor(tp.qual);
+      drawMarker(ctx, m.x, m.y, col, 'T' + tp.id, active);
+    }
+  });
+}
+
+// ---------------- tie point panel ----------------
+const tpListEl = document.getElementById('tpList');
+
+function tpGround(tp, cams) {
+  const entries = Object.entries(tp.meas);
+  if (entries.length < 2) return null;
+  const rays = entries.map(([ci, m]) => {
+    const c = cams[+ci];
+    return { C:[c.X, c.Y, c.Z], d: pixelRay(c, m.x, m.y) };
+  });
+  return triangulate(rays);
+}
+function tpQuality(tp) {
+  // ray-intersection RMS against the TRUE cameras (the scoring truth)
+  const entries = Object.entries(tp.meas);
+  if (entries.length < 2) return null;
+  const rays = entries.map(([ci, m]) => {
+    const c = TRUE_CAMS[+ci];
+    return { C:[c.X, c.Y, c.Z], d: pixelRay(c, m.x, m.y) };
+  });
+  const X = triangulate(rays);
+  if (!X) return null;
+  return Math.sqrt(rays.reduce((s, r) => s + rayDist(r.C, r.d, X)**2, 0) / rays.length);
+}
+
+function renderTpList() {
+  tpListEl.innerHTML = '';
+  if (!state.tps.length) {
+    tpListEl.innerHTML = '<div class="tp-empty">No tie points yet — click a feature in any photo to start one.</div>';
+    return;
+  }
+  for (const tp of state.tps) {
+    const row = document.createElement('div');
+    row.className = 'tp-row' + (tp.id === state.activeId ? ' active' : '');
+    const nRays = Object.keys(tp.meas).length;
+    let qualHtml = '';
+    if (tp.qual != null) {
+      const cls = qualClass(tp.qual);
+      qualHtml = `<span class="qual ${cls}">${tp.qual.toFixed(1)} m</span>`;
+    } else if (nRays < 2) {
+      qualHtml = '<span class="qual" style="color:var(--text-faint)">needs 2+</span>';
+    }
+    row.innerHTML = `
+      <span class="tp-id">T${tp.id}</span>
+      ${qualHtml}
+      <span class="chips">
+        ${[0,1,2].map(ci => `<span class="chip ${tp.meas[ci] ? 'on' : ''}">${ci+1}</span>`).join('')}
+      </span>
+      <button class="del" title="Delete tie point">✕</button>`;
+    row.addEventListener('click', (e) => {
+      if (e.target.classList.contains('del')) return;
+      if (state.phase !== 'edit') return;
+      state.activeId = tp.id;
+      refresh();
+    });
+    row.querySelector('.del').addEventListener('click', () => {
+      if (state.phase !== 'edit') return;
+      state.tps = state.tps.filter(t => t.id !== tp.id);
+      if (state.activeId === tp.id) state.activeId = null;
+      refresh();
+    });
+    tpListEl.appendChild(row);
+  }
+}
+
+// ---------------- coverage ----------------
+const covGridEl = document.getElementById('covGrid');
+// build cells column-major visually: 2 columns (models) x 3 rows (bands)
+const covCells = [];
+for (let b = 0; b < 3; b++) {
+  for (let m = 0; m < 2; m++) {
+    const cell = document.createElement('div');
+    cell.className = 'cov-cell';
+    cell.textContent = ['top', 'mid', 'bot'][b];
+    covGridEl.appendChild(cell);
+    covCells.push({ m, b, el: cell });
+  }
+}
+
+function coverage() {
+  const covered = new Set();
+  const grounds = [];
+  for (const tp of state.tps) {
+    const g = tpGround(tp, state.cams);
+    if (!g) continue;
+    grounds.push({ tp, g });
+    MODELS.forEach((mo, mi) => {
+      if (g[0] < mo.x0 || g[0] > mo.x1) return;
+      // only count for a model if actually measured in both of its photos
+      const need = mi === 0 ? [0,1] : [1,2];
+      if (!need.every(ci => tp.meas[ci])) return;
+      BANDS.forEach((ba, bi) => {
+        if (g[1] >= ba.y0 && g[1] <= ba.y1) covered.add(mi + '-' + bi);
+      });
+    });
+  }
+  return { covered, grounds };
+}
+
+// ---------------- block map ----------------
+const mapCanvas = document.getElementById('mapCanvas');
+const mapCtx = mapCanvas.getContext('2d');
+const MW = mapCanvas.width, MH = mapCanvas.height;
+const wx = x => (x - 40) / 1120 * MW;
+const wy = y => (y - 210) / 580 * MH;
+
+function footprint(cam) {
+  const corners = [[25,25],[IMG-25,25],[IMG-25,IMG-25],[25,IMG-25]];
+  return corners.map(([px,py]) => {
+    const d = pixelRay(cam, px, py);
+    const t = (0 - cam.Z) / d[2];
+    return [cam.X + t*d[0], cam.Y + t*d[1]];
+  });
+}
+
+function drawMap() {
+  const ctx = mapCtx;
+  ctx.clearRect(0, 0, MW, MH);
+  ctx.fillStyle = '#f4f7f4';
+  ctx.fillRect(0, 0, MW, MH);
+  // coverage band frame
+  ctx.strokeStyle = 'rgba(21,101,192,.18)';
+  ctx.setLineDash([4,4]); ctx.lineWidth = 1;
+  MODELS.forEach(mo => {
+    BANDS.forEach(ba => {
+      ctx.strokeRect(wx(mo.x0), wy(ba.y0), wx(mo.x1)-wx(mo.x0), wy(ba.y1)-wy(ba.y0));
+    });
+  });
+  ctx.setLineDash([]);
+  // footprints
+  const colors = ['rgba(21,101,192,.75)', 'rgba(15,138,77,.75)', 'rgba(176,106,0,.75)'];
+  state.cams.forEach((cam, ci) => {
+    const fp = footprint(cam);
+    ctx.strokeStyle = colors[ci]; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    fp.forEach((p, i) => i ? ctx.lineTo(wx(p[0]), wy(p[1])) : ctx.moveTo(wx(p[0]), wy(p[1])));
+    ctx.closePath(); ctx.stroke();
+  });
+  // flight line
+  ctx.strokeStyle = 'rgba(120,135,150,.6)'; ctx.setLineDash([6,5]); ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(wx(340), wy(500)); ctx.lineTo(wx(860), wy(500)); ctx.stroke();
+  ctx.setLineDash([]);
+  // nav estimates (ghost)
+  state.navCams.forEach(c => {
+    ctx.strokeStyle = '#9fb0c2'; ctx.lineWidth = 1.6;
+    const x = wx(c.X), y = wy(c.Y);
+    ctx.beginPath();
+    ctx.moveTo(x-6, y-6); ctx.lineTo(x+6, y+6);
+    ctx.moveTo(x+6, y-6); ctx.lineTo(x-6, y+6);
+    ctx.stroke();
+  });
+  // current cameras
+  state.cams.forEach((c, ci) => {
+    const x = wx(c.X), y = wy(c.Y);
+    ctx.fillStyle = '#1565c0';
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(ci+1), x, y+3.2);
+    ctx.textAlign = 'left';
+  });
+  // GCPs
+  GCPS.forEach(g => {
+    const x = wx(g.P[0]), y = wy(g.P[1]);
+    ctx.fillStyle = '#0f8a4d';
+    ctx.beginPath();
+    ctx.moveTo(x, y-6.5); ctx.lineTo(x-6, y+5); ctx.lineTo(x+6, y+5);
+    ctx.closePath(); ctx.fill();
+  });
+  // tie point grounds
+  const { grounds } = coverage();
+  grounds.forEach(({ tp, g }) => {
+    ctx.fillStyle = tp.qual != null ? qualColor(tp.qual) : '#e37400';
+    ctx.beginPath(); ctx.arc(wx(g[0]), wy(g[1]), 3.4, 0, 7); ctx.fill();
+  });
+  // checkpoints after run
+  if (state.phase === 'done' && state.results) {
+    ctx.strokeStyle = '#7b1fa2'; ctx.lineWidth = 1.6;
+    CHECKPOINTS.forEach(P => {
+      const x = wx(P[0]), y = wy(P[1]);
+      ctx.beginPath();
+      ctx.moveTo(x, y-5); ctx.lineTo(x+5, y); ctx.lineTo(x, y+5); ctx.lineTo(x-5, y);
+      ctx.closePath(); ctx.stroke();
+    });
+  }
+}
+
+// ---------------- 3D block view ----------------
+const scene3d = document.getElementById('scene3d');
+const s3 = scene3d.getContext('2d');
+const orbit = { az: -0.62, el: 0.52, drag: false, lx: 0, ly: 0 };
+let view3d = 'both';
+let showTruth = false;
+const C3 = [600, 500, 470];         // scene centre for the turntable
+
+const COL_BEFORE = { line: '#8b98a6', fill: 'rgba(139,152,166,.12)' };
+const COL_AFTER  = { line: '#1565c0', fill: 'rgba(21,101,192,.11)' };
+const COL_TRUTH  = { line: '#0f8a4d', fill: 'rgba(15,138,77,.05)' };
+
+function rot3(p) {
+  const x = p[0]-C3[0], y = p[1]-C3[1], z = p[2]-C3[2];
+  const ca = Math.cos(orbit.az), sa = Math.sin(orbit.az);
+  const x1 = x*ca - y*sa, y1 = x*sa + y*ca, z1 = z;
+  const ce = Math.cos(orbit.el), se = Math.sin(orbit.el);
+  const y2 = y1*ce - z1*se, z2 = y1*se + z1*ce;
+  return { x: x1, y: -z2, depth: y2 };
+}
+let FIT = { s: 1, ox: 0, oy: 0 };
+function computeFit(w, h) {
+  let minx=1e9, maxx=-1e9, miny=1e9, maxy=-1e9;
+  for (const X of [60,1140]) for (const Y of [230,770]) for (const Z of [0,1050]) {
+    const q = rot3([X,Y,Z]);
+    if (q.x<minx) minx=q.x; if (q.x>maxx) maxx=q.x;
+    if (q.y<miny) miny=q.y; if (q.y>maxy) maxy=q.y;
+  }
+  const pad = 34;
+  const s = Math.min((w-2*pad)/(maxx-minx), (h-2*pad)/(maxy-miny));
+  FIT = { s, ox: (w-(maxx+minx)*s)/2, oy: (h-(maxy+miny)*s)/2 };
+}
+function S(p) { const q = rot3(p); return [FIT.ox + q.x*FIT.s, FIT.oy + q.y*FIT.s]; }
+
+function drawFrustum(cam, col, opt) {
+  opt = opt || {};
+  const O = [cam.X, cam.Y, cam.Z];
+  const corners = [[25,25],[IMG-25,25],[IMG-25,IMG-25],[25,IMG-25]];
+  const g = corners.map(([px,py]) => {
+    const d = pixelRay(cam, px, py);
+    const t = -O[2] / d[2];
+    return [O[0]+t*d[0], O[1]+t*d[1], 0];
+  });
+  const so = S(O), sg = g.map(S);
+  const trace = () => { s3.beginPath(); sg.forEach((p,i)=> i?s3.lineTo(p[0],p[1]):s3.moveTo(p[0],p[1])); s3.closePath(); };
+  if (opt.fill !== false) { trace(); s3.fillStyle = col.fill; s3.fill(); }
+  s3.setLineDash(opt.dash ? [4,4] : []);
+  trace(); s3.strokeStyle = col.line; s3.lineWidth = opt.thin ? 1 : 1.6; s3.stroke();
+  // rays from projection centre to the four ground corners
+  s3.beginPath();
+  sg.forEach(p => { s3.moveTo(so[0], so[1]); s3.lineTo(p[0], p[1]); });
+  s3.lineWidth = opt.thin ? 0.8 : 1.1; s3.stroke();
+  s3.setLineDash([]);
+  // nadir drop line (altitude cue)
+  if (opt.nadir) {
+    const nd = S([O[0], O[1], 0]);
+    s3.setLineDash([3,3]); s3.strokeStyle = 'rgba(110,125,140,.55)'; s3.lineWidth = 1;
+    s3.beginPath(); s3.moveTo(so[0], so[1]); s3.lineTo(nd[0], nd[1]); s3.stroke();
+    s3.setLineDash([]);
+    s3.fillStyle = 'rgba(110,125,140,.6)';
+    s3.beginPath(); s3.arc(nd[0], nd[1], 2, 0, 7); s3.fill();
+  }
+  // principal axis (attitude): centre pixel down to the ground
+  const pd = pixelRay(cam, CXX, CYY);
+  const tt = -O[2] / pd[2];
+  const pp = S([O[0]+tt*pd[0], O[1]+tt*pd[1], 0]);
+  s3.beginPath(); s3.moveTo(so[0], so[1]); s3.lineTo(pp[0], pp[1]);
+  s3.strokeStyle = col.line; s3.lineWidth = opt.thin ? 1 : 2; s3.stroke();
+  // camera body
+  s3.fillStyle = col.line; s3.strokeStyle = '#fff'; s3.lineWidth = 1.4;
+  s3.beginPath(); s3.arc(so[0], so[1], opt.thin ? 3 : 5, 0, 7); s3.fill(); s3.stroke();
+  return so;
+}
+
+function meanShift() {
+  let s = 0;
+  for (let i=0;i<3;i++) {
+    const a = state.navCams[i], b = state.cams[i];
+    s += Math.hypot(a.X-b.X, a.Y-b.Y, a.Z-b.Z);
+  }
+  return s/3;
+}
+
+function draw3D() {
+  const r = scene3d.getBoundingClientRect();
+  if (!r.width) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.round(r.width*dpr), H = Math.round(r.height*dpr);
+  if (scene3d.width !== W || scene3d.height !== H) { scene3d.width = W; scene3d.height = H; }
+  s3.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = r.width, h = r.height;
+  s3.clearRect(0, 0, w, h);
+  computeFit(w, h);
+
+  // ground plane + grid
+  const gp = [[60,230,0],[1140,230,0],[1140,770,0],[60,770,0]].map(S);
+  s3.beginPath(); gp.forEach((p,i)=> i?s3.lineTo(p[0],p[1]):s3.moveTo(p[0],p[1])); s3.closePath();
+  s3.fillStyle = 'rgba(150,172,150,.20)'; s3.fill();
+  s3.strokeStyle = 'rgba(110,132,110,.5)'; s3.lineWidth = 1; s3.stroke();
+  s3.strokeStyle = 'rgba(110,132,110,.20)'; s3.lineWidth = 0.8;
+  for (let X=160;X<=1040;X+=160) { const a=S([X,230,0]), b=S([X,770,0]); s3.beginPath(); s3.moveTo(a[0],a[1]); s3.lineTo(b[0],b[1]); s3.stroke(); }
+  for (let Y=310;Y<=690;Y+=120) { const a=S([60,Y,0]), b=S([1140,Y,0]); s3.beginPath(); s3.moveTo(a[0],a[1]); s3.lineTo(b[0],b[1]); s3.stroke(); }
+
+  // GCPs on the ground
+  GCPS.forEach(gc => {
+    const p = S([gc.P[0], gc.P[1], 0]);
+    s3.fillStyle = '#0f8a4d';
+    s3.beginPath(); s3.moveTo(p[0], p[1]-7); s3.lineTo(p[0]-6, p[1]+5); s3.lineTo(p[0]+6, p[1]+5); s3.closePath(); s3.fill();
+  });
+  // tie point grounds
+  const gcov = coverage();
+  gcov.grounds.forEach(({ tp, g }) => {
+    const p = S([g[0], g[1], 0]);
+    s3.fillStyle = tp.qual != null ? qualColor(tp.qual) : '#e37400';
+    s3.beginPath(); s3.arc(p[0], p[1], 3, 0, 7); s3.fill();
+  });
+  // checkpoints after adjustment
+  if (state.phase === 'done') {
+    CHECKPOINTS.forEach(P => {
+      const p = S([P[0], P[1], 0]);
+      s3.strokeStyle = '#7b1fa2'; s3.lineWidth = 1.6;
+      s3.beginPath(); s3.moveTo(p[0],p[1]-5); s3.lineTo(p[0]+5,p[1]); s3.lineTo(p[0],p[1]+5); s3.lineTo(p[0]-5,p[1]); s3.closePath(); s3.stroke();
+    });
+  }
+
+  if (showTruth) TRUE_CAMS.forEach(c => drawFrustum(c, COL_TRUTH, { dash: true, thin: true, fill: false }));
+
+  const showBefore = view3d === 'before' || view3d === 'both';
+  const showAfter  = view3d === 'after'  || view3d === 'both';
+  const beforeO = [], afterO = [];
+  if (showBefore) state.navCams.forEach(c => beforeO.push(drawFrustum(c, COL_BEFORE, { dash: true, thin: view3d === 'both' })));
+  if (showAfter)  state.cams.forEach(c => afterO.push(drawFrustum(c, COL_AFTER, { nadir: true })));
+
+  // correction vectors between the before/after stations
+  if (view3d === 'both' && state.phase === 'done') {
+    s3.strokeStyle = '#e37400'; s3.lineWidth = 1.4; s3.setLineDash([2,3]);
+    for (let i=0;i<3;i++) if (beforeO[i] && afterO[i]) {
+      s3.beginPath(); s3.moveTo(beforeO[i][0], beforeO[i][1]); s3.lineTo(afterO[i][0], afterO[i][1]); s3.stroke();
+    }
+    s3.setLineDash([]);
+  }
+
+  // station labels
+  const labCams = showAfter ? state.cams : state.navCams;
+  s3.fillStyle = '#16202c'; s3.font = '700 11px system-ui';
+  labCams.forEach((c, i) => { const p = S([c.X, c.Y, c.Z]); s3.fillText('P' + (i+1), p[0]+8, p[1]-6); });
+
+  const note = document.getElementById('geoNote');
+  if (note) note.textContent = state.phase === 'done'
+    ? `Stations shifted ${meanShift().toFixed(1)} m on average and attitudes were re-solved. Orange dashes are the per-camera corrections the adjustment applied.`
+    : 'Adjustment not yet run — the “after” cameras still sit on the rough navigation estimate. Run the adjustment to watch them swing into place.';
+}
+
+scene3d.addEventListener('pointerdown', (e) => {
+  orbit.drag = true; orbit.lx = e.clientX; orbit.ly = e.clientY;
+  try { scene3d.setPointerCapture(e.pointerId); } catch (_) {}
+});
+scene3d.addEventListener('pointermove', (e) => {
+  if (!orbit.drag) return;
+  orbit.az -= (e.clientX - orbit.lx) * 0.008;
+  orbit.el += (e.clientY - orbit.ly) * 0.006;
+  orbit.el = Math.max(0.1, Math.min(1.45, orbit.el));
+  orbit.lx = e.clientX; orbit.ly = e.clientY;
+  draw3D();
+});
+window.addEventListener('pointerup', () => { orbit.drag = false; });
+document.getElementById('viewSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  view3d = b.dataset.view;
+  [...e.currentTarget.children].forEach(c => c.classList.toggle('on', c === b));
+  draw3D();
+});
+document.getElementById('showTruth').addEventListener('change', (e) => { showTruth = e.target.checked; draw3D(); });
+window.addEventListener('resize', () => { draw3D(); drawMap(); });
+
+// ---------------- adjustment ----------------
+function resect(cam, obs) {
+  const p0 = [cam.X, cam.Y, cam.Z, cam.o, cam.p, cam.k];
+  const eps = [0.05, 0.05, 0.05, 1e-4, 1e-4, 1e-4];
+  const res = (p) => {
+    const c = { X:p[0], Y:p[1], Z:p[2], o:p[3], p:p[4], k:p[5], M:null };
+    const r = [];
+    for (const ob of obs) {
+      const pr = project(c, ob.P[0], ob.P[1], ob.P[2]);
+      r.push((pr[0]-ob.px)*ob.w, (pr[1]-ob.py)*ob.w);
+    }
+    return r;
+  };
+  const r0 = res(p0), m = r0.length, J = [];
+  for (let j=0;j<6;j++) {
+    const pj = p0.slice(); pj[j] += eps[j];
+    const rj = res(pj);
+    J.push(rj.map((v, i) => (v - r0[i]) / eps[j]));
+  }
+  const A = Array.from({length:6}, () => new Array(6).fill(0));
+  const b = new Array(6).fill(0);
+  for (let i=0;i<6;i++) {
+    for (let j=0;j<6;j++) {
+      let s = 0; for (let k=0;k<m;k++) s += J[i][k]*J[j][k];
+      A[i][j] = s;
+    }
+    let s = 0; for (let k=0;k<m;k++) s += J[i][k]*r0[k];
+    b[i] = -s;
+  }
+  // GNSS position prior + very weak attitude prior (keeps datum + stability)
+  const wPos = 0.35, wAng = 8;
+  const prior = [cam.gX, cam.gY, cam.gZ, cam.o0, cam.p0, cam.k0];
+  const w = [wPos, wPos, wPos, wAng, wAng, wAng];
+  for (let i=0;i<6;i++) { A[i][i] += w[i]; b[i] -= w[i]*(p0[i]-prior[i]); }
+  for (let i=0;i<6;i++) A[i][i] *= 1.02;
+  const d = solveN(A, b, 6);
+  if (!d) return;
+  const lim = [25, 25, 25, 0.05, 0.05, 0.05];
+  for (let i=0;i<6;i++) {
+    let s = d[i];
+    if (s > lim[i]) s = lim[i]; if (s < -lim[i]) s = -lim[i];
+    p0[i] += s;
+  }
+  cam.X=p0[0]; cam.Y=p0[1]; cam.Z=p0[2]; cam.o=p0[3]; cam.p=p0[4]; cam.k=p0[5];
+  cam.M = null;
+}
+
+function validTps() { return state.tps.filter(t => Object.keys(t.meas).length >= 2); }
+
+function iterateOnce() {
+  const tps = validTps();
+  const pts = tps.map(tp => tpGround(tp, state.cams));
+  state.cams.forEach((cam, ci) => {
+    const obs = [];
+    tps.forEach((tp, ti) => {
+      const m = tp.meas[ci];
+      if (m && pts[ti]) obs.push({ P: pts[ti], px: m.x, py: m.y, w: 1 });
+    });
+    gcpMeas.forEach((meas, gi) => {
+      const m = meas.find(mm => mm.cam === ci);
+      if (m) obs.push({ P: GCPS[gi].P, px: m.px, py: m.py, w: 3 });
+    });
+    if (obs.length >= 3) resect(cam, obs);
+  });
+}
+
+function currentRmsePx() {
+  let s = 0, n = 0;
+  for (const tp of validTps()) {
+    const X = tpGround(tp, state.cams);
+    if (!X) continue;
+    for (const [ci, m] of Object.entries(tp.meas)) {
+      const pr = project(state.cams[+ci], X[0], X[1], X[2]);
+      s += (pr[0]-m.x)**2 + (pr[1]-m.y)**2;
+      n += 2;
+    }
+  }
+  return n ? Math.sqrt(s/n) : null;
+}
+
+function checkpointRMSE(cams) {
+  let s = 0, n = 0;
+  for (const P of CHECKPOINTS) {
+    const rays = [];
+    TRUE_CAMS.forEach((tc, ci) => {
+      const [px, py] = project(tc, P[0], P[1], P[2]);
+      if (inFrame(px, py))
+        rays.push({ C:[cams[ci].X, cams[ci].Y, cams[ci].Z], d: pixelRay(cams[ci], px, py) });
+    });
+    if (rays.length < 2) continue;
+    const X = triangulate(rays);
+    if (!X) continue;
+    s += (X[0]-P[0])**2 + (X[1]-P[1])**2 + (X[2]-P[2])**2;
+    n++;
+  }
+  return n ? Math.sqrt(s/n) : null;
+}
+
+// ---------------- scoring ----------------
+function computeResults() {
+  const tps = validTps();
+  tps.forEach(tp => { tp.qual = tpQuality(tp); });
+  const quals = tps.map(t => t.qual).filter(q => q != null).sort((a, b) => a - b);
+  const median = quals.length ? quals[Math.floor(quals.length/2)] : 99;
+  const blunders = tps.filter(t => t.qual != null && t.qual > 5);
+  const triples = tps.filter(t => Object.keys(t.meas).length === 3);
+  const { covered } = coverage();
+  const cpBefore = checkpointRMSE(state.navCams);
+  const cpAfter = checkpointRMSE(state.cams);
+  const rmse = currentRmsePx();
+
+  // -- components --
+  // accuracy /35 : median tie residual
+  let accuracy;
+  if (median <= 0.5) accuracy = 35;
+  else if (median <= 3) accuracy = 35 - (median - 0.5) / 2.5 * 25;
+  else if (median <= 6) accuracy = 10 - (median - 3) / 3 * 10;
+  else accuracy = 0;
+  accuracy = Math.round(accuracy);
+  // coverage /25
+  const covScore = Math.round(covered.size / 6 * 25);
+  // redundancy /10
+  const redScore = triples.length >= 2 ? 10 : triples.length === 1 ? 6 : 0;
+  // quantity /10
+  const n = tps.length;
+  const qtyScore = n >= 8 ? 10 : n >= 6 ? 8 : n === 5 ? 6 : n === 4 ? 4 : 2;
+  // adjustment /20 : checkpoint RMSE
+  let adjScore;
+  if (cpAfter == null) adjScore = 0;
+  else if (cpAfter <= 1.5) adjScore = 20;
+  else if (cpAfter <= 2.5) adjScore = 16;
+  else if (cpAfter <= 4) adjScore = 12;
+  else if (cpAfter <= 6) adjScore = 8;
+  else if (cpAfter <= 10) adjScore = 4;
+  else adjScore = 0;
+  // blunder penalty
+  const penalty = Math.min(24, blunders.length * 8);
+
+  const total = Math.max(0, Math.min(100, accuracy + covScore + redScore + qtyScore + adjScore - penalty));
+  const grade = total >= 88 ? 'A' : total >= 75 ? 'B' : total >= 60 ? 'C' : total >= 45 ? 'D' : 'F';
+
+  // tips
+  const tips = [];
+  const missing = [];
+  MODELS.forEach((mo, mi) => BANDS.forEach((ba, bi) => {
+    if (!covered.has(mi + '-' + bi))
+      missing.push(`${['top','middle','bottom'][bi]} of model ${mi === 0 ? '1–2' : '2–3'}`);
+  }));
+  if (missing.length)
+    tips.push(`Uncovered von Gruber zones: ${missing.join(', ')}. Weak geometry there lets the block flex.`);
+  blunders.forEach(t =>
+    tips.push(`T${t.id} is a blunder (${t.qual.toFixed(1)} m ray miss) — the clicks are not the same ground feature. Real AT software would flag and reject it.`));
+  if (!triples.length)
+    tips.push('No 3-ray points. Features in the triple overlap (centre of Photo 2) tie the whole strip together — the strongest points in the block.');
+  if (n < 6)
+    tips.push(`Only ${n} usable tie points. Production blocks use many more; 6+ gives this strip healthy redundancy.`);
+  if (median > 1.2 && median <= 5)
+    tips.push('Tie residuals are a little loose — use the loupe and aim for crisp, well-defined details (corners, intersections) rather than soft textures.');
+  if (cpAfter != null && cpAfter <= 1.5)
+    tips.push('Checkpoint QA passed at mapping grade — this block would be accepted for stereo plotting.');
+  if (!tips.length)
+    tips.push('Textbook block. The review board has nothing to add.');
+
+  const verdict = {
+    A: 'Block accepted — mapping grade. A tidy piece of aerotriangulation.',
+    B: 'Block accepted with remarks. Solid geometry, minor slack.',
+    C: 'Conditional pass — the plotter operators will grumble.',
+    D: 'Block rejected: geometry too weak for safe stereo restitution.',
+    F: 'Block rejected outright. Re-observe and re-fly the adjustment.',
+  }[grade];
+
+  return {
+    total, grade, verdict, tips,
+    accuracy, covScore, redScore, qtyScore, adjScore, penalty,
+    median, blunders: blunders.length, rmse, cpBefore, cpAfter, nTps: n,
+  };
+}
+
+// ---------------- run flow ----------------
+const ITERS = 40;
+
+function preflightWarnings() {
+  const w = [];
+  const tps = validTps();
+  if (tps.length < 6) w.push(`Only <b>${tps.length}</b> complete tie points (6+ recommended).`);
+  const { covered } = coverage();
+  if (covered.size < 6) w.push(`Only <b>${covered.size} / 6</b> von Gruber zones covered.`);
+  if (!state.tps.some(t => Object.keys(t.meas).length === 3))
+    w.push('No 3-ray points measured in the triple overlap.');
+  const incomplete = state.tps.filter(t => Object.keys(t.meas).length === 1);
+  if (incomplete.length)
+    w.push(`${incomplete.map(t => 'T'+t.id).join(', ')} measured in only one photo — a single ray cannot triangulate and will be ignored.`);
+  return w;
+}
+
+function startRun() {
+  state.phase = 'running';
+  state.cams = freshCams();          // always adjust from the nav estimates
+  document.getElementById('runOverlay').classList.add('open');
+  let it = 0;
+  const fill = document.getElementById('progFill');
+  const line = document.getElementById('iterLine');
+  const timer = setInterval(() => {
+    iterateOnce(); it++;
+    iterateOnce(); it++;
+    const r = currentRmsePx();
+    fill.style.width = (it / ITERS * 100) + '%';
+    line.textContent = `iteration ${it} / ${ITERS} · σ₀ = ${r != null ? r.toFixed(2) : '—'} px`;
+    drawMap();
+    draw3D();
+    if (it >= ITERS) {
+      clearInterval(timer);
+      setTimeout(finishRun, 350);
+    }
+  }, 90);
+}
+
+function finishRun() {
+  document.getElementById('runOverlay').classList.remove('open');
+  state.phase = 'done';
+  state.results = computeResults();
+  const R = state.results;
+
+  // best score
+  const best = Number(localStorage.getItem('atl-best') || 0);
+  if (R.total > best) localStorage.setItem('atl-best', String(R.total));
+  updateBestChip();
+
+  const badge = document.getElementById('gradeBadge');
+  badge.textContent = R.grade;
+  badge.className = 'grade-badge g' + R.grade;
+  document.getElementById('scoreVal').textContent = R.total;
+  document.getElementById('verdictLine').textContent = R.verdict;
+  document.getElementById('rRmse').textContent = R.rmse != null ? R.rmse.toFixed(2) + ' px' : '—';
+  document.getElementById('rCheck').innerHTML = R.cpAfter != null
+    ? `${R.cpAfter.toFixed(2)} m <small>(was ${R.cpBefore.toFixed(0)} m)</small>` : '—';
+  document.getElementById('rMed').textContent = R.median < 99 ? R.median.toFixed(2) + ' m' : '—';
+  document.getElementById('rBlun').textContent = R.blunders;
+
+  const rows = [
+    ['Tie point accuracy', R.accuracy, 35],
+    ['Von Gruber coverage', R.covScore, 25],
+    ['Adjustment / checkpoint QA', R.adjScore, 20],
+    ['Redundancy (3-ray points)', R.redScore, 10],
+    ['Point count', R.qtyScore, 10],
+  ];
+  let html = rows.map(([k, v, max]) => `
+    <tr><td>${k}<div class="bar-track"><div class="bar-fill" style="width:${v/max*100}%"></div></div></td>
+    <td>${v} / ${max}</td></tr>`).join('');
+  if (R.penalty)
+    html += `<tr class="penalty"><td>Blunder penalty</td><td>−${R.penalty}</td></tr>`;
+  html += `<tr class="total"><td>Total</td><td>${R.total} / 100</td></tr>`;
+  document.getElementById('breakTable').innerHTML = html;
+
+  document.getElementById('tipsList').innerHTML =
+    R.tips.map(t => `<li>${t}</li>`).join('');
+
+  refresh();
+  document.getElementById('resOverlay').classList.add('open');
+}
+
+// ---------------- global refresh ----------------
+function refresh() {
+  drawPhotos();
+  renderTpList();
+  const { covered } = coverage();
+  covCells.forEach(c => c.el.classList.toggle('on', covered.has(c.m + '-' + c.b)));
+  const tps = validTps();
+  document.getElementById('tpCount').textContent = state.tps.length;
+  document.getElementById('stTp').innerHTML = `${tps.length} <small>/ 6 rec.</small>`;
+  document.getElementById('stTriple').textContent =
+    state.tps.filter(t => Object.keys(t.meas).length === 3).length;
+  document.getElementById('stCov').innerHTML = `${covered.size} <small>/ 6</small>`;
+  const rmse = state.phase === 'done' ? currentRmsePx() : null;
+  document.getElementById('stRmse').textContent = rmse != null ? rmse.toFixed(2) + ' px' : '—';
+  document.getElementById('btnRun').disabled = state.phase === 'running' || tps.length < 4;
+  document.getElementById('btnRun').textContent =
+    tps.length < 4 ? `Run adjustment (${tps.length}/4 pts)` : 'Run adjustment ▶';
+  // steps
+  const steps = document.querySelectorAll('#stepList li');
+  steps[0].classList.add('done');
+  steps[1].classList.toggle('done', tps.length >= 6);
+  steps[2].classList.toggle('done', covered.size === 6);
+  steps[3].classList.toggle('done', state.phase === 'done');
+  document.querySelectorAll('.photo-body').forEach(b =>
+    b.classList.toggle('locked', state.phase !== 'edit'));
+  drawMap();
+  draw3D();
+}
+
+function updateBestChip() {
+  const best = Number(localStorage.getItem('atl-best') || 0);
+  document.getElementById('bestChip').innerHTML =
+    best ? `Best: <b>${best} / 100</b>` : 'Best: <b>—</b>';
+}
+
+// ---------------- buttons & modals ----------------
+document.getElementById('btnNewTp').addEventListener('click', () => {
+  if (state.phase !== 'edit') return;
+  state.activeId = null;   // next click starts a fresh point
+  refresh();
+});
+document.getElementById('btnClearTp').addEventListener('click', () => {
+  if (state.phase !== 'edit') return;
+  if (state.tps.length && !confirm('Delete all tie points?')) return;
+  state.tps = []; state.activeId = null;
+  refresh();
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (state.tps.length && !confirm('Reset the whole block (tie points and adjustment)?')) return;
+  state.tps = []; state.activeId = null; state.phase = 'edit';
+  state.cams = freshCams(); state.results = null;
+  refresh();
+});
+document.getElementById('btnRun').addEventListener('click', () => {
+  if (state.phase === 'running') return;
+  if (validTps().length < 4) return;
+  const warnings = preflightWarnings();
+  if (warnings.length) {
+    document.getElementById('warnBody').innerHTML =
+      '<div class="callout warn"><b>The review board notes:</b></div><ul>' +
+      warnings.map(w => `<li>${w}</li>`).join('') + '</ul>' +
+      '<p>You can run anyway — weak blocks converge to weak results, just like real life.</p>';
+    document.getElementById('warnOverlay').classList.add('open');
+  } else {
+    startRun();
+  }
+});
+document.getElementById('btnWarnBack').addEventListener('click', () =>
+  document.getElementById('warnOverlay').classList.remove('open'));
+document.getElementById('btnWarnRun').addEventListener('click', () => {
+  document.getElementById('warnOverlay').classList.remove('open');
+  startRun();
+});
+document.getElementById('btnHelp').addEventListener('click', () =>
+  document.getElementById('helpOverlay').classList.add('open'));
+document.getElementById('btnHelpClose').addEventListener('click', () =>
+  document.getElementById('helpOverlay').classList.remove('open'));
+document.getElementById('btnCloseRes').addEventListener('click', () =>
+  document.getElementById('resOverlay').classList.remove('open'));
+document.getElementById('btnRefine').addEventListener('click', () => {
+  document.getElementById('resOverlay').classList.remove('open');
+  state.phase = 'edit';
+  refresh();
+});
+document.getElementById('btnRestart').addEventListener('click', () => {
+  document.getElementById('resOverlay').classList.remove('open');
+  state.tps = []; state.activeId = null; state.phase = 'edit';
+  state.cams = freshCams(); state.results = null;
+  refresh();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Delete' && state.phase === 'edit' && state.activeId != null) {
+    state.tps = state.tps.filter(t => t.id !== state.activeId);
+    state.activeId = null;
+    refresh();
+  }
+});
+
+// ---------------- boot ----------------
+updateBestChip();
+refresh();
+document.getElementById('helpOverlay').classList.add('open');
+</script>
+</body>
+</html>
