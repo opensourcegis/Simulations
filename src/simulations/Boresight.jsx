@@ -31,7 +31,7 @@ const toWorld = (axes, v) => add(add(scale(axes[0], v[0]), scale(axes[1], v[1]))
 
 const VIEW_W = 700; const VIEW_H = 560;
 function makeProjector(orbit) {
-  const center = [0, 0, -1.4];
+  const center = [0, 0, -1.0];
   const ca = Math.cos(orbit.az); const sa = Math.sin(orbit.az);
   const ce = Math.cos(orbit.el); const se = Math.sin(orbit.el);
   const eye = [center[0] + orbit.dist * ce * sa, center[1] - orbit.dist * ce * ca, center[2] + orbit.dist * se];
@@ -83,21 +83,67 @@ const SENSORS = {
 };
 
 const DEFAULTS = {
-  gps: { arm: [-0.4, 0.4, 3.2], bore: [0, 0, 0] },
-  scanner: { arm: [1.4, 0.0, -0.7], bore: [4, -3, 5] },
-  camera: { arm: [1.7, 0.7, -0.5], bore: [-3, 4, -2] },
+  gps: { arm: [-0.9, 0.0, 1.05], bore: [0, 0, 0] }, // antenna on top of the fuselage, behind the wing
+  scanner: { arm: [0.7, 0.0, -0.8], bore: [4, -3, 5] }, // laser scanner under the belly, looking down
+  camera: { arm: [1.3, 0.5, -0.75], bore: [-3, 4, -2] }, // camera under the nose, offset
 };
 
-// Payload box (the sensor pod / drone body), in IMU body coordinates.
-const BOX = { hx: 2.1, hy: 1.25, hz: 0.65 };
-const BOX_CORNERS = [
-  [-BOX.hx, -BOX.hy, -BOX.hz], [BOX.hx, -BOX.hy, -BOX.hz], [BOX.hx, BOX.hy, -BOX.hz], [-BOX.hx, BOX.hy, -BOX.hz],
-  [-BOX.hx, -BOX.hy, BOX.hz], [BOX.hx, -BOX.hy, BOX.hz], [BOX.hx, BOX.hy, BOX.hz], [-BOX.hx, BOX.hy, BOX.hz],
-];
-const BOX_FACES = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [3, 0, 4, 7]];
+// A transparent fixed-wing drone, in IMU body coordinates (X forward/nose,
+// Y left, Z up). Built as a lofted fuselage tube plus wing/tail/fin quads so it
+// can be drawn see-through (faint fills + wireframe) with the sensors visible
+// inside it.
+const DRONE = (() => {
+  const sides = 8;
+  const stations = [
+    { x: 3.25, r: 0.08 }, { x: 2.5, r: 0.4 }, { x: 1.3, r: 0.58 }, { x: 0.0, r: 0.6 },
+    { x: -1.3, r: 0.5 }, { x: -2.5, r: 0.32 }, { x: -3.25, r: 0.1 },
+  ];
+  const rings = stations.map((st) => Array.from({ length: sides }, (_, i) => {
+    const a = (i / sides) * Math.PI * 2; return [st.x, st.r * Math.cos(a), st.r * Math.sin(a)];
+  }));
+  const faces = []; const edges = [];
+  rings.forEach((ring) => { for (let i = 0; i < sides; i += 1) edges.push([ring[i], ring[(i + 1) % sides]]); });
+  for (let s = 0; s < rings.length - 1; s += 1) {
+    for (let i = 0; i < sides; i += 1) {
+      faces.push({ pts: [rings[s][i], rings[s][(i + 1) % sides], rings[s + 1][(i + 1) % sides], rings[s + 1][i]], kind: 'body' });
+      edges.push([rings[s][i], rings[s + 1][i]]);
+    }
+  }
+  const wingR = [[1.5, 0.35, 0.06], [0.3, 0.35, 0.06], [0.65, 3.7, 0.06], [1.05, 3.7, 0.06]];
+  const wingL = wingR.map((p) => [p[0], -p[1], p[2]]);
+  const hzR = [[-2.4, 0.2, 0.02], [-3.15, 0.2, 0.02], [-3.05, 1.5, 0.02], [-2.55, 1.5, 0.02]];
+  const hzL = hzR.map((p) => [p[0], -p[1], p[2]]);
+  const fin = [[-2.4, 0, 0.1], [-3.15, 0, 0.1], [-3.15, 0, 1.15], [-2.55, 0, 0.95]];
+  [wingR, wingL, hzR, hzL].forEach((q) => faces.push({ pts: q, kind: 'wing' }));
+  faces.push({ pts: fin, kind: 'fin' });
+  [wingR, wingL, hzR, hzL, fin].forEach((q) => { for (let i = 0; i < q.length; i += 1) edges.push([q[i], q[(i + 1) % q.length]]); });
+  return { faces, edges, propX: 3.32, propR: 1.05 };
+})();
+
+const DRONE_FILL = { body: 'rgba(150,180,210,0.05)', wing: 'rgba(150,180,210,0.11)', fin: 'rgba(150,180,210,0.11)' };
+
+function drawDrone(ctx, proj, eye) {
+  DRONE.faces.map((f) => ({ f, depth: norm(sub(scale(f.pts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / f.pts.length), eye)) }))
+    .sort((a, b) => b.depth - a.depth)
+    .forEach(({ f }) => {
+      const pr = f.pts.map(proj); if (pr.some((p) => !p)) return;
+      ctx.beginPath(); pr.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath();
+      ctx.fillStyle = DRONE_FILL[f.kind] || DRONE_FILL.body; ctx.fill();
+    });
+  ctx.strokeStyle = 'rgba(178,202,226,0.5)'; ctx.lineWidth = 1;
+  DRONE.edges.forEach(([a, b]) => { const pa = proj(a); const pb = proj(b); if (pa && pb) { ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke(); } });
+  // propeller: dashed arc + blades + hub
+  const hub = [DRONE.propX, 0, 0];
+  ctx.strokeStyle = 'rgba(178,202,226,0.35)'; ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = 0; i <= 24; i += 1) { const a = i / 24 * Math.PI * 2; const p = proj([DRONE.propX, DRONE.propR * Math.cos(a), DRONE.propR * Math.sin(a)]); if (p) (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); }
+  ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(198,216,236,0.75)'; ctx.lineWidth = 2.4;
+  for (let b = 0; b < 3; b += 1) { const a = b * Math.PI * 2 / 3; const ph = proj(hub); const pt = proj([DRONE.propX, DRONE.propR * Math.cos(a), DRONE.propR * Math.sin(a)]); if (ph && pt) { ctx.beginPath(); ctx.moveTo(ph[0], ph[1]); ctx.lineTo(pt[0], pt[1]); ctx.stroke(); } }
+  const ph = proj(hub); if (ph) { ctx.fillStyle = '#c6d6e2'; ctx.beginPath(); ctx.arc(ph[0], ph[1], 3, 0, Math.PI * 2); ctx.fill(); label(ctx, ph, 'propeller', 'rgba(198,214,226,.7)', 6, -8, '600 10px system-ui'); }
+}
 
 function render(canvas, state) {
-  const { orbit, arms, bores, height, showArms, showGhost, showLaser } = state;
+  const { orbit, arms, bores, height, showArms, showGhost, showLaser, sel } = state;
   const ctx = canvas.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
   g.addColorStop(0, '#111d29'); g.addColorStop(1, '#0a1119');
@@ -111,49 +157,35 @@ function render(canvas, state) {
     line(ctx, proj([-8, i, groundZ]), proj([8, i, groundZ]), 'rgba(90,120,150,.16)');
   }
 
-  // Payload box (painter-sorted, simple shading).
-  const faces = BOX_FACES.map((f) => {
-    const pts = f.map((i) => BOX_CORNERS[i]);
-    const c = scale(pts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / 4);
-    let n = normalize(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
-    if (dot(n, sub(c, [0, 0, 0])) < 0) n = scale(n, -1);
-    return { pts, c, depth: norm(sub(c, eye)), front: dot(n, sub(eye, c)) > 0, n };
-  }).sort((a, b) => b.depth - a.depth);
-  faces.forEach((fc) => {
-    if (!fc.front) return;
-    const sc = 0.4 + 0.6 * Math.max(0, dot(fc.n, normalize([-0.4, -0.5, 0.9])));
-    const pr = fc.pts.map(proj); if (pr.some((p) => !p)) return;
-    ctx.beginPath(); pr.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath();
-    ctx.fillStyle = `rgba(${Math.round(214 * sc)},${Math.round(196 * sc)},${Math.round(70 * sc)},0.92)`;
-    ctx.fill(); ctx.strokeStyle = 'rgba(30,26,10,.6)'; ctx.lineWidth = 1; ctx.stroke();
-  });
+  // Transparent fixed-wing drone (wireframe + faint fills, so the sensors and
+  // their vectors stay visible inside it).
+  drawDrone(ctx, proj, eye);
 
   // IMU triad (reference frame) at the body origin.
-  triad(ctx, proj, [0, 0, 0], eulerAxes(0, 0, 0), 2.2, 0.95, 'ᴵ');
+  triad(ctx, proj, [0, 0, 0], eulerAxes(0, 0, 0), 1.8, 0.95, 'ᴵ');
   const oI = proj([0, 0, 0]);
   if (oI) { ctx.fillStyle = '#e8eff5'; ctx.beginPath(); ctx.arc(oI[0], oI[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, oI, 'IMU', '#e8eff5', 8, 16); }
 
-  // Each sensor: lever-arm vector, boresighted axis triad, marker.
+  // Each sensor: lever-arm vector, boresighted axis triad, marker. The sensor
+  // currently being edited is drawn in full; the others are dimmed to declutter.
   Object.keys(SENSORS).forEach((key) => {
-    const s = SENSORS[key]; const pos = arms[key];
+    const s = SENSORS[key]; const pos = arms[key]; const isSel = key === sel;
     const axes = s.bore ? eulerAxes(...bores[key]) : eulerAxes(0, 0, 0);
     if (showArms) {
-      arrow3(ctx, proj, [0, 0, 0], pos, s.color, 2.4);
-      const mid = proj(scale(pos, 0.5));
-      const mag = norm(pos);
-      label(ctx, mid, `a${key === 'gps' ? '₉' : key === 'scanner' ? 'ₛ' : 'ₑ'} = ${mag.toFixed(2)} m`, s.color, 8, -4, '600 11px system-ui');
+      arrow3(ctx, proj, [0, 0, 0], pos, s.color, isSel ? 2.6 : 1.4);
+      if (isSel) label(ctx, proj(scale(pos, 0.5)), `a = ${norm(pos).toFixed(2)} m`, s.color, 8, -4, '600 11px system-ui');
     }
     // ghost of IMU-aligned axes at the sensor, to reveal the boresight offset
-    if (s.bore && showGhost) triad(ctx, proj, pos, eulerAxes(0, 0, 0), 1.3, 0.28, null);
-    triad(ctx, proj, pos, axes, 1.5, 0.95, key === 'scanner' ? 'ₛ' : key === 'camera' ? 'ₑ' : null);
+    if (s.bore && showGhost && isSel) triad(ctx, proj, pos, eulerAxes(0, 0, 0), 1.2, 0.3, null);
+    triad(ctx, proj, pos, axes, isSel ? 1.6 : 0.8, isSel ? 0.95 : 0.55, isSel && key === 'scanner' ? 'ₛ' : isSel && key === 'camera' ? 'ₑ' : null);
     const pp = proj(pos);
     if (pp) {
-      ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(pp[0], pp[1], 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(pp[0], pp[1], isSel ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#0a1119'; ctx.lineWidth = 1.5; ctx.stroke();
-      label(ctx, pp, s.label, s.color, 9, 20, '600 11px system-ui');
+      label(ctx, pp, s.label, s.color, 9, isSel ? 20 : 14, isSel ? '700 12px system-ui' : '600 10px system-ui');
     }
     // GPS antenna disc
-    if (key === 'gps' && pp) { ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(pp[0], pp[1] - 2, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); }
+    if (key === 'gps' && pp) { ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(pp[0], pp[1] - 2, 15, 6, 0, 0, Math.PI * 2); ctx.stroke(); }
   });
 
   // Laser beam + boresight ground error.
@@ -182,7 +214,7 @@ function render(canvas, state) {
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export default function Boresight() {
-  const [orbit, setOrbit] = useState({ az: -0.7, el: 0.32, dist: 22 });
+  const [orbit, setOrbit] = useState({ az: -0.6, el: 0.28, dist: 20 });
   const [arms, setArms] = useState({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice(), camera: DEFAULTS.camera.arm.slice() });
   const [bores, setBores] = useState({ scanner: DEFAULTS.scanner.bore.slice(), camera: DEFAULTS.camera.bore.slice() });
   const [height, setHeight] = useState(6);
@@ -194,8 +226,8 @@ export default function Boresight() {
   const canvasRef = useRef(null); const drag = useRef(null);
 
   useEffect(() => {
-    render(canvasRef.current, { orbit, arms, bores, height, showArms, showGhost, showLaser });
-  }, [orbit, arms, bores, height, showArms, showGhost, showLaser]);
+    render(canvasRef.current, { orbit, arms, bores, height, showArms, showGhost, showLaser, sel });
+  }, [orbit, arms, bores, height, showArms, showGhost, showLaser, sel]);
 
   const setArm = (key, i) => (e) => setArms((p) => { const a = { ...p, [key]: p[key].slice() }; a[key][i] = Number(e.target.value); return a; });
   const setBore = (key, i) => (e) => setBores((p) => { const b = { ...p, [key]: p[key].slice() }; b[key][i] = Number(e.target.value); return b; });
@@ -253,7 +285,7 @@ export default function Boresight() {
               <label><input type="checkbox" checked={showArms} onChange={(e) => setShowArms(e.target.checked)} /> lever-arm vectors</label>
               <label><input type="checkbox" checked={showGhost} onChange={(e) => setShowGhost(e.target.checked)} /> IMU-aligned ghost axes</label>
               <label><input type="checkbox" checked={showLaser} onChange={(e) => setShowLaser(e.target.checked)} /> laser &amp; ground error</label>
-              <button className="bs-btn" onClick={() => setOrbit({ az: -0.7, el: 0.32, dist: 22 })}>reset view</button>
+              <button className="bs-btn" onClick={() => setOrbit({ az: -0.6, el: 0.28, dist: 20 })}>reset view</button>
             </div>
           </section>
         </div>
