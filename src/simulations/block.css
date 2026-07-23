@@ -101,6 +101,53 @@
   font-weight: 400;
 }
 
+/* Sub-Pill Tab Switcher */
+.sub-pill-container {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sub-pill-btn {
+  padding: 6px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.sub-pill-btn:hover {
+  border-color: #0f8a4d;
+  color: #0f8a4d;
+}
+.sub-pill-btn.active {
+  border-color: #0f8a4d;
+  background: #0f8a4d;
+  color: #ffffff;
+}
+
+/* Collapsible Accordion Drawer */
+.accordion-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+}
+.accordion-toggle:hover {
+  background: #f1f5f9;
+}
+
 /* Solvability Status Badges */
 .solvability-badge {
   display: inline-flex;

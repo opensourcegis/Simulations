@@ -66,17 +66,24 @@ function computeBlockParams(numStrips, photosPerStrip, endLap, sideLap, numGcps,
 }
 
 export default function BlockAdjustment() {
-  // Main Tab State: 'single' (Single Photo & Collinearity Geometry) vs 'block' (Full Block Adjustment)
+  // Main Tab State: 'single' (Single Photo) vs 'block' (Full Block Adjustment)
   const [activeTab, setActiveTab] = useState('single');
+
+  // Sub-Tab State inside Tab 1: 'diagram' (Ray & Variables) vs 'gcp' (3 GCP Rule & Solvability)
+  const [subTab, setSubTab] = useState('diagram');
+
+  // Collapsible Accordion State
+  const [showDerivation, setShowDerivation] = useState(false);
+  const [showArithmetic, setShowArithmetic] = useState(false);
 
   // Tab 1: Single Photo State
   const [singleGcps, setSingleGcps] = useState(3); // 1 to 6 GCPs
   const [singleSelfCalib, setSingleSelfCalib] = useState(false);
   const [showAxesProjections, setShowAxesProjections] = useState(true);
 
-  // Tab 2: Full Block Parameters
-  const [numStrips, setNumStrips] = useState(2);
-  const [photosPerStrip, setPhotosPerStrip] = useState(4);
+  // Tab 2: Full Block Parameters (fixed block layout)
+  const numStrips = 2;
+  const photosPerStrip = 4;
   const [endLap, setEndLap] = useState(70);
   const [sideLap, setSideLap] = useState(40);
   const [numGcps, setNumGcps] = useState(4);
@@ -95,7 +102,7 @@ export default function BlockAdjustment() {
   const [solverStep, setSolverStep] = useState(0);
   const [isSolving, setIsSolving] = useState(false);
 
-  // Animation Frame Ref for Smooth Light Rays & Laser Pulses
+  // Animation Frame Ref
   const animFrameRef = useRef(null);
   const animTimeRef = useRef(0);
   const canvasRef = useRef(null);
@@ -146,7 +153,7 @@ export default function BlockAdjustment() {
     return () => clearInterval(timer);
   }, [isSolving, solverHistory.length]);
 
-  // Continuous Animation Loop (Light Ray Pulses & Collinearity Geometry Diagram)
+  // Continuous Animation Loop
   useEffect(() => {
     let running = true;
     const loop = () => {
@@ -162,7 +169,6 @@ export default function BlockAdjustment() {
 
         ctx.clearRect(0, 0, width, height);
 
-        // Dark gradient background
         const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
         bgGrad.addColorStop(0, '#070f19');
         bgGrad.addColorStop(1, '#0c1a2b');
@@ -196,174 +202,198 @@ export default function BlockAdjustment() {
         };
 
         if (activeTab === 'single') {
-          // =========================================================================
-          // TAB 1: TEXTBOOK COLLINEARITY CONDITION GEOMETRY DIAGRAM
-          // =========================================================================
-          // 1. Draw 3D Ground Coordinate Axes X, Y, Z
-          const orig = project3D(0, 0, 0);
-          const xAxis = project3D(100, 0, 0);
-          const yAxis = project3D(0, 100, 0);
-          const zAxis = project3D(0, 0, 60);
+          if (subTab === 'diagram') {
+            // =========================================================================
+            // 3D COLLINEARITY GEOMETRY DIAGRAM (L - a - A)
+            // =========================================================================
+            const orig = project3D(0, 0, 0);
+            const xAxis = project3D(100, 0, 0);
+            const yAxis = project3D(0, 100, 0);
+            const zAxis = project3D(0, 0, 60);
 
-          ctx.strokeStyle = '#64748b';
-          ctx.lineWidth = 2;
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(orig.px, orig.py); ctx.lineTo(xAxis.px, xAxis.py); ctx.stroke();
+            ctx.fillStyle = '#94a3b8'; ctx.font = '700 13px system-ui';
+            ctx.fillText('X (Ground)', xAxis.px + 8, xAxis.py + 4);
 
-          // X-Axis
-          ctx.beginPath(); ctx.moveTo(orig.px, orig.py); ctx.lineTo(xAxis.px, xAxis.py); ctx.stroke();
-          ctx.fillStyle = '#94a3b8'; ctx.font = '700 13px system-ui';
-          ctx.fillText('X (Ground)', xAxis.px + 8, xAxis.py + 4);
+            ctx.beginPath(); ctx.moveTo(orig.px, orig.py); ctx.lineTo(yAxis.px, yAxis.py); ctx.stroke();
+            ctx.fillText('Y (Ground)', yAxis.px - 25, yAxis.py + 16);
 
-          // Y-Axis
-          ctx.beginPath(); ctx.moveTo(orig.px, orig.py); ctx.lineTo(yAxis.px, yAxis.py); ctx.stroke();
-          ctx.fillText('Y (Ground)', yAxis.px - 25, yAxis.py + 16);
+            ctx.beginPath(); ctx.moveTo(orig.px, orig.py); ctx.lineTo(zAxis.px, zAxis.py); ctx.stroke();
+            ctx.fillText('Z (Height)', zAxis.px - 6, zAxis.py - 10);
 
-          // Z-Axis
-          ctx.beginPath(); ctx.moveTo(orig.px, orig.py); ctx.lineTo(zAxis.px, zAxis.py); ctx.stroke();
-          ctx.fillText('Z (Height)', zAxis.px - 6, zAxis.py - 10);
+            const pG0 = project3D(0, 0, 0), pG1 = project3D(100, 0, 0), pG2 = project3D(100, 100, 0), pG3 = project3D(0, 100, 0);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+            ctx.beginPath();
+            ctx.moveTo(pG0.px, pG0.py); ctx.lineTo(pG1.px, pG1.py); ctx.lineTo(pG2.px, pG2.py); ctx.lineTo(pG3.px, pG3.py);
+            ctx.closePath(); ctx.fill();
 
-          // Ground Plane Grid
-          const pG0 = project3D(0, 0, 0), pG1 = project3D(100, 0, 0), pG2 = project3D(100, 100, 0), pG3 = project3D(0, 100, 0);
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
-          ctx.beginPath();
-          ctx.moveTo(pG0.px, pG0.py); ctx.lineTo(pG1.px, pG1.py); ctx.lineTo(pG2.px, pG2.py); ctx.lineTo(pG3.px, pG3.py);
-          ctx.closePath(); ctx.fill();
+            const XL = 42, YL = 45, ZL = 48;
+            const projL = project3D(XL, YL, ZL);
+            const projL_ground = project3D(XL, YL, 0);
 
-          // 2. Perspective Center L (XL, YL, ZL)
-          const XL = 42, YL = 45, ZL = 48;
-          const projL = project3D(XL, YL, ZL);
-          const projL_ground = project3D(XL, YL, 0);
+            if (showAxesProjections) {
+              ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)'; ctx.lineWidth = 1;
+              const pXL = project3D(XL, 0, 0);
+              const pYL = project3D(0, YL, 0);
 
-          // Ground Projections for L (XL, YL, ZL)
-          if (showAxesProjections) {
-            ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)'; ctx.lineWidth = 1;
-            const pXL = project3D(XL, 0, 0);
-            const pYL = project3D(0, YL, 0);
+              ctx.beginPath(); ctx.moveTo(pXL.px, pXL.py); ctx.lineTo(projL_ground.px, projL_ground.py); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(pYL.px, pYL.py); ctx.lineTo(projL_ground.px, projL_ground.py); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(projL_ground.px, projL_ground.py); ctx.lineTo(projL.px, projL.py); ctx.stroke();
+              ctx.setLineDash([]);
 
-            ctx.beginPath(); ctx.moveTo(pXL.px, pXL.py); ctx.lineTo(projL_ground.px, projL_ground.py); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(pYL.px, pYL.py); ctx.lineTo(projL_ground.px, projL_ground.py); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(projL_ground.px, projL_ground.py); ctx.lineTo(projL.px, projL.py); ctx.stroke();
+              ctx.fillStyle = '#38bdf8'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center';
+              ctx.fillText('XL', (pXL.px + projL_ground.px) / 2, (pXL.py + projL_ground.py) / 2 + 12);
+              ctx.fillText('YL', (pYL.px + projL_ground.px) / 2 - 10, (pYL.py + projL_ground.py) / 2);
+              ctx.fillText('ZL (Flying Height)', projL.px + 40, (projL.py + projL_ground.py) / 2);
+            }
+
+            const fDistance = 14;
+            const pOrigin = project3D(XL, YL, ZL - fDistance);
+
+            const pw = 28, ph = 22;
+            const pf0 = project3D(XL - pw / 2, YL - ph / 2, ZL - fDistance);
+            const pf1 = project3D(XL + pw / 2, YL - ph / 2, ZL - fDistance);
+            const pf2 = project3D(XL + pw / 2, YL + ph / 2, ZL - fDistance);
+            const pf3 = project3D(XL - pw / 2, YL + ph / 2, ZL - fDistance);
+
+            ctx.fillStyle = 'rgba(30, 58, 138, 0.45)'; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(pf0.px, pf0.py); ctx.lineTo(pf1.px, pf1.py); ctx.lineTo(pf2.px, pf2.py); ctx.lineTo(pf3.px, pf3.py);
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+
+            const pxAxis = project3D(XL + pw / 2 - 2, YL, ZL - fDistance);
+            const pyAxis = project3D(XL, YL + ph / 2 - 2, ZL - fDistance);
+
+            ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.moveTo(pf0.px, (pf0.py + pf3.py) / 2); ctx.lineTo(pf1.px, (pf1.py + pf2.py) / 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo((pf0.px + pf1.px) / 2, pf0.py); ctx.lineTo((pf3.px + pf2.px) / 2, pf3.py); ctx.stroke();
+
+            ctx.fillStyle = '#93c5fd'; ctx.font = '600 10px system-ui';
+            ctx.fillText('x_a', pxAxis.px + 4, pxAxis.py); ctx.fillText('y_a', pyAxis.px, pyAxis.py + 10);
+
+            ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.arc(pOrigin.px, pOrigin.py, 3.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillText('o (Principal Point)', pOrigin.px - 45, pOrigin.py + 12);
+
+            ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(projL.px, projL.py); ctx.lineTo(pOrigin.px, pOrigin.py); ctx.stroke();
             ctx.setLineDash([]);
+            ctx.fillStyle = '#fbbf24'; ctx.font = '700 11px system-ui';
+            ctx.fillText('f (Focal Length)', (projL.px + pOrigin.px) / 2 + 25, (projL.py + pOrigin.py) / 2);
 
-            ctx.fillStyle = '#38bdf8'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center';
-            ctx.fillText('XL', (pXL.px + projL_ground.px) / 2, (pXL.py + projL_ground.py) / 2 + 12);
-            ctx.fillText('YL', (pYL.px + projL_ground.px) / 2 - 10, (pYL.py + projL_ground.py) / 2);
-            ctx.fillText('ZL (Flying Height)', projL.px + 40, (projL.py + projL_ground.py) / 2);
-          }
-
-          // 3. Tilted Photo Plane (Image Plane)
-          const fDistance = 14; // Focal Length f
-          const pOrigin = project3D(XL, YL, ZL - fDistance); // Principal point o
-          const pNadir = project3D(XL, YL, 0); // Nadir point n on ground
-
-          // Draw Photo Plane Quadrilateral Rectangle
-          const pw = 28, ph = 22;
-          const pf0 = project3D(XL - pw / 2, YL - ph / 2, ZL - fDistance);
-          const pf1 = project3D(XL + pw / 2, YL - ph / 2, ZL - fDistance);
-          const pf2 = project3D(XL + pw / 2, YL + ph / 2, ZL - fDistance);
-          const pf3 = project3D(XL - pw / 2, YL + ph / 2, ZL - fDistance);
-
-          ctx.fillStyle = 'rgba(30, 58, 138, 0.45)';
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.moveTo(pf0.px, pf0.py); ctx.lineTo(pf1.px, pf1.py); ctx.lineTo(pf2.px, pf2.py); ctx.lineTo(pf3.px, pf3.py);
-          ctx.closePath(); ctx.fill(); ctx.stroke();
-
-          // Image Plane Axes x_a, y_a
-          const pxAxis = project3D(XL + pw / 2 - 2, YL, ZL - fDistance);
-          const pyAxis = project3D(XL, YL + ph / 2 - 2, ZL - fDistance);
-
-          ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 1.2;
-          ctx.beginPath(); ctx.moveTo(pf0.px, (pf0.py + pf3.py) / 2); ctx.lineTo(pf1.px, (pf1.py + pf2.py) / 2); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo((pf0.px + pf1.px) / 2, pf0.py); ctx.lineTo((pf3.px + pf2.px) / 2, pf3.py); ctx.stroke();
-
-          ctx.fillStyle = '#93c5fd'; ctx.font = '600 10px system-ui';
-          ctx.fillText('x_a', pxAxis.px + 4, pxAxis.py);
-          ctx.fillText('y_a', pyAxis.px, pyAxis.py + 10);
-
-          // Principal Point o
-          ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.arc(pOrigin.px, pOrigin.py, 3.5, 0, Math.PI * 2); ctx.fill();
-          ctx.fillText('o (Principal Point)', pOrigin.px - 45, pOrigin.py + 12);
-
-          // Optical Axis / Focal Length f (L -> o)
-          ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
-          ctx.beginPath(); ctx.moveTo(projL.px, projL.py); ctx.lineTo(pOrigin.px, pOrigin.py); ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.fillStyle = '#fbbf24'; ctx.font = '700 11px system-ui';
-          ctx.fillText('f (Focal Length)', (projL.px + pOrigin.px) / 2 + 25, (projL.py + pOrigin.py) / 2);
-
-          // Nadir Point Line (L -> n)
-          ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
-          ctx.beginPath(); ctx.moveTo(projL.px, projL.py); ctx.lineTo(projL_ground.px, projL_ground.py); ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.fillStyle = '#94a3b8'; ctx.fillText('n (Nadir)', projL_ground.px - 18, projL_ground.py + 14);
-
-          // 4. Ground Object Point A (XA, YA, ZA)
-          const XA = 78, YA = 75, ZA = 10;
-          const projA = project3D(XA, YA, ZA);
-          const projA_ground = project3D(XA, YA, 0);
-
-          // Ground Projections for A (XA, YA, ZA)
-          if (showAxesProjections) {
-            ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)'; ctx.lineWidth = 1;
-            const pXA = project3D(XA, 0, 0);
-            const pYA = project3D(0, YA, 0);
-
-            ctx.beginPath(); ctx.moveTo(pXA.px, pXA.py); ctx.lineTo(projA_ground.px, projA_ground.py); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(pYA.px, pYA.py); ctx.lineTo(projA_ground.px, projA_ground.py); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(projA_ground.px, projA_ground.py); ctx.lineTo(projA.px, projA.py); ctx.stroke();
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(projL.px, projL.py); ctx.lineTo(projL_ground.px, projL_ground.py); ctx.stroke();
             ctx.setLineDash([]);
+            ctx.fillStyle = '#94a3b8'; ctx.fillText('n (Nadir)', projL_ground.px - 18, projL_ground.py + 14);
 
-            ctx.fillStyle = '#fbbf24'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center';
-            ctx.fillText('XA', (pXA.px + projA_ground.px) / 2, (pXA.py + projA_ground.py) / 2 + 10);
-            ctx.fillText('YA', (pYA.px + projA_ground.px) / 2 + 10, (pYA.py + projA_ground.py) / 2);
-            ctx.fillText('ZA', projA.px + 12, (projA.py + projA_ground.py) / 2);
+            const XA = 78, YA = 75, ZA = 10;
+            const projA = project3D(XA, YA, ZA);
+            const projA_ground = project3D(XA, YA, 0);
+
+            if (showAxesProjections) {
+              ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)'; ctx.lineWidth = 1;
+              const pXA = project3D(XA, 0, 0); const pYA = project3D(0, YA, 0);
+              ctx.beginPath(); ctx.moveTo(pXA.px, pXA.py); ctx.lineTo(projA_ground.px, projA_ground.py); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(pYA.px, pYA.py); ctx.lineTo(projA_ground.px, projA_ground.py); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(projA_ground.px, projA_ground.py); ctx.lineTo(projA.px, projA.py); ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.fillStyle = '#fbbf24'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center';
+              ctx.fillText('XA', (pXA.px + projA_ground.px) / 2, (pXA.py + projA_ground.py) / 2 + 10);
+              ctx.fillText('YA', (pYA.px + projA_ground.px) / 2 + 10, (pYA.py + projA_ground.py) / 2);
+              ctx.fillText('ZA', projA.px + 12, (projA.py + projA_ground.py) / 2);
+            }
+
+            const t_photo = fDistance / (ZL - ZA);
+            const pt_a_3d = { x: XL + (XA - XL) * t_photo, y: YL + (YA - YL) * t_photo, z: ZL - fDistance };
+            const proj_a = project3D(pt_a_3d.x, pt_a_3d.y, pt_a_3d.z);
+
+            ctx.fillStyle = '#34d399'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(proj_a.px, proj_a.py, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#34d399'; ctx.font = '700 12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('a (Image Pt: xa, ya)', proj_a.px + 8, proj_a.py - 4);
+
+            ctx.fillStyle = '#f59e0b'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(projA.px, projA.py, 6.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(projA.px, projA.py, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fbbf24'; ctx.font = '700 12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('A (Ground Pt: XA, YA, ZA)', projA.px + 10, projA.py + 4);
+
+            ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5; ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.moveTo(projL.px, projL.py); ctx.lineTo(projA.px, projA.py); ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            const pFrac = (t * 0.7) % 1.0;
+            const pulsePx = projL.px + (projA.px - projL.px) * pFrac;
+            const pulsePy = projL.py + (projA.py - projL.py) * pFrac;
+            ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.arc(pulsePx, pulsePy, 5, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = '#38bdf8'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(projL.px, projL.py, 7.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#ffffff'; ctx.font = '700 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('L (Perspective Center: XL, YL, ZL)', projL.px, projL.py - 12);
+
+          } else {
+            // =========================================================================
+            // SINGLE CAMERA GCP RAYS VIEW
+            // =========================================================================
+            const pG0 = project3D(0, 0, 0), pG1 = project3D(100, 0, 0), pG2 = project3D(100, 100, 0), pG3 = project3D(0, 100, 0);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+            ctx.beginPath(); ctx.moveTo(pG0.px, pG0.py); ctx.lineTo(pG1.px, pG1.py); ctx.lineTo(pG2.px, pG2.py); ctx.lineTo(pG3.px, pG3.py);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            const camX = 50, camY = 50, camZ = 40;
+            const camProj = project3D(camX, camY, camZ);
+
+            if (singleGcps < 3) {
+              const errRadius = (3 - singleGcps) * 16;
+              ctx.fillStyle = 'rgba(239, 68, 68, 0.15)'; ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; ctx.lineWidth = 1.5;
+              ctx.beginPath(); ctx.arc(camProj.px, camProj.py, errRadius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#ef4444'; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center';
+              ctx.fillText(`⚠️ Pose Uncertainty Cone (r = ${singleGcps * 2 - 6})`, camProj.px, camProj.py - errRadius - 8);
+            }
+
+            const fW = 32, fH = 26;
+            const fp0 = project3D(camX - fW / 2, camY - fH / 2, 0), fp1 = project3D(camX + fW / 2, camY - fH / 2, 0);
+            const fp2 = project3D(camX + fW / 2, camY + fH / 2, 0), fp3 = project3D(camX - fW / 2, camY + fH / 2, 0);
+
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.12)'; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.2;
+            [fp0, fp1, fp2, fp3].forEach((fp) => {
+              ctx.beginPath(); ctx.moveTo(camProj.px, camProj.py); ctx.lineTo(fp.px, fp.py); ctx.stroke();
+            });
+
+            ctx.beginPath(); ctx.moveTo(fp0.px, fp0.py); ctx.lineTo(fp1.px, fp1.py); ctx.lineTo(fp2.px, fp2.py); ctx.lineTo(fp3.px, fp3.py);
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+
+            ctx.fillStyle = '#38bdf8'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(camProj.px, camProj.py, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#ffffff'; ctx.font = '700 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('Camera C1 (Xc, Yc, Zc, ω, φ, κ)', camProj.px, camProj.py - 12);
+
+            const gcpLocations = [
+              { x: 30, y: 32 }, { x: 70, y: 32 }, { x: 70, y: 68 },
+              { x: 30, y: 68 }, { x: 50, y: 32 }, { x: 50, y: 68 },
+            ];
+
+            for (let g = 0; g < singleGcps; g++) {
+              const gcp = gcpLocations[g];
+              const gcpProj = project3D(gcp.x, gcp.y, 0);
+              ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.8;
+              ctx.beginPath(); ctx.moveTo(camProj.px, camProj.py); ctx.lineTo(gcpProj.px, gcpProj.py); ctx.stroke();
+
+              const pFrac = (t * 0.8 + g * 0.35) % 1.0;
+              const pulsePx = camProj.px + (gcpProj.px - camProj.px) * pFrac;
+              const pulsePy = camProj.py + (gcpProj.py - camProj.py) * pFrac;
+              ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pulsePx, pulsePy, 4, 0, Math.PI * 2); ctx.fill();
+
+              ctx.fillStyle = '#f59e0b'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.arc(gcpProj.px, gcpProj.py, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(gcpProj.px, gcpProj.py, 2.5, 0, Math.PI * 2); ctx.fill();
+
+              ctx.fillStyle = '#fbbf24'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center';
+              ctx.fillText(`GCP-${g + 1} (2 eq)`, gcpProj.px, gcpProj.py - 10);
+            }
           }
-
-          // Exact Collinearity Image Point a (xa, ya) on Photo Plane
-          // Parameter t_photo = f / (ZL - ZA) ensures point a is EXACTLY on line L - A!
-          const t_photo = fDistance / (ZL - ZA);
-          const pt_a_3d = {
-            x: XL + (XA - XL) * t_photo,
-            y: YL + (YA - YL) * t_photo,
-            z: ZL - fDistance,
-          };
-          const proj_a = project3D(pt_a_3d.x, pt_a_3d.y, pt_a_3d.z);
-
-          // Draw Image Point a
-          ctx.fillStyle = '#34d399'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.arc(proj_a.px, proj_a.py, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-          ctx.fillStyle = '#34d399'; ctx.font = '700 12px system-ui'; ctx.textAlign = 'left';
-          ctx.fillText('a (Image Pt: xa, ya)', proj_a.px + 8, proj_a.py - 4);
-
-          // Draw Ground Point A
-          ctx.fillStyle = '#f59e0b'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(projA.px, projA.py, 6.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-          ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(projA.px, projA.py, 2, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#fbbf24'; ctx.font = '700 12px system-ui'; ctx.textAlign = 'left';
-          ctx.fillText('A (Ground Pt: XA, YA, ZA)', projA.px + 10, projA.py + 4);
-
-          // 5. THE COLLINEARITY RAY (Straight Line L - a - A)
-          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5;
-          ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 8;
-          ctx.beginPath();
-          ctx.moveTo(projL.px, projL.py);
-          ctx.lineTo(projA.px, projA.py);
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-
-          // Animated Pulse along Collinearity Ray
-          const pFrac = (t * 0.7) % 1.0;
-          const pulsePx = projL.px + (projA.px - projL.px) * pFrac;
-          const pulsePy = projL.py + (projA.py - projL.py) * pFrac;
-          ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.arc(pulsePx, pulsePy, 5, 0, Math.PI * 2); ctx.fill();
-
-          // Camera Center Node L
-          ctx.fillStyle = '#38bdf8'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(projL.px, projL.py, 7.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-          ctx.fillStyle = '#ffffff'; ctx.font = '700 12px system-ui'; ctx.textAlign = 'center';
-          ctx.fillText('L (Perspective Center: XL, YL, ZL)', projL.px, projL.py - 12);
-
         } else {
           // =========================================================================
           // TAB 2: FULL BLOCK ADJUSTMENT ANIMATION
@@ -511,6 +541,7 @@ export default function BlockAdjustment() {
     };
   }, [
     activeTab,
+    subTab,
     singleGcps,
     showAxesProjections,
     numStrips,
@@ -568,7 +599,7 @@ export default function BlockAdjustment() {
           onClick={() => setActiveTab('single')}
         >
           <strong>📸 Tab 1: Single Photo Collinearity Geometry &amp; 3 GCP Rule</strong>
-          <span>Examine the textbook ray L-a-A, photo plane, variables (L, f, o, n, a, A), and 3 GCP requirement</span>
+          <span>Examine ray L-a-A, photo plane, variables (L, f, o, n, a, A), and 3 GCP requirement</span>
         </button>
 
         <button
@@ -584,9 +615,30 @@ export default function BlockAdjustment() {
         {/* Left Column: 3D Animated Canvas View */}
         <div className="sim-col">
           <section className="sim-panel">
+            {activeTab === 'single' && (
+              <div className="sub-pill-container">
+                <button
+                  className={`sub-pill-btn ${subTab === 'diagram' ? 'active' : ''}`}
+                  onClick={() => setSubTab('diagram')}
+                >
+                  📐 3D Collinearity Diagram (L - a - A)
+                </button>
+                <button
+                  className={`sub-pill-btn ${subTab === 'gcp' ? 'active' : ''}`}
+                  onClick={() => setSubTab('gcp')}
+                >
+                  🎯 Single Photo 3 GCP Rule Demo
+                </button>
+              </div>
+            )}
+
             <h2>
               <span className="stepno">1</span>
-              {activeTab === 'single' ? ' Collinearity Geometry Diagram (L - a - A)' : ' 3D Flight Block & Overlap Ray-Tracing'}
+              {activeTab === 'single'
+                ? subTab === 'diagram'
+                  ? ' Collinearity Geometry Diagram (L - a - A)'
+                  : ' Single Camera GCP Ray-Tracing'
+                : ' 3D Flight Block & Overlap Ray-Tracing'}
               <small style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 <button
                   className="tin-btn secondary"
@@ -638,7 +690,7 @@ export default function BlockAdjustment() {
                 </>
               )}
 
-              {activeTab === 'single' && (
+              {activeTab === 'single' && subTab === 'diagram' && (
                 <label style={{ marginLeft: 'auto' }}>
                   <input
                     type="checkbox"
@@ -673,18 +725,45 @@ export default function BlockAdjustment() {
 
             {/* Legend */}
             <div className="block-legend">
-              <span>
-                <i className="block-swatch" style={{ background: '#38bdf8' }} /> L (Perspective Center / Exposure Station)
-              </span>
-              <span>
-                <i className="block-swatch" style={{ background: '#34d399' }} /> a (Image Point: xa, ya)
-              </span>
-              <span>
-                <i className="block-swatch" style={{ background: '#f59e0b' }} /> A (Ground Object Point: XA, YA, ZA)
-              </span>
-              <span>
-                <i className="block-swatch" style={{ background: '#fbbf24' }} /> Line L-a-A (Collinearity Ray)
-              </span>
+              {activeTab === 'single' ? (
+                subTab === 'diagram' ? (
+                  <>
+                    <span>
+                      <i className="block-swatch" style={{ background: '#38bdf8' }} /> L (Perspective Center)
+                    </span>
+                    <span>
+                      <i className="block-swatch" style={{ background: '#34d399' }} /> a (Image Point: xa, ya)
+                    </span>
+                    <span>
+                      <i className="block-swatch" style={{ background: '#f59e0b' }} /> A (Ground Point: XA, YA, ZA)
+                    </span>
+                    <span>
+                      <i className="block-swatch" style={{ background: '#fbbf24' }} /> Line L-a-A (Collinearity Ray)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      <i className="block-swatch" style={{ background: '#38bdf8' }} /> Camera Center (C1)
+                    </span>
+                    <span>
+                      <i className="block-swatch" style={{ background: '#f59e0b' }} /> Ground Control Points ({singleGcps} GCPs)
+                    </span>
+                  </>
+                )
+              ) : (
+                <>
+                  <span>
+                    <i className="block-swatch" style={{ background: '#38bdf8' }} /> Camera Centers ({stats.numPhotos} photos)
+                  </span>
+                  <span>
+                    <i className="block-swatch" style={{ background: '#34d399' }} /> Tie Points (~{stats.numTiePoints})
+                  </span>
+                  <span>
+                    <i className="block-swatch" style={{ background: '#f59e0b' }} /> GCPs ({numGcps})
+                  </span>
+                </>
+              )}
             </div>
           </section>
 
@@ -745,214 +824,200 @@ export default function BlockAdjustment() {
           )}
         </div>
 
-        {/* Right Column: Interactive Tab Content & Mathematics */}
+        {/* Right Column: Clean Interactive Tab Content */}
         <div className="sim-col">
           {activeTab === 'single' ? (
-            /* ========================================================================= */
-            /* TAB 1 CONTENT: COLLINEARITY DIAGRAM & VARIABLE EXPLANATION                */
-            /* ========================================================================= */
-            <>
-              {/* Detailed Collinearity Variables Reference Table */}
-              <section className="sim-panel">
-                <h2>
-                  <span className="stepno">2</span> Geometric Variable Definitions &amp; Diagram Notation
-                </h2>
+            subTab === 'diagram' ? (
+              /* SUB-TAB 1A: COLLINEARITY DIAGRAM & VARIABLES */
+              <>
+                <section className="sim-panel">
+                  <h2>
+                    <span className="stepno">2</span> Variable Definitions
+                  </h2>
 
-                <div className="math-step-calc" style={{ marginTop: 4 }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Symbol</th>
-                        <th>Geometric Definition</th>
-                        <th>Description &amp; Role in Photogrammetry</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td><b style={{ color: '#38bdf8' }}>L (X_L, Y_L, Z_L)</b></td>
-                        <td>Perspective Center / Exposure Station</td>
-                        <td>3D spatial coordinates of camera lens center in ground system. (3 EO unknowns per photo)</td>
-                      </tr>
-                      <tr>
-                        <td><b style={{ color: '#fbbf24' }}>f</b></td>
-                        <td>Calibrated Focal Length</td>
-                        <td>Perpendicular distance from lens L to photo plane origin o. (IO parameter)</td>
-                      </tr>
-                      <tr>
-                        <td><b style={{ color: '#60a5fa' }}>o (x₀, y₀)</b></td>
-                        <td>Principal Point</td>
-                        <td>Intersection of optical axis with photo plane. Origin of image coordinate system.</td>
-                      </tr>
-                      <tr>
-                        <td><b style={{ color: '#94a3b8' }}>n</b></td>
-                        <td>Nadir Point</td>
-                        <td>Point where plumb vertical line passing through L intersects photo plane.</td>
-                      </tr>
-                      <tr>
-                        <td><b style={{ color: '#34d399' }}>a (x_a, y_a)</b></td>
-                        <td>Image Point</td>
-                        <td>2D photo coordinates of target point measured on image plane.</td>
-                      </tr>
-                      <tr>
-                        <td><b style={{ color: '#a7f3d0' }}>(x'_a, y'_a, z'_a)</b></td>
-                        <td>Rotated Image Point</td>
-                        <td>Coordinates of image point a in an un-rotated system x'y'z' parallel to ground system.</td>
-                      </tr>
-                      <tr>
-                        <td><b style={{ color: '#f59e0b' }}>A (X_A, Y_A, Z_A)</b></td>
-                        <td>Ground Object Point</td>
-                        <td>True 3D spatial coordinates of target point on ground terrain (GCP or Tie Point).</td>
-                      </tr>
-                      <tr>
-                        <td><b style={{ color: '#38bdf8' }}>Line L - a - A</b></td>
-                        <td><b>Collinearity Ray</b></td>
-                        <td>Fundamental condition: Exposure station <b>L</b>, image point <b>a</b>, and ground point <b>A</b> lie on a single straight line in space.</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              {/* Simple Step-by-Step Derivation of Collinearity Equations */}
-              <section className="sim-panel">
-                <h2>
-                  <span className="stepno">3</span> Simple Derivation of Collinearity Equations
-                </h2>
-
-                <div className="block-summary-box" style={{ background: '#f8fafc', borderLeft: '4px solid #38bdf8', color: '#1e293b' }}>
-                  <strong style={{ color: '#0f172a' }}>Step 1: Similar Triangles (Parallel System x'y'z')</strong>
-                  <p>
-                    By similar triangles along the straight line <b>L - a - A</b> in space:
-                  </p>
-                  <div style={{ fontFamily: 'monospace', background: '#0f172a', color: '#f8fafc', padding: '8px 12px', borderRadius: 6, margin: '6px 0', fontSize: 12 }}>
-                    <div>x'_a / (X_A - X_L) = y'_a / (Y_A - Y_L) = -z'_a / (Z_L - Z_A)</div>
-                    <div style={{ color: '#38bdf8', marginTop: 4 }}>
-                      &rArr; x'_a = [ (X_A - X_L) / (Z_A - Z_L) ] · z'_a
-                    </div>
-                    <div style={{ color: '#38bdf8' }}>
-                      &rArr; y'_a = [ (Y_A - Y_L) / (Z_A - Z_L) ] · z'_a
-                    </div>
+                  <div className="math-step-calc" style={{ marginTop: 4 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Symbol</th>
+                          <th>Definition</th>
+                          <th>Role</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><b style={{ color: '#38bdf8' }}>L (X_L, Y_L, Z_L)</b></td>
+                          <td>Perspective Center</td>
+                          <td>Lens 3D position (3 EO parameters)</td>
+                        </tr>
+                        <tr>
+                          <td><b style={{ color: '#fbbf24' }}>f</b></td>
+                          <td>Focal Length</td>
+                          <td>Distance from lens L to photo origin o</td>
+                        </tr>
+                        <tr>
+                          <td><b style={{ color: '#60a5fa' }}>o (x₀, y₀)</b></td>
+                          <td>Principal Point</td>
+                          <td>Photo plane coordinate origin</td>
+                        </tr>
+                        <tr>
+                          <td><b style={{ color: '#94a3b8' }}>n</b></td>
+                          <td>Nadir Point</td>
+                          <td>Plumb line intersection on photo plane</td>
+                        </tr>
+                        <tr>
+                          <td><b style={{ color: '#34d399' }}>a (x_a, y_a)</b></td>
+                          <td>Image Point</td>
+                          <td>2D photo coordinates of target point</td>
+                        </tr>
+                        <tr>
+                          <td><b style={{ color: '#a7f3d0' }}>(x'_a, y'_a, z'_a)</b></td>
+                          <td>Rotated Image Pt</td>
+                          <td>Point a in parallel system x'y'z'</td>
+                        </tr>
+                        <tr>
+                          <td><b style={{ color: '#f59e0b' }}>A (X_A, Y_A, Z_A)</b></td>
+                          <td>Ground Point</td>
+                          <td>True 3D coordinates on terrain</td>
+                        </tr>
+                        <tr>
+                          <td><b style={{ color: '#38bdf8' }}>Ray L-a-A</b></td>
+                          <td><b>Collinearity Ray</b></td>
+                          <td>L, a, and A lie on 1 straight line</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
-                  <strong style={{ color: '#0f172a', display: 'block', marginTop: 10 }}>Step 2: 3D Camera Rotation Matrix M (ω, φ, κ)</strong>
-                  <p>
-                    Camera orientation angles <b>roll (ω), pitch (φ), yaw (κ)</b> convert un-rotated system <code>(x'_a, y'_a, z'_a)</code> to actual image coordinates <code>(x_a, y_a, z_a)</code>:
-                  </p>
-                  <div style={{ fontFamily: 'monospace', background: '#0f172a', color: '#f8fafc', padding: '8px 12px', borderRadius: 6, margin: '6px 0', fontSize: 12 }}>
-                    <div>x_a = m₁₁ x'_a + m₁₂ y'_a + m₁₃ z'_a</div>
-                    <div>y_a = m₂₁ x'_a + m₂₂ y'_a + m₂₃ z'_a</div>
-                    <div>z_a = m₃₁ x'_a + m₃₂ y'_a + m₃₃ z'_a = -f</div>
-                  </div>
+                  {/* Collapsible Derivation Drawer */}
+                  <button
+                    className="accordion-toggle"
+                    onClick={() => setShowDerivation(!showDerivation)}
+                  >
+                    <span>📖 {showDerivation ? 'Hide' : 'Show'} Step-by-Step Derivation Formulas</span>
+                    <span>{showDerivation ? '▲' : '▼'}</span>
+                  </button>
 
-                  <strong style={{ color: '#0f172a', display: 'block', marginTop: 10 }}>Step 3: Final Collinearity Observation Equations</strong>
-                  <p>
-                    Dividing <code>x_a</code> and <code>y_a</code> by <code>z_a = -f</code> and adding principal point offset <code>(x₀, y₀)</code> yields the final equations:
-                  </p>
-                  <div className="math-formula-box" style={{ marginTop: 4 }}>
-                    <div style={{ color: '#34d399', fontWeight: 700, fontSize: 13 }}>
-                      x_a = x₀ - f · [ m₁₁(X_A - X_L) + m₁₂(Y_A - Y_L) + m₁₃(Z_A - Z_L) ] / [ m₃₁(X_A - X_L) + m₃₂(Y_A - Y_L) + m₃₃(Z_A - Z_L) ]
+                  {showDerivation && (
+                    <div className="block-summary-box" style={{ background: '#f8fafc', borderLeft: '4px solid #38bdf8', color: '#1e293b', marginTop: 8 }}>
+                      <strong style={{ color: '#0f172a' }}>Step 1: Similar Triangles</strong>
+                      <div style={{ fontFamily: 'monospace', background: '#0f172a', color: '#f8fafc', padding: '6px 10px', borderRadius: 6, margin: '4px 0', fontSize: 11 }}>
+                        <div>x'_a = [ (X_A - X_L) / (Z_A - Z_L) ] · z'_a</div>
+                        <div>y'_a = [ (Y_A - Y_L) / (Z_A - Z_L) ] · z'_a</div>
+                      </div>
+
+                      <strong style={{ color: '#0f172a', display: 'block', marginTop: 8 }}>Step 2: 3D Camera Rotation Matrix M (ω, φ, κ)</strong>
+                      <div style={{ fontFamily: 'monospace', background: '#0f172a', color: '#f8fafc', padding: '6px 10px', borderRadius: 6, margin: '4px 0', fontSize: 11 }}>
+                        <div>x_a = m₁₁ x'_a + m₁₂ y'_a + m₁₃ z'_a</div>
+                        <div>y_a = m₂₁ x'_a + m₂₂ y'_a + m₂₃ z'_a</div>
+                        <div>z_a = m₃₁ x'_a + m₃₂ y'_a + m₃₃ z'_a = -f</div>
+                      </div>
+
+                      <strong style={{ color: '#0f172a', display: 'block', marginTop: 8 }}>Step 3: Final Collinearity Equations</strong>
+                      <div className="math-formula-box" style={{ marginTop: 4 }}>
+                        <div style={{ color: '#34d399', fontWeight: 700, fontSize: 12 }}>
+                          x_a = x₀ - f · [ m₁₁(X_A - X_L) + m₁₂(Y_A - Y_L) + m₁₃(Z_A - Z_L) ] / [ m₃₁(X_A - X_L) + m₃₂(Y_A - Y_L) + m₃₃(Z_A - Z_L) ]
+                        </div>
+                        <div style={{ color: '#34d399', fontWeight: 700, fontSize: 12, marginTop: 4 }}>
+                          y_a = y₀ - f · [ m₂₁(X_A - X_L) + m₂₂(Y_A - Y_L) + m₂₃(Z_A - Z_L) ] / [ m₃₁(X_A - X_L) + m₃₂(Y_A - Y_L) + m₃₃(Z_A - Z_L) ]
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ color: '#34d399', fontWeight: 700, fontSize: 13, marginTop: 6 }}>
-                      y_a = y₀ - f · [ m₂₁(X_A - X_L) + m₂₂(Y_A - Y_L) + m₂₃(Z_A - Z_L) ] / [ m₃₁(X_A - X_L) + m₃₂(Y_A - Y_L) + m₃₃(Z_A - Z_L) ]
-                    </div>
-                  </div>
-                </div>
-              </section>
+                  )}
+                </section>
+              </>
+            ) : (
+              /* SUB-TAB 1B: SINGLE PHOTO 3 GCP RULE & SOLVABILITY */
+              <>
+                <section className="sim-panel">
+                  <h2>
+                    <span className="stepno">2</span> Single Photo 3 GCP Rule &amp; Controls
+                  </h2>
 
-              {/* Single Photo 3 GCP Requirement & Controls */}
-              <section className="sim-panel">
-                <h2>
-                  <span className="stepno">4</span> Single Photo 3 GCP Rule &amp; Equation Balance
-                </h2>
-
-                <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
-                  <label>
-                    Ground Control Points (GCPs): <b>{singleGcps} GCPs</b>
-                    <input
-                      type="range"
-                      min="1"
-                      max="6"
-                      step="1"
-                      value={singleGcps}
-                      onChange={(e) => setSingleGcps(Number(e.target.value))}
-                    />
-                  </label>
-
-                  <div className="check-row">
-                    <label style={{ cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                  <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <label>
+                      Ground Control Points (GCPs): <b>{singleGcps} GCPs</b>
                       <input
-                        type="checkbox"
-                        checked={singleSelfCalib}
-                        onChange={(e) => setSingleSelfCalib(e.target.checked)}
+                        type="range"
+                        min="1"
+                        max="6"
+                        step="1"
+                        value={singleGcps}
+                        onChange={(e) => setSingleGcps(Number(e.target.value))}
                       />
-                      Enable Unknown Focal Length / Calibration (+7 IO Unknowns)
                     </label>
-                  </div>
-                </div>
 
-                {/* Math Equation Balance Cards for Single Photo */}
-                <div className="eq-balance-grid" style={{ marginTop: 14 }}>
-                  <div className="eq-card">
-                    <h3>Unknowns (N_unk)</h3>
-                    <div className="eq-main-val" style={{ color: '#ef4444' }}>
-                      {singleUnkCount}
+                    <div className="check-row">
+                      <label style={{ cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                        <input
+                          type="checkbox"
+                          checked={singleSelfCalib}
+                          onChange={(e) => setSingleSelfCalib(e.target.checked)}
+                        />
+                        Enable Unknown Focal Length / Calibration (+7 IO Unknowns)
+                      </label>
                     </div>
+                  </div>
+
+                  <div className="eq-balance-grid" style={{ marginTop: 14 }}>
+                    <div className="eq-card">
+                      <h3>Unknowns (N_unk)</h3>
+                      <div className="eq-main-val" style={{ color: '#ef4444' }}>
+                        {singleUnkCount}
+                      </div>
+                      <ul>
+                        <li>EO (Position + Attitude): <b>6</b></li>
+                        <li>IO (Distortion/Focal): <b>{singleSelfCalib ? 7 : 0}</b></li>
+                      </ul>
+                    </div>
+
+                    <div className="eq-card">
+                      <h3>Observations (N_obs)</h3>
+                      <div className="eq-main-val" style={{ color: '#3b82f6' }}>
+                        {singleEqCount}
+                      </div>
+                      <ul>
+                        <li>Collinearity Eq: <b>{singleEqCount}</b> (2 per GCP)</li>
+                      </ul>
+                    </div>
+
+                    <div className="eq-card">
+                      <h3>Redundancy (r)</h3>
+                      <div className="eq-main-val" style={{ color: singleRedundancy >= 0 ? '#10b981' : '#ef4444' }}>
+                        {singleRedundancy >= 0 ? `+${singleRedundancy}` : singleRedundancy}
+                      </div>
+                      <ul>
+                        <li>Status: <b>{singleRedundancy >= 0 ? 'SOLVABLE' : 'UNSOLVABLE'}</b></li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="block-summary-box" style={{ marginTop: 14 }}>
+                    <strong>🎯 Why Exactly 3 GCPs are Minimum Required:</strong>
+                    <p>
+                      Each camera pose has <b>6 degrees of freedom (EO)</b>: <code>(X_L, Y_L, Z_L, roll ω, pitch φ, yaw κ)</code>.
+                    </p>
+                    <p>
+                      Each GCP produces <b>2 collinearity equations</b> (image x and y).
+                    </p>
                     <ul>
-                      <li>EO (Position + Attitude): <b>6</b> (XL,YL,ZL, ω,φ,κ)</li>
-                      <li>IO (Focal length/distortion): <b>{singleSelfCalib ? 7 : 0}</b></li>
+                      <li><b>1 GCP (2 eq)</b>: 2 &lt; 6 &rarr; <code>r = -4</code> (Underdetermined! Camera position floats).</li>
+                      <li><b>2 GCPs (4 eq)</b>: 4 &lt; 6 &rarr; <code>r = -2</code> (Underdetermined! Scale/tilt unconstrained).</li>
+                      <li><b>3 GCPs (6 eq)</b>: 6 = 6 &rarr; <code>r = 0</code> (<b>EXACTLY DETERMINED</b>! Solves all 6 parameters).</li>
+                      <li><b>4+ GCPs (8+ eq)</b>: 8 &gt; 6 &rarr; <code>r = +2</code> (<b>OVERDETERMINED</b>! Enables least-squares bundle).</li>
                     </ul>
                   </div>
-
-                  <div className="eq-card">
-                    <h3>Observations (N_obs)</h3>
-                    <div className="eq-main-val" style={{ color: '#3b82f6' }}>
-                      {singleEqCount}
-                    </div>
-                    <ul>
-                      <li>Collinearity Equations: <b>{singleEqCount}</b> (2 per GCP)</li>
-                      <li>Measured GCPs: <b>{singleGcps}</b></li>
-                    </ul>
-                  </div>
-
-                  <div className="eq-card">
-                    <h3>Redundancy (r)</h3>
-                    <div className="eq-main-val" style={{ color: singleRedundancy >= 0 ? '#10b981' : '#ef4444' }}>
-                      {singleRedundancy >= 0 ? `+${singleRedundancy}` : singleRedundancy}
-                    </div>
-                    <ul>
-                      <li>Status: <b>{singleRedundancy >= 0 ? 'SOLVABLE' : 'UNSOLVABLE'}</b></li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Educational Explanation Box */}
-                <div className="block-summary-box" style={{ marginTop: 14 }}>
-                  <strong>🎯 Why Exactly 3 GCPs are Minimum Required for a Single Photo:</strong>
-                  <p>
-                    Each camera pose in 3D space has <b>6 degrees of freedom (Exterior Orientation)</b>:
-                    3 spatial coordinates <code>(XL, YL, ZL)</code> and 3 rotation angles <code>(roll ω, pitch φ, yaw κ)</code>.
-                  </p>
-                  <p>
-                    Every GCP measured on the photograph produces <b>2 collinearity observation equations</b> (image x and image y).
-                  </p>
-                  <ul>
-                    <li><b>1 GCP (2 equations)</b>: 2 equations &lt; 6 unknowns &rarr; <code>r = -4</code> (Underdetermined! Camera position &amp; tilt remain completely floating).</li>
-                    <li><b>2 GCPs (4 equations)</b>: 4 equations &lt; 6 unknowns &rarr; <code>r = -2</code> (Underdetermined! Camera scale &amp; rotation remain unconstrained).</li>
-                    <li><b>3 GCPs (6 equations)</b>: 6 equations = 6 unknowns &rarr; <code>r = 0</code> (<b>EXACTLY DETERMINED</b>! Solves all 6 EO parameters perfectly!).</li>
-                    <li><b>4+ GCPs (8+ equations)</b>: 8 equations &gt; 6 unknowns &rarr; <code>r = +2</code> (<b>OVERDETERMINED</b>! Enables Gauss-Markov least-squares error minimization).</li>
-                  </ul>
-                </div>
-              </section>
-            </>
+                </section>
+              </>
+            )
           ) : (
             /* ========================================================================= */
             /* TAB 2 CONTENT: FULL BLOCK ADJUSTMENT & OVERLAP EFFICIENCY                 */
             /* ========================================================================= */
             <>
-              {/* Section 3: Equation & Redundancy Math Engine */}
               <section className="sim-panel">
                 <h2>
-                  <span className="stepno">3</span> Photogrammetric Equation &amp; Redundancy Balance
+                  <span className="stepno">3</span> Equation Balance &amp; Block Redundancy
                 </h2>
 
                 <div className="eq-balance-grid">
@@ -963,8 +1028,8 @@ export default function BlockAdjustment() {
                     </div>
                     <ul>
                       <li>EO (Camera Poses): <b>{stats.eoUnknowns}</b> (6 × {stats.numPhotos})</li>
-                      <li>IO (Calib. Params): <b>{stats.ioUnknowns}</b> ({selfCalibration ? 'Self-Calib' : 'Known'})</li>
-                      <li>Tie Points 3D (X,Y,Z): <b>{stats.tiePtUnknowns}</b> (3 × {stats.numTiePoints})</li>
+                      <li>IO (Calib): <b>{stats.ioUnknowns}</b> ({selfCalibration ? 'Self-Calib' : 'Known'})</li>
+                      <li>Tie Points 3D: <b>{stats.tiePtUnknowns}</b> (3 × {stats.numTiePoints})</li>
                     </ul>
                   </div>
 
@@ -974,13 +1039,13 @@ export default function BlockAdjustment() {
                       {stats.totalObservations}
                     </div>
                     <ul>
-                      <li>Tie Point Images: <b>{stats.tiePointObsCount}</b> (2 × ~{stats.avgRaysPerTiePoint} rays)</li>
+                      <li>Tie Point Images: <b>{stats.tiePointObsCount}</b></li>
                       <li>GCP Image Obs: <b>{stats.gcpObsCount}</b> ({numGcps} GCPs)</li>
                     </ul>
                   </div>
 
                   <div className="eq-card">
-                    <h3>Redundancy (r = N_obs - N_unk)</h3>
+                    <h3>Redundancy (r)</h3>
                     <div
                       className="eq-main-val"
                       style={{ color: stats.redundancy >= 20 ? '#10b981' : stats.redundancy >= 0 ? '#f59e0b' : '#ef4444' }}
@@ -988,119 +1053,99 @@ export default function BlockAdjustment() {
                       {stats.redundancy >= 0 ? `+${stats.redundancy}` : stats.redundancy}
                     </div>
                     <ul>
-                      <li>Degrees of Freedom: <b>{stats.redundancy}</b></li>
+                      <li>DOF: <b>{stats.redundancy}</b></li>
                       <li>Status: <b>{stats.status}</b></li>
                     </ul>
                   </div>
                 </div>
 
-                {/* Educational Insight Box */}
-                <div className="block-summary-box">
-                  <strong>💡 Overlap &amp; Tie Point Efficiency Principle:</strong>
+                <div className="block-summary-box" style={{ marginTop: 12 }}>
+                  <strong>💡 Overlap &amp; Tie Point Efficiency:</strong>
                   <p>
-                    Without photo overlap, a block of {stats.numPhotos} photos would require <b>{stats.minGcpWithoutOverlap} GCPs</b> (3 GCPs per photo).
+                    Without overlap, a block of {stats.numPhotos} photos would require <b>{stats.minGcpWithoutOverlap} GCPs</b> (3 GCPs per photo).
                   </p>
                   <p>
-                    By adding <b>{endLap}% End-Lap</b> and <b>{sideLap}% Side-Lap</b>, overlapping photos observe common <b>Tie Points</b> across 3 to 4 photos.
-                    Each tie point adds ~{Math.round(stats.avgRaysPerTiePoint * 2)} equations for only 3 unknowns, adding <b>+{Math.round(stats.avgRaysPerTiePoint * 2 - 3)} degrees of freedom</b> to the block.
-                    This multi-ray network locks all photos into a rigid block, reducing the minimum required GCPs for the entire block from <b>{stats.minGcpWithoutOverlap} down to just {stats.minGcpRequiredBlock} GCPs</b>!
+                    With <b>{endLap}% End-Lap</b> and <b>{sideLap}% Side-Lap</b>, shared <b>Tie Points</b> tie adjacent photos together.
+                    This multi-ray network locks all photos into a rigid block, reducing required GCPs from <b>{stats.minGcpWithoutOverlap} down to just {stats.minGcpRequiredBlock} GCPs</b>!
                   </p>
                 </div>
 
-                {/* Worked Arithmetic Calculation Breakdown Table */}
-                <div className="math-step-calc" style={{ marginTop: 12 }}>
-                  <strong>🧮 Live Variable &amp; Equation Arithmetic Breakdown:</strong>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Variable / Term</th>
-                        <th>Formula</th>
-                        <th>Calculated Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td><b>EO Unknowns (N_EO)</b></td>
-                        <td>N_photos × 6 = {stats.numPhotos} × 6</td>
-                        <td><b>{stats.eoUnknowns} parameters</b> (3 position + 3 orientation per photo)</td>
-                      </tr>
-                      <tr>
-                        <td><b>IO Unknowns (N_IO)</b></td>
-                        <td>{selfCalibration ? 'Self-Calib (f, x₀, y₀, K₁, K₂, P₁, P₂)' : 'Known Lab Calibration'}</td>
-                        <td><b>{stats.ioUnknowns} parameters</b></td>
-                      </tr>
-                      <tr>
-                        <td><b>Tie Point Unknowns (N_Tie3D)</b></td>
-                        <td>N_tie × 3 = {stats.numTiePoints} × 3</td>
-                        <td><b>{stats.tiePtUnknowns} ground coords</b> (X, Y, Z per point)</td>
-                      </tr>
-                      <tr style={{ background: '#fef2f2', fontWeight: 600 }}>
-                        <td><b>TOTAL UNKNOWNS (N_unk)</b></td>
-                        <td>N_EO + N_IO + N_Tie3D = {stats.eoUnknowns} + {stats.ioUnknowns} + {stats.tiePtUnknowns}</td>
-                        <td><b style={{ color: '#ef4444' }}>{stats.totalUnknowns} Unknowns</b></td>
-                      </tr>
-                      <tr>
-                        <td><b>Tie Point Image Equations</b></td>
-                        <td>N_tie × avgRays × 2 = {stats.numTiePoints} × {stats.avgRaysPerTiePoint} × 2</td>
-                        <td><b>{stats.tiePointObsCount} equations</b> (2 per ray observation)</td>
-                      </tr>
-                      <tr>
-                        <td><b>GCP Observation Equations</b></td>
-                        <td>N_gcp × obsPerPhoto × 2 = {numGcps} × {Math.min(stats.numPhotos, Math.max(2, Math.round(stats.numPhotos * 0.4)))} × 2</td>
-                        <td><b>{stats.gcpObsCount} equations</b></td>
-                      </tr>
-                      <tr style={{ background: '#eff6ff', fontWeight: 600 }}>
-                        <td><b>TOTAL OBSERVATIONS (N_obs)</b></td>
-                        <td>N_Obs_Tie + N_Obs_GCP = {stats.tiePointObsCount} + {stats.gcpObsCount}</td>
-                        <td><b style={{ color: '#3b82f6' }}>{stats.totalObservations} Equations</b></td>
-                      </tr>
-                      <tr style={{ background: '#f0faf4', fontWeight: 700 }}>
-                        <td><b>REDUNDANCY (r = DOF)</b></td>
-                        <td>N_obs - N_unk = {stats.totalObservations} - {stats.totalUnknowns}</td>
-                        <td><b style={{ color: stats.redundancy >= 0 ? '#10b981' : '#ef4444' }}>+{stats.redundancy} Degrees of Freedom</b></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                {/* Collapsible Arithmetic Breakdown Drawer */}
+                <button
+                  className="accordion-toggle"
+                  onClick={() => setShowArithmetic(!showArithmetic)}
+                >
+                  <span>🧮 {showArithmetic ? 'Hide' : 'Show'} Full Arithmetic Equation Breakdown Table</span>
+                  <span>{showArithmetic ? '▲' : '▼'}</span>
+                </button>
+
+                {showArithmetic && (
+                  <div className="math-step-calc" style={{ marginTop: 8 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Term</th>
+                          <th>Formula</th>
+                          <th>Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><b>EO Unknowns</b></td>
+                          <td>N_photos × 6 = {stats.numPhotos} × 6</td>
+                          <td><b>{stats.eoUnknowns}</b></td>
+                        </tr>
+                        <tr>
+                          <td><b>IO Unknowns</b></td>
+                          <td>{selfCalibration ? 'Self-Calib (7 params)' : 'Known Lab Calibration'}</td>
+                          <td><b>{stats.ioUnknowns}</b></td>
+                        </tr>
+                        <tr>
+                          <td><b>Tie Pt Unknowns</b></td>
+                          <td>N_tie × 3 = {stats.numTiePoints} × 3</td>
+                          <td><b>{stats.tiePtUnknowns}</b></td>
+                        </tr>
+                        <tr style={{ background: '#fef2f2', fontWeight: 600 }}>
+                          <td><b>TOTAL UNKNOWNS</b></td>
+                          <td>N_EO + N_IO + N_Tie3D</td>
+                          <td><b style={{ color: '#ef4444' }}>{stats.totalUnknowns}</b></td>
+                        </tr>
+                        <tr>
+                          <td><b>Tie Pt Equations</b></td>
+                          <td>N_tie × avgRays × 2</td>
+                          <td><b>{stats.tiePointObsCount}</b></td>
+                        </tr>
+                        <tr>
+                          <td><b>GCP Equations</b></td>
+                          <td>N_gcp × obsPerPhoto × 2</td>
+                          <td><b>{stats.gcpObsCount}</b></td>
+                        </tr>
+                        <tr style={{ background: '#eff6ff', fontWeight: 600 }}>
+                          <td><b>TOTAL OBSERVATIONS</b></td>
+                          <td>N_Obs_Tie + N_Obs_GCP</td>
+                          <td><b style={{ color: '#3b82f6' }}>{stats.totalObservations}</b></td>
+                        </tr>
+                        <tr style={{ background: '#f0faf4', fontWeight: 700 }}>
+                          <td><b>REDUNDANCY (r)</b></td>
+                          <td>N_obs - N_unk</td>
+                          <td><b style={{ color: stats.redundancy >= 0 ? '#10b981' : '#ef4444' }}>+{stats.redundancy} DOF</b></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </section>
 
-              {/* Section 4: Block Configuration Sliders */}
               <section className="sim-panel">
                 <h2>
-                  <span className="stepno">4</span> Block &amp; Camera Configuration Sliders
+                  <span className="stepno">4</span> Block Configuration
                 </h2>
 
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                  Fixed Block: <b>{numStrips} strips × {photosPerStrip} photos/strip = {stats.numPhotos} photos</b>
+                </div>
+
                 <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
-                  <label>
-                    Flight Strips (N_strips): <b>{numStrips}</b>
-                    <input
-                      type="range"
-                      min="1"
-                      max="4"
-                      step="1"
-                      value={numStrips}
-                      onChange={(e) => {
-                        setNumStrips(Number(e.target.value));
-                        setSolverStep(0);
-                      }}
-                    />
-                  </label>
-
-                  <label>
-                    Photos per Strip (N_photos): <b>{photosPerStrip}</b>
-                    <input
-                      type="range"
-                      min="2"
-                      max="6"
-                      step="1"
-                      value={photosPerStrip}
-                      onChange={(e) => {
-                        setPhotosPerStrip(Number(e.target.value));
-                        setSolverStep(0);
-                      }}
-                    />
-                  </label>
-
                   <label>
                     End-Lap (Forward Overlap): <b>{endLap}%</b>
                     <input
