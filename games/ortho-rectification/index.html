@@ -551,11 +551,11 @@ function drawSource(){
   // nadir
   const nd=V(project(cam,cam.X,cam.Y,0));
   if(nd){
-    srcCtx.strokeStyle='#ffd23f';srcCtx.lineWidth=2;
+    srcCtx.strokeStyle='#3fa9f5';srcCtx.lineWidth=2;
     srcCtx.beginPath();srcCtx.arc(nd[0],nd[1],9,0,7);srcCtx.stroke();
     srcCtx.beginPath();srcCtx.moveTo(nd[0]-14,nd[1]);srcCtx.lineTo(nd[0]+14,nd[1]);
     srcCtx.moveTo(nd[0],nd[1]-14);srcCtx.lineTo(nd[0],nd[1]+14);srcCtx.stroke();
-    srcCtx.fillStyle='#ffd23f';srcCtx.font='600 11px system-ui';srcCtx.fillText('nadir ⊕',nd[0]+12,nd[1]-10);
+    srcCtx.fillStyle='#3fa9f5';srcCtx.font='600 11px system-ui';srcCtx.fillText('nadir ⊕',nd[0]+12,nd[1]-10);
   }
   // probe: back-trace from the true map position to the recorded roof pixel
   const pr=probeInfo();
