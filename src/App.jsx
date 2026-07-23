@@ -2,6 +2,7 @@ import { useState } from 'react';
 import OrthoRectification from './simulations/OrthoRectification.jsx';
 import StructureFromMotion from './simulations/StructureFromMotion.jsx';
 import LidarRanging from './simulations/LidarRanging.jsx';
+import AdaptiveTIN from './simulations/AdaptiveTIN.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -12,6 +13,7 @@ const simulators = [
   { title: 'Structure from Motion', category: 'Photogrammetry', level: 'Advanced', description: 'Match the same corner of a 3D object across photographs and watch triangulation and resection recover each camera’s position and orientation.', tags: ['Feature matching', 'Camera pose', '3D reconstruction'], path: '?simulation=sfm', kind: 'sfm', status: 'Native React' },
   { title: 'True Ortho-Rectification', category: 'Photogrammetry', level: 'Intermediate', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho', status: 'Original' },
   { title: 'True Ortho-Rectification — React', category: 'Photogrammetry', level: 'Intermediate', description: 'React migration workspace for the same rectification renderer, with the original interaction model preserved while the engine is split into React modules.', tags: ['React migration', 'Canvas engine', 'DSM vs DTM'], path: '?simulation=ortho', kind: 'ortho', status: 'React preview' },
+  { title: 'Adaptive TIN Ground Filter', category: 'LiDAR', level: 'Intermediate', description: 'Classify ground vs. non-ground points in LiDAR point clouds using Axelsson’s adaptive triangulated irregular network (TIN) algorithm with customizable distance and angle thresholds.', tags: ['Axelsson algorithm', 'Delaunay TIN', 'Ground classification', 'Point cloud', 'Iterative filtering'], path: '?simulation=adaptive-tin', kind: 'tin', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -24,6 +26,41 @@ function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
 }
 
 function Thumbnail({ kind }) {
+  if (kind === 'tin') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Adaptive TIN ground classification">
+      <defs><linearGradient id="bg-tin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#081826" /><stop offset="1" stopColor="#0e2a3f" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-tin)" /><Grid id="tin" tint="rgba(255,255,255,.05)" />
+      {/* TIN Mesh Facets */}
+      <g fill="rgba(16,185,129,.14)" stroke="#34d399" strokeWidth="2">
+        <polygon points="120,280 240,220 340,290" />
+        <polygon points="240,220 340,290 460,210" />
+        <polygon points="340,290 460,210 540,280" />
+        <polygon points="240,220 460,210 320,130" />
+        <polygon points="120,280 240,220 180,160" />
+        <polygon points="180,160 240,220 320,130" />
+      </g>
+      {/* Off-terrain building box & non-ground points */}
+      <g fill="rgba(239,68,68,.2)" stroke="#ef4444" strokeWidth="2.5">
+        <polygon points="360,150 440,150 460,110 380,110" />
+        <line x1="360" y1="150" x2="360" y2="190" stroke="#ef4444" strokeWidth="2" />
+        <line x1="440" y1="150" x2="440" y2="190" stroke="#ef4444" strokeWidth="2" />
+      </g>
+      <g fill="#ef4444">
+        <circle cx="360" cy="110" r="5" /><circle cx="440" cy="110" r="5" /><circle cx="460" cy="110" r="5" /><circle cx="380" cy="110" r="5" />
+        <circle cx="210" cy="110" r="5.5" /><circle cx="200" cy="90" r="5" /><circle cx="225" cy="80" r="6" />
+      </g>
+      {/* Ground TIN Seed Points */}
+      <g fill="#10b981">
+        <circle cx="120" cy="280" r="6" /><circle cx="240" cy="220" r="6" /><circle cx="340" cy="290" r="6" />
+        <circle cx="460" cy="210" r="6" /><circle cx="540" cy="280" r="6" /><circle cx="320" cy="130" r="6" />
+        <circle cx="180" cy="160" r="6" />
+      </g>
+      <g fill="#f59e0b" stroke="#ffffff" strokeWidth="1.5">
+        <circle cx="120" cy="280" r="4" /><circle cx="540" cy="280" r="4" /><circle cx="320" cy="130" r="4" />
+      </g>
+      <text x="320" y="335" fill="#a7f3d0" fontSize="17" fontFamily="system-ui" fontWeight="600" textAnchor="middle">Adaptive TIN Ground Filter</text>
+    </svg>
+  );
   if (kind === 'ranging') return (
     <svg viewBox="0 0 640 360" role="img" aria-label="LiDAR ranging by time of flight">
       <defs><linearGradient id="bg-rng" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0a2740" /><stop offset="1" stopColor="#123a5c" /></linearGradient></defs>
@@ -180,5 +217,6 @@ export default function App() {
   if (simulation === 'ortho') return <OrthoRectification />;
   if (simulation === 'sfm') return <StructureFromMotion />;
   if (simulation === 'lidar-ranging') return <LidarRanging />;
+  if (simulation === 'adaptive-tin') return <AdaptiveTIN />;
   return <Landing />;
 }
