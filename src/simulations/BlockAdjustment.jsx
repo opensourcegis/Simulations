@@ -769,14 +769,14 @@ export default function BlockAdjustment() {
                     </thead>
                     <tbody>
                       <tr>
-                        <td><b style={{ color: '#38bdf8' }}>L (XL, YL, ZL)</b></td>
+                        <td><b style={{ color: '#38bdf8' }}>L (X_L, Y_L, Z_L)</b></td>
                         <td>Perspective Center / Exposure Station</td>
                         <td>3D spatial coordinates of camera lens center in ground system. (3 EO unknowns per photo)</td>
                       </tr>
                       <tr>
                         <td><b style={{ color: '#fbbf24' }}>f</b></td>
                         <td>Calibrated Focal Length</td>
-                        <td>Perpendicular distance from exposure station L to photo plane origin o. (IO parameter)</td>
+                        <td>Perpendicular distance from lens L to photo plane origin o. (IO parameter)</td>
                       </tr>
                       <tr>
                         <td><b style={{ color: '#60a5fa' }}>o (x₀, y₀)</b></td>
@@ -789,12 +789,17 @@ export default function BlockAdjustment() {
                         <td>Point where plumb vertical line passing through L intersects photo plane.</td>
                       </tr>
                       <tr>
-                        <td><b style={{ color: '#34d399' }}>a (xa, ya)</b></td>
+                        <td><b style={{ color: '#34d399' }}>a (x_a, y_a)</b></td>
                         <td>Image Point</td>
                         <td>2D photo coordinates of target point measured on image plane.</td>
                       </tr>
                       <tr>
-                        <td><b style={{ color: '#f59e0b' }}>A (XA, YA, ZA)</b></td>
+                        <td><b style={{ color: '#a7f3d0' }}>(x'_a, y'_a, z'_a)</b></td>
+                        <td>Rotated Image Point</td>
+                        <td>Coordinates of image point a in an un-rotated system x'y'z' parallel to ground system.</td>
+                      </tr>
+                      <tr>
+                        <td><b style={{ color: '#f59e0b' }}>A (X_A, Y_A, Z_A)</b></td>
                         <td>Ground Object Point</td>
                         <td>True 3D spatial coordinates of target point on ground terrain (GCP or Tie Point).</td>
                       </tr>
@@ -808,10 +813,56 @@ export default function BlockAdjustment() {
                 </div>
               </section>
 
+              {/* Simple Step-by-Step Derivation of Collinearity Equations */}
+              <section className="sim-panel">
+                <h2>
+                  <span className="stepno">3</span> Simple Derivation of Collinearity Equations
+                </h2>
+
+                <div className="block-summary-box" style={{ background: '#f8fafc', borderLeft: '4px solid #38bdf8', color: '#1e293b' }}>
+                  <strong style={{ color: '#0f172a' }}>Step 1: Similar Triangles (Parallel System x'y'z')</strong>
+                  <p>
+                    By similar triangles along the straight line <b>L - a - A</b> in space:
+                  </p>
+                  <div style={{ fontFamily: 'monospace', background: '#0f172a', color: '#f8fafc', padding: '8px 12px', borderRadius: 6, margin: '6px 0', fontSize: 12 }}>
+                    <div>x'_a / (X_A - X_L) = y'_a / (Y_A - Y_L) = -z'_a / (Z_L - Z_A)</div>
+                    <div style={{ color: '#38bdf8', marginTop: 4 }}>
+                      &rArr; x'_a = [ (X_A - X_L) / (Z_A - Z_L) ] · z'_a
+                    </div>
+                    <div style={{ color: '#38bdf8' }}>
+                      &rArr; y'_a = [ (Y_A - Y_L) / (Z_A - Z_L) ] · z'_a
+                    </div>
+                  </div>
+
+                  <strong style={{ color: '#0f172a', display: 'block', marginTop: 10 }}>Step 2: 3D Camera Rotation Matrix M (ω, φ, κ)</strong>
+                  <p>
+                    Camera orientation angles <b>roll (ω), pitch (φ), yaw (κ)</b> convert un-rotated system <code>(x'_a, y'_a, z'_a)</code> to actual image coordinates <code>(x_a, y_a, z_a)</code>:
+                  </p>
+                  <div style={{ fontFamily: 'monospace', background: '#0f172a', color: '#f8fafc', padding: '8px 12px', borderRadius: 6, margin: '6px 0', fontSize: 12 }}>
+                    <div>x_a = m₁₁ x'_a + m₁₂ y'_a + m₁₃ z'_a</div>
+                    <div>y_a = m₂₁ x'_a + m₂₂ y'_a + m₂₃ z'_a</div>
+                    <div>z_a = m₃₁ x'_a + m₃₂ y'_a + m₃₃ z'_a = -f</div>
+                  </div>
+
+                  <strong style={{ color: '#0f172a', display: 'block', marginTop: 10 }}>Step 3: Final Collinearity Observation Equations</strong>
+                  <p>
+                    Dividing <code>x_a</code> and <code>y_a</code> by <code>z_a = -f</code> and adding principal point offset <code>(x₀, y₀)</code> yields the final equations:
+                  </p>
+                  <div className="math-formula-box" style={{ marginTop: 4 }}>
+                    <div style={{ color: '#34d399', fontWeight: 700, fontSize: 13 }}>
+                      x_a = x₀ - f · [ m₁₁(X_A - X_L) + m₁₂(Y_A - Y_L) + m₁₃(Z_A - Z_L) ] / [ m₃₁(X_A - X_L) + m₃₂(Y_A - Y_L) + m₃₃(Z_A - Z_L) ]
+                    </div>
+                    <div style={{ color: '#34d399', fontWeight: 700, fontSize: 13, marginTop: 6 }}>
+                      y_a = y₀ - f · [ m₂₁(X_A - X_L) + m₂₂(Y_A - Y_L) + m₂₃(Z_A - Z_L) ] / [ m₃₁(X_A - X_L) + m₃₂(Y_A - Y_L) + m₃₃(Z_A - Z_L) ]
+                    </div>
+                  </div>
+                </div>
+              </section>
+
               {/* Single Photo 3 GCP Requirement & Controls */}
               <section className="sim-panel">
                 <h2>
-                  <span className="stepno">3</span> Single Photo 3 GCP Rule &amp; Equation Balance
+                  <span className="stepno">4</span> Single Photo 3 GCP Rule &amp; Equation Balance
                 </h2>
 
                 <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
