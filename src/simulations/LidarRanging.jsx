@@ -204,15 +204,23 @@ function drawPhaseChart(ctx, { phi, theta }) {
 // ranges (every λ/2); the coarse tone's unambiguous estimate picks the right
 // one, which is exactly how the integer N is found.
 const COMB_W = 640; const COMB_H = 150;
-function drawComb(ctx, { unambFine, fracFine, coarseR, N }) {
+// Animatable comb. When markerR is null it shows the finished result (all
+// candidates lit, N revealed); during the animation the marker sweeps out from
+// 0, candidates light as it passes and countN ticks up until it snaps to N.
+function drawComb(ctx, o) {
+  const u = o.unambFine; const fr = o.fracFine; const coarseR = o.coarseR; const N = o.N;
+  const coarseVisible = o.coarseVisible ?? 1;
+  const markerR = o.markerR === undefined ? null : o.markerR;
+  const revealN = o.revealN ?? true;
+  const pulse = o.pulse ?? 0;
   ctx.clearRect(0, 0, COMB_W, COMB_H);
   ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, COMB_W, COMB_H);
   const left = 44; const right = COMB_W - 20; const baseY = COMB_H - 30;
   const X = (m) => left + (m / DMAX) * (right - left);
 
   ctx.fillStyle = '#8ea3b5'; ctx.font = '10.5px system-ui'; ctx.textAlign = 'left';
-  ctx.fillText('cyan: possible ranges from fine phase (spaced λ/2)', left, 15);
-  ctx.fillStyle = '#ffae4d'; ctx.fillText('orange: coarse estimate selects one', left + 316, 15);
+  ctx.fillText('cyan: candidate ranges from fine phase (every λ/2)', left, 14);
+  ctx.fillStyle = '#ffae4d'; ctx.fillText('orange: coarse estimate', left + 328, 14);
 
   ctx.strokeStyle = 'rgba(140,163,181,.5)'; ctx.lineWidth = 1.4;
   ctx.beginPath(); ctx.moveTo(left, baseY); ctx.lineTo(right, baseY); ctx.stroke();
@@ -220,20 +228,41 @@ function drawComb(ctx, { unambFine, fracFine, coarseR, N }) {
   for (let d = 0; d <= DMAX; d += 50) { const x = X(d); ctx.strokeStyle = 'rgba(140,163,181,.2)'; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke(); ctx.fillStyle = '#8ea3b5'; ctx.fillText(`${d}`, x, baseY + 17); }
   ctx.textAlign = 'left'; ctx.fillText('m', right - 6, baseY + 17);
 
-  // coarse estimate + its uncertainty band (±λ_fine/4): exactly one candidate lands inside
-  const bandHalf = unambFine * 0.5;
-  const bx0 = X(Math.max(0, coarseR - bandHalf)); const bx1 = X(Math.min(DMAX, coarseR + bandHalf));
-  ctx.fillStyle = 'rgba(255,174,77,.14)'; ctx.fillRect(bx0, baseY - 66, bx1 - bx0, 66);
-  ctx.strokeStyle = '#ffae4d'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(X(coarseR), baseY - 70); ctx.lineTo(X(coarseR), baseY); ctx.stroke();
-  ctx.fillStyle = '#ffae4d'; ctx.beginPath(); ctx.moveTo(X(coarseR), baseY - 70); ctx.lineTo(X(coarseR) - 5, baseY - 80); ctx.lineTo(X(coarseR) + 5, baseY - 80); ctx.closePath(); ctx.fill();
-  ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`coarse R ≈ ${coarseR.toFixed(0)} m`, X(coarseR), baseY - 84); ctx.textAlign = 'left';
-
-  const maxN = Math.floor((DMAX - fracFine * unambFine) / unambFine);
+  // candidate comb
+  const maxN = Math.floor((DMAX - fr * u) / u);
   for (let n = 0; n <= maxN; n += 1) {
-    const Rn = (n + fracFine) * unambFine; const x = X(Rn); const hit = n === N;
-    ctx.strokeStyle = hit ? '#4ade80' : 'rgba(90,209,255,.65)'; ctx.lineWidth = hit ? 2.6 : 1.2;
-    ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY - (hit ? 52 : 18)); ctx.stroke();
-    if (hit) { ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.arc(x, baseY - 52, 3.5, 0, TAU); ctx.fill(); ctx.font = '700 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`N=${n}`, x, baseY - 58); ctx.textAlign = 'left'; }
+    const Rn = (n + fr) * u; const x = X(Rn); const isN = n === N;
+    const passed = markerR === null ? true : Rn <= markerR + 0.001;
+    let color; let h;
+    if (isN && revealN) { color = '#4ade80'; h = 52; }
+    else if (passed) { color = 'rgba(90,209,255,.8)'; h = 20; }
+    else { color = 'rgba(120,150,175,.3)'; h = 12; }
+    ctx.strokeStyle = color; ctx.lineWidth = isN && revealN ? 2.6 : 1.2;
+    ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY - h * (isN && revealN ? 1 + 0.14 * pulse : 1)); ctx.stroke();
+    if (isN && revealN) { ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.arc(x, baseY - 52, 3.5 + pulse * 1.6, 0, TAU); ctx.fill(); ctx.font = '700 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`N=${n}`, x, baseY - 60); ctx.textAlign = 'left'; }
+  }
+
+  // coarse estimate + ±λ/4 band (grows in with coarseVisible)
+  if (coarseVisible > 0.01) {
+    ctx.globalAlpha = coarseVisible;
+    const bandHalf = u * 0.5;
+    const bx0 = X(Math.max(0, coarseR - bandHalf)); const bx1 = X(Math.min(DMAX, coarseR + bandHalf));
+    ctx.fillStyle = 'rgba(255,174,77,.14)'; ctx.fillRect(bx0, baseY - 66, bx1 - bx0, 66);
+    ctx.strokeStyle = '#ffae4d'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(X(coarseR), baseY - 70); ctx.lineTo(X(coarseR), baseY); ctx.stroke();
+    ctx.fillStyle = '#ffae4d'; ctx.beginPath(); ctx.moveTo(X(coarseR), baseY - 70); ctx.lineTo(X(coarseR) - 5, baseY - 80); ctx.lineTo(X(coarseR) + 5, baseY - 80); ctx.closePath(); ctx.fill();
+    ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`coarse R ≈ ${coarseR.toFixed(0)} m`, X(coarseR), baseY - 84); ctx.textAlign = 'left';
+    ctx.globalAlpha = 1;
+  }
+
+  // sweeping counter marker
+  if (markerR !== null) {
+    const x = X(markerR);
+    ctx.strokeStyle = 'rgba(126,224,196,.9)'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, 24); ctx.stroke(); ctx.setLineDash([]);
+    const label = o.countN === null ? 'counting…' : `N = ${o.countN}`;
+    ctx.font = '700 14px "Segoe UI", system-ui'; const w = ctx.measureText(label).width + 14;
+    const bx = clamp(x - w / 2, 2, COMB_W - w - 2);
+    ctx.fillStyle = 'rgba(10,17,24,.9)'; ctx.strokeStyle = '#7ee0c4'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(bx, 6, w, 20, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#7ee0c4'; ctx.textAlign = 'center'; ctx.fillText(label, bx + w / 2, 21); ctx.textAlign = 'left';
   }
 }
 
@@ -249,9 +278,11 @@ export default function LidarRanging() {
 
   const sceneRef = useRef(null); const chartRef = useRef(null); const combRef = useRef(null);
   const params = useRef({}); const anim = useRef({ active: false, start: 0, prog: 0 });
+  const combAnim = useRef({ playing: false, start: 0 });
   params.current = { mode, distance, speed, continuous, pulseWidth, fMod };
 
   const fire = () => { anim.current = { active: true, start: performance.now(), prog: 0 }; };
+  const playComb = () => { combAnim.current = { playing: true, start: performance.now() }; };
 
   useEffect(() => {
     let raf;
@@ -267,11 +298,28 @@ export default function LidarRanging() {
         if (sc) drawPulseScene(sc.getContext('2d'), { distance: p.distance, prog: a.prog, active: a.active });
         if (ch) drawPulseTiming(ch.getContext('2d'), { distance: p.distance, prog: a.prog, active: a.active, pulseWidth: p.pulseWidth });
       } else {
-        const f = p.fMod * 1e6; const lambda = C / f;
-        const phi = ((2 * TAU * p.distance / lambda) % TAU + TAU) % TAU;
+        const f = p.fMod * 1e6; const lambda = C / f; const unamb = lambda / 2;
+        const ratio = p.distance / unamb; const Nn = Math.floor(ratio); const fr = ratio - Nn;
+        const phi = fr * TAU;
         const theta = (now * 0.0018 * p.speed) % TAU;
         if (sc) drawCwScene(sc.getContext('2d'), { distance: p.distance, lambda, theta });
         if (ch) drawPhaseChart(ch.getContext('2d'), { phi, theta });
+        const cb = combRef.current;
+        if (cb) {
+          const base = { unambFine: unamb, fracFine: fr, coarseR: p.distance, N: Nn };
+          const ca = combAnim.current;
+          if (ca.playing) {
+            const prog = (now - ca.start) / 1000;
+            let o;
+            if (prog < 0.9) o = { ...base, coarseVisible: prog / 0.9, markerR: 0, countN: null, revealN: false };
+            else if (prog < 2.7) { const t = (prog - 0.9) / 1.8; const markerR = t * p.distance; let c = null; for (let n = 0; n <= Nn; n += 1) if ((n + fr) * unamb <= markerR) c = n; o = { ...base, coarseVisible: 1, markerR, countN: c, revealN: false }; }
+            else { o = { ...base, coarseVisible: 1, markerR: null, countN: Nn, revealN: true, pulse: Math.abs(Math.sin((prog - 2.7) * 4)) }; }
+            drawComb(cb.getContext('2d'), o);
+            if (prog > 4.2) ca.playing = false;
+          } else {
+            drawComb(cb.getContext('2d'), { ...base, coarseVisible: 1, markerR: null, countN: Nn, revealN: true, pulse: 0 });
+          }
+        }
       }
       raf = requestAnimationFrame(loop);
     };
@@ -293,10 +341,6 @@ export default function LidarRanging() {
   const phiCoarseDeg = (distance / unambCoarse) * 360; // no wrap: distance < unambCoarse
   const coarseR = (phiCoarseDeg / 360) * unambCoarse; // = distance (coarse, unambiguous)
   const Ncalc = Math.round(coarseR / unamb - frac);
-
-  useEffect(() => {
-    if (mode === 'phase' && combRef.current) drawComb(combRef.current.getContext('2d'), { unambFine: unamb, fracFine: frac, coarseR, N: Ncalc });
-  }, [mode, distance, fMod, unamb, frac, coarseR, Ncalc]);
 
   return (
     <div className="sim-app">
@@ -412,6 +456,10 @@ export default function LidarRanging() {
               <div className="rng-sub">How is N calculated? — a second, coarse tone</div>
               <div className="rng-note">
                 Phase alone repeats every <b>λ/2 = {unamb.toFixed(1)} m</b>, so it can&rsquo;t tell {rPhase.toFixed(1)} m from {(rPhase + unamb).toFixed(1)} m from {(rPhase + 2 * unamb).toFixed(1)} m… To find <b>N</b>, the sensor adds a <b>coarse modulation tone</b> whose half-wavelength is longer than the whole measurement range, so its phase is <b>unambiguous</b> — a rough distance that tells you which fine cycle you&rsquo;re in.
+              </div>
+              <div className="rng-fire" style={{ marginTop: 0, marginBottom: 8 }}>
+                <button className="rng-btn ghost" onClick={playComb}>▶ Animate the calculation</button>
+                <span className="rng-chk">coarse estimate sweeps out, counting whole λ/2 cycles up to N</span>
               </div>
               <canvas ref={combRef} className="rng-canvas" width={COMB_W} height={COMB_H} />
               <div className="equation big" style={{ marginTop: 10 }}>coarse f = 0.45 MHz → λ/2 = {unambCoarse.toFixed(0)} m → R<sub>coarse</sub> ≈ {coarseR.toFixed(1)} m</div>
