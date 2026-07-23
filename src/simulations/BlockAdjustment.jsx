@@ -256,11 +256,11 @@ export default function BlockAdjustment() {
           const pNadir = project3D(XL, YL, 0); // Nadir point n on ground
 
           // Draw Photo Plane Quadrilateral Rectangle
-          const pw = 24, ph = 18;
-          const pf0 = project3D(XL - pw / 2, YL - ph / 2, ZL - fDistance + 1);
-          const pf1 = project3D(XL + pw / 2, YL - ph / 2, ZL - fDistance + 2);
-          const pf2 = project3D(XL + pw / 2, YL + ph / 2, ZL - fDistance - 1);
-          const pf3 = project3D(XL - pw / 2, YL + ph / 2, ZL - fDistance - 2);
+          const pw = 28, ph = 22;
+          const pf0 = project3D(XL - pw / 2, YL - ph / 2, ZL - fDistance);
+          const pf1 = project3D(XL + pw / 2, YL - ph / 2, ZL - fDistance);
+          const pf2 = project3D(XL + pw / 2, YL + ph / 2, ZL - fDistance);
+          const pf3 = project3D(XL - pw / 2, YL + ph / 2, ZL - fDistance);
 
           ctx.fillStyle = 'rgba(30, 58, 138, 0.45)';
           ctx.strokeStyle = '#38bdf8';
@@ -270,8 +270,8 @@ export default function BlockAdjustment() {
           ctx.closePath(); ctx.fill(); ctx.stroke();
 
           // Image Plane Axes x_a, y_a
-          const pxAxis = project3D(XL + pw / 2 - 2, YL, ZL - fDistance + 1.5);
-          const pyAxis = project3D(XL, YL + ph / 2 - 2, ZL - fDistance - 1.5);
+          const pxAxis = project3D(XL + pw / 2 - 2, YL, ZL - fDistance);
+          const pyAxis = project3D(XL, YL + ph / 2 - 2, ZL - fDistance);
 
           ctx.strokeStyle = '#93c5fd'; ctx.lineWidth = 1.2;
           ctx.beginPath(); ctx.moveTo(pf0.px, (pf0.py + pf3.py) / 2); ctx.lineTo(pf1.px, (pf1.py + pf2.py) / 2); ctx.stroke();
@@ -320,17 +320,19 @@ export default function BlockAdjustment() {
             ctx.fillText('ZA', projA.px + 12, (projA.py + projA_ground.py) / 2);
           }
 
-          // Image Point a (xa, ya) on Photo Plane
+          // Exact Collinearity Image Point a (xa, ya) on Photo Plane
+          // Parameter t_photo = f / (ZL - ZA) ensures point a is EXACTLY on line L - A!
+          const t_photo = fDistance / (ZL - ZA);
           const pt_a_3d = {
-            x: XL + (XA - XL) * (fDistance / ZL),
-            y: YL + (YA - YL) * (fDistance / ZL),
+            x: XL + (XA - XL) * t_photo,
+            y: YL + (YA - YL) * t_photo,
             z: ZL - fDistance,
           };
           const proj_a = project3D(pt_a_3d.x, pt_a_3d.y, pt_a_3d.z);
 
           // Draw Image Point a
           ctx.fillStyle = '#34d399'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.arc(proj_a.px, proj_a.py, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.arc(proj_a.px, proj_a.py, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
           ctx.fillStyle = '#34d399'; ctx.font = '700 12px system-ui'; ctx.textAlign = 'left';
           ctx.fillText('a (Image Pt: xa, ya)', proj_a.px + 8, proj_a.py - 4);
 
