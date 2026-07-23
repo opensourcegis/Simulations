@@ -370,9 +370,10 @@ export default function BlockAdjustment() {
             ctx.fillStyle = '#ffffff'; ctx.font = '700 11px system-ui'; ctx.textAlign = 'center';
             ctx.fillText('Camera C1 (Xc, Yc, Zc, ω, φ, κ)', camProj.px, camProj.py - 12);
 
+            // GCPs must lie inside the camera footprint (34..66 x, 37..63 y)
             const gcpLocations = [
-              { x: 30, y: 32 }, { x: 70, y: 32 }, { x: 70, y: 68 },
-              { x: 30, y: 68 }, { x: 50, y: 32 }, { x: 50, y: 68 },
+              { x: 38, y: 41 }, { x: 62, y: 41 }, { x: 62, y: 59 },
+              { x: 38, y: 59 }, { x: 50, y: 41 }, { x: 50, y: 59 },
             ];
 
             for (let g = 0; g < singleGcps; g++) {
