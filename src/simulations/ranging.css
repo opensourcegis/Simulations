@@ -14,3 +14,7 @@
 .rng-note{margin-top:10px;padding:9px 12px;border-left:3px solid #1565c0;border-radius:8px;background:#f5f8fa;color:#56677a;font-size:12.5px;line-height:1.55}
 .rng-note b{color:#16202c}
 .rng-sub{margin:14px 0 8px;font-size:11.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:#7d8fa1}
+.rng-modes{display:flex;gap:6px;max-width:1520px;margin:14px auto 0;padding:5px;border:1px solid #d6dee7;border-radius:12px;background:#fff}
+.rng-seg{flex:1;padding:10px 14px;border:0;border-radius:8px;background:transparent;color:#56677a;font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s ease}
+.rng-seg:hover{background:#f0faf4;color:#0f8a4d}
+.rng-seg.on{background:#0f8a4d;color:#fff;box-shadow:0 3px 10px rgba(15,138,77,.28)}
