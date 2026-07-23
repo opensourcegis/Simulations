@@ -126,8 +126,8 @@ export default function BlockAdjustment() {
       const dx = e.clientX - lastPointerRef.current.x;
       const dy = e.clientY - lastPointerRef.current.y;
       lastPointerRef.current = { x: e.clientX, y: e.clientY };
-      setYawAngle((prev) => (prev + dx * 0.6 + 360) % 360);
-      setPitchAngle((prev) => Math.max(10, Math.min(85, prev - dy * 0.4)));
+      setYawAngle((prev) => (prev - dx * 0.6 + 360) % 360);
+      setPitchAngle((prev) => Math.max(10, Math.min(85, prev + dy * 0.4)));
     };
     const onPointerUp = () => {
       isDraggingRef.current = false;
