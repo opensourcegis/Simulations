@@ -27,7 +27,25 @@ function eulerAxes(roll, pitch, yaw) {
   const zAxis = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
   return [xAxis, yAxis, zAxis];
 }
-const toWorld = (axes, v) => add(add(scale(axes[0], v[0]), scale(axes[1], v[1])), scale(axes[2], v[2]));
+// --- Reference frames ------------------------------------------------------
+// Site of the survey, used only to orient the ECEF triad realistically.
+const LAT = 13 * DEG; const LON = 77.5 * DEG;
+// Local navigation frame is NED (X=North, Y=East, Z=Down). Map an NED vector
+// into scene coordinates (scene X=North/forward, +Y=left, +Z=up).
+const navToScene = (v) => [v[0], -v[1], -v[2]];
+// IMU = local nav frame: North, East, Nadir(down), expressed in scene axes.
+const NAV_AXES = [navToScene([1, 0, 0]), navToScene([0, 1, 0]), navToScene([0, 0, 1])];
+// LiDAR = nav frame rotated by the boresight roll/pitch/yaw.
+const lidarAxes = (roll, pitch, yaw) => eulerAxes(roll, pitch, yaw).map(navToScene);
+// GPS antenna triad = the ECEF axes. Compute each ECEF axis direction in NED
+// at (lat,lon), then map into scene coordinates.
+function ecefAxes(lat, lon) {
+  const sf = Math.sin(lat); const cf = Math.cos(lat); const sl = Math.sin(lon); const cl = Math.cos(lon);
+  const Xe = [-sf * cl, -sl, -cf * cl]; // ECEF X in NED
+  const Ye = [-sf * sl, cl, -cf * sl]; // ECEF Y in NED
+  const Ze = [cf, 0, -sf]; // ECEF Z in NED (spin axis)
+  return [navToScene(Xe), navToScene(Ye), navToScene(Ze)];
+}
 
 const VIEW_W = 700; const VIEW_H = 560;
 function makeProjector(orbit) {
@@ -65,20 +83,19 @@ function arrow3(ctx, proj, from, to, color, w = 2, text = null) {
   ctx.stroke();
   if (text) label(ctx, b, text, color);
 }
-// A body-frame axis triad at `origin` with world axes `axes`.
-function triad(ctx, proj, origin, axes, len, alpha, tag) {
+// An axis triad at `origin`; `names` labels the three axes (null hides labels).
+function triad(ctx, proj, origin, axes, len, alpha, names) {
   const cols = [`rgba(230,70,59,${alpha})`, `rgba(46,160,90,${alpha})`, `rgba(60,130,246,${alpha})`];
-  const names = ['X', 'Y', 'Z'];
   for (let i = 0; i < 3; i += 1) {
     const tip = add(origin, scale(axes[i], len));
-    arrow3(ctx, proj, origin, tip, cols[i], 2.2, tag ? `${names[i]}${tag}` : names[i]);
+    arrow3(ctx, proj, origin, tip, cols[i], 2.2, names ? names[i] : null);
   }
 }
 
 // ---------------------------------------------------------------------------
 const SENSORS = {
   gps: { label: 'GPS antenna', color: '#f59e0b', bore: false },
-  scanner: { label: 'Laser scanner', color: '#38bdf8', bore: true },
+  scanner: { label: 'LiDAR', color: '#38bdf8', bore: true },
 };
 
 const DEFAULTS = {
@@ -159,37 +176,48 @@ function render(canvas, state) {
   // their vectors stay visible inside it).
   drawDrone(ctx, proj, eye);
 
-  // IMU triad (reference frame) at the body origin.
-  triad(ctx, proj, [0, 0, 0], eulerAxes(0, 0, 0), 1.8, 0.95, 'ᴵ');
-  const oI = proj([0, 0, 0]);
-  if (oI) { ctx.fillStyle = '#e8eff5'; ctx.beginPath(); ctx.arc(oI[0], oI[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, oI, 'IMU', '#e8eff5', 8, 16); }
+  const gpsPos = arms.gps; const scanPos = arms.scanner;
 
-  // Each sensor: lever-arm vector, boresighted axis triad, marker. The sensor
-  // currently being edited is drawn in full; the others are dimmed to declutter.
-  Object.keys(SENSORS).forEach((key) => {
-    const s = SENSORS[key]; const pos = arms[key]; const isSel = key === sel;
-    const axes = s.bore ? eulerAxes(...bores[key]) : eulerAxes(0, 0, 0);
-    if (showArms) {
-      arrow3(ctx, proj, [0, 0, 0], pos, s.color, isSel ? 2.6 : 1.4);
-      if (isSel) label(ctx, proj(scale(pos, 0.5)), `a = ${norm(pos).toFixed(2)} m`, s.color, 8, -4, '600 11px system-ui');
-    }
-    // ghost of IMU-aligned axes at the sensor, to reveal the boresight offset
-    if (s.bore && showGhost && isSel) triad(ctx, proj, pos, eulerAxes(0, 0, 0), 1.2, 0.3, null);
-    triad(ctx, proj, pos, axes, isSel ? 1.6 : 0.8, isSel ? 0.95 : 0.55, isSel && key === 'scanner' ? 'ₛ' : null);
-    const pp = proj(pos);
-    if (pp) {
-      ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(pp[0], pp[1], isSel ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#0a1119'; ctx.lineWidth = 1.5; ctx.stroke();
-      label(ctx, pp, s.label, s.color, 9, isSel ? 20 : 14, isSel ? '700 12px system-ui' : '600 10px system-ui');
-    }
-    // GPS antenna disc
-    if (key === 'gps' && pp) { ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(pp[0], pp[1] - 2, 15, 6, 0, 0, Math.PI * 2); ctx.stroke(); }
-  });
+  // Lever arm: the vector that physically ties the GPS antenna to the LiDAR.
+  // (There is deliberately no antenna→IMU line — the arm we care about spans
+  // the two sensors whose measurements must be fused.)
+  if (showArms) {
+    arrow3(ctx, proj, gpsPos, scanPos, '#c084fc', 2.6);
+    const armVec = sub(scanPos, gpsPos);
+    label(ctx, proj(scale(add(gpsPos, scanPos), 0.5)), `lever arm = ${norm(armVec).toFixed(2)} m`, '#c084fc', 8, -6, '700 11px system-ui');
+  }
+
+  // IMU triad = local navigation frame: True North, East, Nadir.
+  triad(ctx, proj, [0, 0, 0], NAV_AXES, 1.8, 0.95, ['N', 'E', 'Nadir']);
+  const oI = proj([0, 0, 0]);
+  if (oI) { ctx.fillStyle = '#e8eff5'; ctx.beginPath(); ctx.arc(oI[0], oI[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, oI, 'IMU (nav frame)', '#e8eff5', 8, 16); }
+
+  // GPS antenna: its triad is aligned with the ECEF axes.
+  triad(ctx, proj, gpsPos, ecefAxes(LAT, LON), sel === 'gps' ? 1.6 : 1.1, sel === 'gps' ? 0.95 : 0.6, ['Xₑ', 'Yₑ', 'Zₑ']);
+  const pg = proj(gpsPos);
+  if (pg) {
+    ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(pg[0], pg[1] - 2, 15, 6, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(pg[0], pg[1], sel === 'gps' ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#0a1119'; ctx.lineWidth = 1.5; ctx.stroke();
+    label(ctx, pg, 'GPS antenna (ECEF)', '#f59e0b', 9, sel === 'gps' ? 20 : 14, sel === 'gps' ? '700 12px system-ui' : '600 10px system-ui');
+  }
+
+  // LiDAR: nav frame rotated by the boresight roll/pitch/yaw. The faint ghost
+  // shows the un-rotated nav axes so the boresight offset is visible.
+  const scanAxes = lidarAxes(...bores.scanner);
+  if (showGhost) triad(ctx, proj, scanPos, NAV_AXES, 1.2, 0.28, null);
+  triad(ctx, proj, scanPos, scanAxes, sel === 'scanner' ? 1.6 : 1.1, sel === 'scanner' ? 0.95 : 0.6, ['Xₛ', 'Yₛ', 'Zₛ']);
+  const ps = proj(scanPos);
+  if (ps) {
+    ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(ps[0], ps[1], sel === 'scanner' ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#0a1119'; ctx.lineWidth = 1.5; ctx.stroke();
+    label(ctx, ps, 'LiDAR (roll/pitch/yaw)', '#38bdf8', 9, sel === 'scanner' ? 20 : 14, sel === 'scanner' ? '700 12px system-ui' : '600 10px system-ui');
+  }
 
   // Laser beam + boresight ground error.
   if (showLaser) {
-    const sPos = arms.scanner; const axes = eulerAxes(...bores.scanner);
-    const beam = normalize(toWorld(axes, [0, 0, -1])); // scanner "down" axis, tilted by boresight
+    const sPos = scanPos;
+    const beam = normalize(scanAxes[2]); // LiDAR "down" (Zₛ), tilted by boresight
     const nominal = [0, 0, -1]; // where it should point with zero boresight
     const tHit = (groundZ - sPos[2]) / beam[2];
     const tNom = (groundZ - sPos[2]) / nominal[2];
@@ -244,12 +272,14 @@ export default function Boresight() {
 
   // Boresight magnitude + ground error for the readouts (scanner).
   const boreMag = useMemo(() => {
-    const axes = eulerAxes(...bores.scanner); const beam = normalize(toWorld(axes, [0, 0, -1]));
+    const beam = normalize(lidarAxes(...bores.scanner)[2]);
     return Math.acos(clamp(dot(beam, [0, 0, -1]), -1, 1)) / DEG;
   }, [bores.scanner]);
   const scannerH = height + arms.scanner[2]; // scanner's true height above ground (arm z is negative)
   const groundErr = scannerH * Math.tan(boreMag * DEG);
-  const s = SENSORS[sel]; const arm = arms[sel]; const mag = norm(arm);
+  const [roll, pitch, yaw] = bores.scanner;
+  const leverArm = norm(sub(arms.scanner, arms.gps)); // antenna → LiDAR
+  const s = SENSORS[sel]; const arm = arms[sel];
 
   const AXES = ['X', 'Y', 'Z'];
   const RPY = ['roll (X)', 'pitch (Y)', 'yaw (Z)'];
@@ -260,9 +290,9 @@ export default function Boresight() {
         <a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a>
         <div className="title-block">
           <h1>Boresight &amp; Lever-Arm <span className="native-badge">Native React</span></h1>
-          <span className="sub">Direct georeferencing: how the GPS antenna, IMU &amp; laser scanner are tied together in 3D</span>
+          <span className="sub">Direct georeferencing: GPS antenna aligned to ECEF, IMU to North/Nadir, LiDAR by roll/pitch/yaw</span>
         </div>
-        <span className="score-chip">reference frame: <b>IMU</b></span>
+        <span className="score-chip">nav frame: <b>North · East · Nadir</b></span>
       </header>
 
       <div className="sim-layout">
@@ -272,15 +302,15 @@ export default function Boresight() {
             <canvas ref={canvasRef} className="bs-view3d" width={VIEW_W} height={VIEW_H}
               onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onWheel={onWheel} />
             <div className="bs-legend">
-              <span><i className="bs-dot" style={{ background: '#e8eff5' }} /> IMU (reference)</span>
-              <span><i className="bs-dot" style={{ background: '#f59e0b' }} /> GPS antenna</span>
-              <span><i className="bs-dot" style={{ background: '#38bdf8' }} /> laser scanner</span>
-              <span><i className="bs-line" style={{ borderColor: '#94a3b8' }} /> lever arm</span>
+              <span><i className="bs-dot" style={{ background: '#e8eff5' }} /> IMU — N / E / Nadir</span>
+              <span><i className="bs-dot" style={{ background: '#f59e0b' }} /> GPS antenna — ECEF axes</span>
+              <span><i className="bs-dot" style={{ background: '#38bdf8' }} /> LiDAR — roll/pitch/yaw</span>
+              <span><i className="bs-line" style={{ borderColor: '#c084fc' }} /> lever arm (antenna→LiDAR)</span>
               <span><i className="bs-line" style={{ borderColor: '#ff6a5a', borderStyle: 'solid' }} /> laser ray</span>
             </div>
             <div className="bs-toolbar">
-              <label><input type="checkbox" checked={showArms} onChange={(e) => setShowArms(e.target.checked)} /> lever-arm vectors</label>
-              <label><input type="checkbox" checked={showGhost} onChange={(e) => setShowGhost(e.target.checked)} /> IMU-aligned ghost axes</label>
+              <label><input type="checkbox" checked={showArms} onChange={(e) => setShowArms(e.target.checked)} /> lever-arm vector</label>
+              <label><input type="checkbox" checked={showGhost} onChange={(e) => setShowGhost(e.target.checked)} /> nav-aligned ghost axes</label>
               <label><input type="checkbox" checked={showLaser} onChange={(e) => setShowLaser(e.target.checked)} /> laser &amp; ground error</label>
               <button className="bs-btn" onClick={() => setOrbit({ az: -0.6, el: 0.28, dist: 20 })}>reset view</button>
             </div>
@@ -298,17 +328,17 @@ export default function Boresight() {
               ))}
             </div>
 
-            <div className="bs-sub">Lever arm — offset from the IMU (metres)</div>
+            <div className="bs-sub">Mounting position — offset from the IMU (metres)</div>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
               {AXES.map((ax, i) => (
                 <label key={ax}>{ax} <b>{arm[i].toFixed(2)}</b><input type="range" min="-4" max="4" step="0.05" value={arm[i]} onChange={setArm(sel, i)} /></label>
               ))}
             </div>
-            <div className="bs-eq">|a<sub>{sel === 'gps' ? 'gps' : sel === 'scanner' ? 'ls' : 'cam'}</sub>| = <b>{mag.toFixed(2)} m</b> &nbsp; a = ({arm.map((v) => v.toFixed(2)).join(', ')})</div>
+            <div className="bs-eq">antenna → LiDAR lever arm |a<sub>gps→ls</sub>| = <b>{leverArm.toFixed(2)} m</b></div>
 
             {s.bore ? (
               <>
-                <div className="bs-sub">Boresight — rotation vs the IMU (degrees, exaggerated)</div>
+                <div className="bs-sub">Boresight — LiDAR roll / pitch / yaw vs the IMU (deg, exaggerated)</div>
                 <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                   {RPY.map((nm, i) => (
                     <label key={nm}>{nm} <b>{bores[sel][i]}&deg;</b><input type="range" min="-15" max="15" step="0.5" value={bores[sel][i]} onChange={setBore(sel, i)} /></label>
@@ -317,31 +347,39 @@ export default function Boresight() {
                 <button className="bs-btn" style={{ marginTop: 8 }} onClick={zeroBore}>zero this boresight</button>
               </>
             ) : (
-              <div className="bs-note">The GPS antenna is a single phase-centre <b>point</b> — it has a lever arm but <b>no orientation</b>, so there is no boresight for it.</div>
+              <div className="bs-note">The GPS antenna is a single phase-centre <b>point</b> with its triad locked to the <b>ECEF</b> axes — it has a lever arm but <b>no roll/pitch/yaw</b>, so there is no boresight for it.</div>
             )}
+
+            <div className="bs-sub">LiDAR attitude (roll / pitch / yaw)</div>
+            <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+              <div><span>roll</span><b>{roll.toFixed(1)}&deg;</b></div>
+              <div><span>pitch</span><b>{pitch.toFixed(1)}&deg;</b></div>
+              <div><span>yaw</span><b>{yaw.toFixed(1)}&deg;</b></div>
+            </div>
 
             <div className="bs-sub">Flying height &amp; impact</div>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
               <label>height above ground <b>{height} m</b><input type="range" min="2" max="12" step="0.5" value={height} onChange={(e) => setHeight(Number(e.target.value))} /></label>
             </div>
             <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-              <div><span>scanner boresight</span><b>{boreMag.toFixed(2)}&deg;</b></div>
+              <div><span>boresight β</span><b>{boreMag.toFixed(2)}&deg;</b></div>
               <div><span>flying height H</span><b>{height} m</b></div>
               <div><span>ground error ≈ H·tanβ</span><b className={groundErr > 0.3 ? 'orange' : ''}>{(groundErr * 100).toFixed(0)} cm</b></div>
             </div>
 
             <div className="rect-summary">
-              <b>Lever arm vs. boresight</b>
+              <b>Three frames, one measurement</b>
               <p>
-                Every sensor sits in its own place and pose on the aircraft, all referenced to the <b>IMU body frame</b>.
-                The <b>lever arm</b> is the <b>translation</b> from the IMU to a sensor (measured once, e.g. by survey), while the
-                <b> boresight</b> is the small <b>rotational</b> misalignment between the IMU axes and the sensor axes (found by
-                calibration). Toggle the ghost axes to see the boresight, and watch the laser ray: an uncalibrated boresight
-                angle β turns into a ground error of about <b>H·tan β</b> — {(groundErr * 100).toFixed(0)} cm at {height} m here.
+                Each device advertises its own frame: the <b>GPS antenna</b> reports its phase-centre in <b>ECEF</b> axes,
+                the <b>IMU</b> measures the aircraft's attitude in the local <b>North / East / Nadir</b> nav frame, and the
+                <b> LiDAR</b> is bolted on with a small <b>roll / pitch / yaw</b> offset from the IMU — that offset is the
+                <b> boresight</b>. The <b>lever arm</b> is the fixed <b>translation from the antenna to the LiDAR</b> (there is
+                no line to the IMU — it is the two sensors whose measurements must be fused). Watch the laser ray: an
+                uncalibrated boresight β turns into a ground error of about <b>H·tan β</b> — {(groundErr * 100).toFixed(0)} cm at {height} m here.
               </p>
             </div>
             <div className={`bs-note ${groundErr > 0.3 ? 'warn' : ''}`}>
-              Georeferencing a laser point: <b>X<sub>world</sub> = X<sub>GPS</sub> + R<sub>IMU</sub><sup>world</sup> · ( R<sub>bore</sub> · r<sub>scan</sub> + a<sub>ls</sub> − a<sub>gps</sub> )</b> — the lever arms shift the origin and the boresight R<sub>bore</sub> rotates the scanner ray into the IMU frame.
+              Georeferencing a laser point: <b>X<sub>ECEF</sub> = X<sub>GPS</sub> + R<sub>ECEF</sub><sup>nav</sup> · R<sub>nav</sub><sup>body</sup> · ( R<sub>bore</sub> · r<sub>scan</sub> + a<sub>gps→ls</sub> )</b> — the antenna→LiDAR lever arm shifts the origin, the boresight R<sub>bore</sub> rotates the ray into the IMU/nav frame, and R<sub>ECEF</sub><sup>nav</sup> lifts it into ECEF.
             </div>
           </section>
         </div>
