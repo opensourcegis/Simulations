@@ -79,13 +79,11 @@ function triad(ctx, proj, origin, axes, len, alpha, tag) {
 const SENSORS = {
   gps: { label: 'GPS antenna', color: '#f59e0b', bore: false },
   scanner: { label: 'Laser scanner', color: '#38bdf8', bore: true },
-  camera: { label: 'Camera', color: '#a78bfa', bore: true },
 };
 
 const DEFAULTS = {
   gps: { arm: [-0.9, 0.0, 1.05], bore: [0, 0, 0] }, // antenna on top of the fuselage, behind the wing
   scanner: { arm: [0.7, 0.0, -0.8], bore: [4, -3, 5] }, // laser scanner under the belly, looking down
-  camera: { arm: [1.3, 0.5, -0.75], bore: [-3, 4, -2] }, // camera under the nose, offset
 };
 
 // A transparent fixed-wing drone, in IMU body coordinates (X forward/nose,
@@ -177,7 +175,7 @@ function render(canvas, state) {
     }
     // ghost of IMU-aligned axes at the sensor, to reveal the boresight offset
     if (s.bore && showGhost && isSel) triad(ctx, proj, pos, eulerAxes(0, 0, 0), 1.2, 0.3, null);
-    triad(ctx, proj, pos, axes, isSel ? 1.6 : 0.8, isSel ? 0.95 : 0.55, isSel && key === 'scanner' ? 'ₛ' : isSel && key === 'camera' ? 'ₑ' : null);
+    triad(ctx, proj, pos, axes, isSel ? 1.6 : 0.8, isSel ? 0.95 : 0.55, isSel && key === 'scanner' ? 'ₛ' : null);
     const pp = proj(pos);
     if (pp) {
       ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(pp[0], pp[1], isSel ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
@@ -215,8 +213,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export default function Boresight() {
   const [orbit, setOrbit] = useState({ az: -0.6, el: 0.28, dist: 20 });
-  const [arms, setArms] = useState({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice(), camera: DEFAULTS.camera.arm.slice() });
-  const [bores, setBores] = useState({ scanner: DEFAULTS.scanner.bore.slice(), camera: DEFAULTS.camera.bore.slice() });
+  const [arms, setArms] = useState({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice() });
+  const [bores, setBores] = useState({ scanner: DEFAULTS.scanner.bore.slice() });
   const [height, setHeight] = useState(6);
   const [sel, setSel] = useState('scanner');
   const [showArms, setShowArms] = useState(true);
@@ -239,10 +237,10 @@ export default function Boresight() {
     setOrbit((o) => ({ ...o, az: o.az - dx * 0.008, el: clamp(o.el + dy * 0.006, -0.2, 1.4) }));
   };
   const onUp = () => { drag.current = null; };
-  const onWheel = (e) => setOrbit((o) => ({ ...o, dist: clamp(o.dist + e.deltaY * 0.02, 12, 40) }));
+  const onWheel = (e) => setOrbit((o) => ({ ...o, dist: clamp(o.dist + e.deltaY * 0.02, 5, 40) }));
 
-  const reset = () => { setArms({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice(), camera: DEFAULTS.camera.arm.slice() }); setBores({ scanner: DEFAULTS.scanner.bore.slice(), camera: DEFAULTS.camera.bore.slice() }); };
-  const zeroBore = () => setBores((p) => ({ scanner: sel === 'scanner' ? [0, 0, 0] : p.scanner, camera: sel === 'camera' ? [0, 0, 0] : p.camera }));
+  const reset = () => { setArms({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice() }); setBores({ scanner: DEFAULTS.scanner.bore.slice() }); };
+  const zeroBore = () => setBores((p) => ({ scanner: sel === 'scanner' ? [0, 0, 0] : p.scanner }));
 
   // Boresight magnitude + ground error for the readouts (scanner).
   const boreMag = useMemo(() => {
@@ -262,7 +260,7 @@ export default function Boresight() {
         <a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a>
         <div className="title-block">
           <h1>Boresight &amp; Lever-Arm <span className="native-badge">Native React</span></h1>
-          <span className="sub">Direct georeferencing: how the GPS antenna, IMU, laser scanner &amp; camera are tied together in 3D</span>
+          <span className="sub">Direct georeferencing: how the GPS antenna, IMU &amp; laser scanner are tied together in 3D</span>
         </div>
         <span className="score-chip">reference frame: <b>IMU</b></span>
       </header>
@@ -277,7 +275,6 @@ export default function Boresight() {
               <span><i className="bs-dot" style={{ background: '#e8eff5' }} /> IMU (reference)</span>
               <span><i className="bs-dot" style={{ background: '#f59e0b' }} /> GPS antenna</span>
               <span><i className="bs-dot" style={{ background: '#38bdf8' }} /> laser scanner</span>
-              <span><i className="bs-dot" style={{ background: '#a78bfa' }} /> camera</span>
               <span><i className="bs-line" style={{ borderColor: '#94a3b8' }} /> lever arm</span>
               <span><i className="bs-line" style={{ borderColor: '#ff6a5a', borderStyle: 'solid' }} /> laser ray</span>
             </div>
