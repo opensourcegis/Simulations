@@ -157,56 +157,69 @@ function drawPhasor(ctx, { sats, t }) {
   ctx.fillStyle = '#8ea3b5'; ctx.font = '9.5px system-ui'; ctx.fillText('a receiver-clock error rotates ALL vectors together', lx, ly + 4);
 }
 
-const COMB_W = 700; const COMB_H = 300;
-// Multi-satellite phase candidate-position combs; they align at one longitude.
-function drawComb(ctx, { sats, roverX, codeRx, resolve }) {
-  ctx.clearRect(0, 0, COMB_W, COMB_H); ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, COMB_W, COMB_H);
-  const left = 60; const right = COMB_W - 20; const HALF = 2.2; // metres window around truth
-  const X = (m) => left + ((m - (roverX - HALF)) / (2 * HALF)) * (right - left);
-  const laneTop = 34; const laneH = 34; const gap = 14;
+// One satellite: the receiver locks its replica to the incoming carrier and
+// tracks the phase (PLL). Shows the two carriers overlaid + a phasor for the
+// tracked phase.
+const TRACK_W = 700; const TRACK_H = 168;
+function drawTrack(ctx, { sat, phi, t }) {
+  ctx.clearRect(0, 0, TRACK_W, TRACK_H); ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, TRACK_W, TRACK_H);
+  const left = 20; const right = TRACK_W - 175; const mid = 84; const A = 40; const cycles = 5; const per = (right - left) / cycles;
+  const scroll = t * 2.2;
+  const carrier = (color, w, dash) => {
+    ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath();
+    for (let x = left; x <= right; x += 2) { const ph = (x - left) / per * TAU - scroll; const y = mid - A * Math.sin(ph); if (x === left) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.stroke(); if (dash) ctx.setLineDash([]);
+  };
+  carrier(sat.color, 2.6, null); // incoming carrier
+  carrier('rgba(232,239,245,.9)', 1.4, [5, 4]); // receiver replica, phase-locked
+  // reference line where the fractional phase is read
+  const refx = left + per * 1.5;
+  ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(refx, 26); ctx.lineTo(refx, TRACK_H - 26); ctx.stroke(); ctx.setLineDash([]);
+  const ry = mid - A * Math.sin((refx - left) / per * TAU - scroll);
+  ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.arc(refx, ry, 4, 0, TAU); ctx.fill();
+  // phasor
+  const cx = TRACK_W - 88; const cy = 84; const R = 54;
+  ctx.strokeStyle = 'rgba(140,163,181,.4)'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+  const ang = phi * TAU - scroll; const ex = cx + Math.cos(ang) * R; const ey = cy - Math.sin(ang) * R;
+  ctx.strokeStyle = sat.color; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+  ctx.fillStyle = sat.color; ctx.beginPath(); ctx.arc(ex, ey, 3.6, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#8ea3b5'; ctx.font = '9px system-ui'; ctx.textAlign = 'center'; ctx.fillText('tracked phase', cx, cy + R + 14); ctx.textAlign = 'left';
+  // labels
+  ctx.fillStyle = sat.color; ctx.font = '600 11px system-ui'; ctx.fillText(`incoming carrier  ·  G${sat.prn}`, left, 16);
+  ctx.fillStyle = '#cfe0ef'; ctx.font = '11px system-ui'; ctx.fillText('receiver replica — phase-locked (PLL)', left, TRACK_H - 10);
+  ctx.fillStyle = '#4ade80'; ctx.font = '700 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`φ = ${phi.toFixed(3)} cyc`, refx, 20); ctx.textAlign = 'left';
+}
 
-  ctx.fillStyle = '#8ea3b5'; ctx.font = '10.5px system-ui'; ctx.textAlign = 'left';
-  ctx.fillText('each satellite: possible rover longitudes one carrier cycle apart — only one column lines up for all', left - 4, 16);
-
+// One satellite: the carrier gives a comb of candidate ranges (λ apart); the
+// rough code range picks the correct whole-cycle count N.
+const NL_W = 700; const NL_H = 200;
+function drawNline(ctx, { phi, codeRange, smoothed, Nest, color, resolve }) {
+  ctx.clearRect(0, 0, NL_W, NL_H); ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, NL_W, NL_H);
+  const left = 30; const right = NL_W - 24; const y = NL_H - 48; const WIN = 0.55; // metres half-window
+  const X = (m) => left + ((m - (codeRange - WIN)) / (2 * WIN)) * (right - left);
   const fixed = resolve >= 1;
-  sats.forEach((s, i) => {
-    const y = laneTop + i * (laneH + gap); const ux = Math.abs((s.Sx - roverX) / Math.hypot(s.Sx - roverX, s.Sy));
-    const dx = LAMBDA / ux; // longitude spacing for one cycle
-    ctx.fillStyle = s.color; ctx.font = '600 10px system-ui'; ctx.textAlign = 'right'; ctx.fillText(`G${s.prn}`, left - 8, y + laneH / 2 + 3);
-    ctx.textAlign = 'left'; ctx.fillStyle = '#7d8fa1'; ctx.font = '9px ui-monospace,monospace'; ctx.fillText(`${(dx * 100).toFixed(0)}cm`, left - 30, y + laneH / 2 + 14);
-    ctx.textAlign = 'right'; ctx.font = '700 10px system-ui'; ctx.fillStyle = fixed ? '#4ade80' : '#e37400'; ctx.fillText(fixed ? '🔒 N fixed' : '🔒 N = ?', right - 3, y + 10); ctx.textAlign = 'left';
-    ctx.strokeStyle = 'rgba(140,163,181,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y + laneH); ctx.lineTo(right, y + laneH); ctx.stroke();
-    for (let k = -30; k <= 30; k += 1) {
-      const m = roverX + k * dx; if (m < roverX - HALF || m > roverX + HALF) continue;
-      const x = X(m); const isTruth = k === 0;
-      ctx.strokeStyle = isTruth && fixed ? '#4ade80' : s.color; ctx.globalAlpha = isTruth && fixed ? 1 : 0.7;
-      ctx.lineWidth = isTruth && fixed ? 2.4 : 1.3;
-      ctx.beginPath(); ctx.moveTo(x, y + laneH); ctx.lineTo(x, y + (isTruth && fixed ? 2 : laneH - 22)); ctx.stroke(); ctx.globalAlpha = 1;
-    }
-  });
-
-  const bottom = laneTop + sats.length * (laneH + gap);
-  // code position marker + uncertainty
-  ctx.fillStyle = 'rgba(227,116,0,.14)';
-  const bw = X(codeRx + 1.2) - X(codeRx - 1.2);
-  ctx.fillRect(X(codeRx - 1.2), laneTop - 6, bw, bottom - laneTop);
-  ctx.strokeStyle = '#e37400'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(X(codeRx), laneTop - 10); ctx.lineTo(X(codeRx), bottom); ctx.stroke();
-  ctx.fillStyle = '#e37400'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText('code ±m', X(codeRx), laneTop - 12);
-
-  // resolve scan / consensus line
-  if (resolve > 0 && resolve < 1) {
-    const scanX = X(roverX - HALF) + (X(roverX + HALF) - X(roverX - HALF)) * resolve;
-    ctx.strokeStyle = 'rgba(126,224,196,.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(scanX, laneTop - 6); ctx.lineTo(scanX, bottom); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#cdd9e3'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText('carrier → candidate ranges one wavelength (19 cm) apart;  the code range picks one → N', left - 6, 16);
+  // code band + marker
+  ctx.fillStyle = 'rgba(227,116,0,.16)'; ctx.fillRect(X(codeRange - smoothed), y - 74, X(codeRange + smoothed) - X(codeRange - smoothed), 74);
+  ctx.strokeStyle = '#e37400'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(X(codeRange), y - 80); ctx.lineTo(X(codeRange), y); ctx.stroke();
+  ctx.fillStyle = '#e37400'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText('code range ρ', X(codeRange), y - 84);
+  // candidates
+  for (let k = -5; k <= 5; k += 1) {
+    const m = (Nest + k + phi) * LAMBDA; if (m < codeRange - WIN || m > codeRange + WIN) continue;
+    const x = X(m); const isN = k === 0;
+    ctx.strokeStyle = isN && fixed ? '#4ade80' : color; ctx.lineWidth = isN && fixed ? 2.8 : 1.5;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - (isN && fixed ? 60 : 32)); ctx.stroke();
+    if (isN && fixed) { ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.arc(x, y - 60, 3.6, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = isN && fixed ? '#4ade80' : '#8ea3b5'; ctx.font = isN ? '700 10px system-ui' : '9.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(k === 0 ? 'N' : k > 0 ? `N+${k}` : `N${k}`, x, y + 15);
   }
-  if (fixed) {
-    ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(roverX), laneTop - 8); ctx.lineTo(X(roverX), bottom + 4); ctx.stroke();
-    ctx.fillStyle = '#4ade80'; ctx.font = '700 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('FIXED', X(roverX), bottom + 18);
-  }
+  // scan line during resolve
+  if (resolve > 0 && resolve < 1) { const sx = left + (right - left) * resolve; ctx.strokeStyle = 'rgba(126,224,196,.9)'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(sx, y - 74); ctx.lineTo(sx, y); ctx.stroke(); ctx.setLineDash([]); }
   // axis
-  ctx.strokeStyle = 'rgba(140,163,181,.5)'; ctx.beginPath(); ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); ctx.stroke();
-  ctx.fillStyle = '#8ea3b5'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-  for (let m = -2; m <= 2; m += 1) { const x = X(roverX + m); ctx.beginPath(); ctx.moveTo(x, bottom); ctx.lineTo(x, bottom + 4); ctx.stroke(); ctx.fillText(`${m > 0 ? '+' : ''}${m} m`, x, bottom + 28); }
-  ctx.textAlign = 'left';
+  ctx.strokeStyle = 'rgba(140,163,181,.5)'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+  ctx.textAlign = 'left'; ctx.fillStyle = '#7d8fa1'; ctx.font = '9px system-ui';
+  ctx.fillText(`each tick = a whole number of wavelengths N   ·   window ±${(WIN * 100).toFixed(0)} cm around ρ`, left, NL_H - 14);
 }
 
 export default function Gnss() {
@@ -217,7 +230,7 @@ export default function Gnss() {
   const [showBase, setShowBase] = useState(true);
   const [sel, setSel] = useState(0);
 
-  const skyRef = useRef(null); const phaseRef = useRef(null); const combRef = useRef(null);
+  const skyRef = useRef(null); const phaseRef = useRef(null); const trackRef = useRef(null); const nlineRef = useRef(null);
   const params = useRef({}); const resolveAnim = useRef({ playing: false, start: 0, done: false });
 
   // Deterministic per-satellite code noise so the solution is stable per input.
@@ -236,7 +249,17 @@ export default function Gnss() {
     return { sats, code };
   }, [numSat, roverOffset, codeNoise, noise]);
 
-  params.current = { step, sats: data.sats, showBase, sel, roverX: roverOffset, codeRx: data.code.Rx };
+  // Focused satellite for step 3 (single-satellite N calculation). The code
+  // range here is the clean, differenced range (clocks/atmosphere removed),
+  // carrier-smoothed, so the whole-cycle count rounds out uniquely.
+  const fs = data.sats[Math.min(sel, data.sats.length - 1)];
+  const focusIdx = Math.min(sel, data.sats.length - 1);
+  const smoothed = Math.max(0.03, codeNoise * 0.03);
+  const codeRange = fs.r + noise[focusIdx] * smoothed;
+  const Nest = Math.round(codeRange / LAMBDA - fs.phaseFrac);
+  const fixedRange = (Nest + fs.phaseFrac) * LAMBDA;
+
+  params.current = { step, sats: data.sats, showBase, sel, roverX: roverOffset, codeRx: data.code.Rx, focus: { sat: fs, phi: fs.phaseFrac, codeRange, smoothed, Nest } };
 
   useEffect(() => {
     let raf; const t0 = performance.now();
@@ -244,10 +267,11 @@ export default function Gnss() {
       const p = params.current; const t = (now - t0) / 1000;
       if (p.step === 'signals' && skyRef.current) drawSky(skyRef.current.getContext('2d'), { sats: p.sats, showBase: p.showBase, sel: p.sel, t });
       if (p.step === 'phase' && phaseRef.current) drawPhasor(phaseRef.current.getContext('2d'), { sats: p.sats, t });
-      if (p.step === 'rtk' && combRef.current) {
+      if (p.step === 'rtk') {
         const ra = resolveAnim.current; let resolve = ra.done ? 1 : 0;
         if (ra.playing) { const pr = (now - ra.start) / 1400; if (pr >= 1) { ra.playing = false; ra.done = true; resolve = 1; } else resolve = pr; }
-        drawComb(combRef.current.getContext('2d'), { sats: p.sats, roverX: p.roverX, codeRx: p.codeRx, resolve });
+        if (trackRef.current) drawTrack(trackRef.current.getContext('2d'), { sat: p.focus.sat, phi: p.focus.phi, t });
+        if (nlineRef.current) drawNline(nlineRef.current.getContext('2d'), { phi: p.focus.phi, codeRange: p.focus.codeRange, smoothed: p.focus.smoothed, Nest: p.focus.Nest, color: p.focus.sat.color, resolve });
       }
       raf = requestAnimationFrame(loop);
     };
@@ -257,7 +281,7 @@ export default function Gnss() {
   const codeErr = data.code.Rx - roverOffset;
   const rtkErr = 0.012; // cm-level once ambiguities are fixed
   const play = () => { resolveAnim.current = { playing: true, start: performance.now(), done: false }; };
-  useEffect(() => { resolveAnim.current = { playing: false, start: 0, done: false }; }, [numSat, roverOffset, codeNoise]);
+  useEffect(() => { resolveAnim.current = { playing: false, start: 0, done: false }; }, [numSat, roverOffset, codeNoise, sel]);
 
   const step2Idx = ['signals', 'phase', 'rtk'].indexOf(step) + 1;
 
@@ -365,32 +389,40 @@ export default function Gnss() {
         <div className="sim-layout" key="rtk">
           <div className="sim-col">
             <section className="sim-panel">
-              <h2><span className="stepno">1</span> Double-differenced ambiguity resolution <small>&mdash; finding the integer N</small></h2>
-              <canvas ref={combRef} className="gn-canvas" width={COMB_W} height={COMB_H} />
+              <h2><span className="stepno">1</span> Tracking one satellite&rsquo;s carrier <small>&mdash; G{fs.prn}</small></h2>
+              <canvas ref={trackRef} className="gn-canvas" width={TRACK_W} height={TRACK_H} />
+              <div className="gn-legend">
+                <span><i className="gn-dot" style={{ background: fs.color }} /> incoming carrier</span>
+                <span><i className="gn-dot" style={{ background: '#e8eff5' }} /> receiver replica (locked)</span>
+                <span><i className="gn-dot" style={{ background: '#4ade80' }} /> measured phase φ</span>
+              </div>
+              <div className="gn-sub" style={{ marginTop: 12 }}>Using the code range to find N</div>
+              <canvas ref={nlineRef} className="gn-canvas" width={NL_W} height={NL_H} />
               <div className="gn-btnrow">
-                <button className="gn-btn primary" onClick={play}>▶ Resolve ambiguity (fix N)</button>
-                <span className="gn-chk">the receiver tracks each carrier; only one integer set lines up all satellites</span>
+                <button className="gn-btn primary" onClick={play}>▶ Find N</button>
+                <span className="gn-chk">the code range picks the nearest carrier cycle</span>
               </div>
               <div className="control-grid" style={{ marginTop: 8 }}>
-                <label>Rover position <b>{roverOffset.toFixed(2)} m</b><input type="range" min="-15" max="15" step="0.1" value={roverOffset} onChange={(e) => setRoverOffset(Number(e.target.value))} /></label>
-                <label>Code (P-code) noise <b>{codeNoise.toFixed(1)} m</b><input type="range" min="0.2" max="6" step="0.1" value={codeNoise} onChange={(e) => setCodeNoise(Number(e.target.value))} /></label>
+                <label>Focus satellite <b>G{fs.prn}</b><input type="range" min="0" max={numSat - 1} step="1" value={focusIdx} onChange={(e) => setSel(Number(e.target.value))} /></label>
+                <label>Code range noise <b>{smoothed >= 1 ? `${smoothed.toFixed(2)} m` : `${(smoothed * 100).toFixed(0)} cm`}</b><input type="range" min="0.2" max="6" step="0.1" value={codeNoise} onChange={(e) => setCodeNoise(Number(e.target.value))} /></label>
               </div>
             </section>
           </div>
 
           <div className="sim-col">
             <section className="sim-panel">
-              <h2><span className="stepno">2</span> Double differencing finds N</h2>
-              <div className="gn-note">The receiver <b>tracks</b> each satellite&rsquo;s carrier, counting whole cycles continuously — but the number of cycles <b>N</b> present at the moment it locked on is unknown (the &ldquo;integer ambiguity&rdquo;).</div>
-              <div className="gn-eq">single diff (rover − base): removes satellite clock + atmosphere<br />double diff (sat<sub>i</sub> − sat<sub>j</sub>): removes both receiver clocks<br />&rArr; ∇Δφ = <b>∇Δρ / λ</b> + <b>N</b><sub>ij</sub> &nbsp; (N<sub>ij</sub> is a whole number)</div>
-              <div className="gn-note">With the clocks and atmosphere gone, only the geometry and an <b>integer</b> remain. Because each satellite&rsquo;s 19 cm cycles fall at <b>different longitude spacings</b>, there is exactly <b>one</b> integer set N where all satellites agree — the code position (±1 m) points to the right neighbourhood, and resolving those integers <b>fixes N</b>.</div>
+              <h2><span className="stepno">2</span> How the phase is tracked &amp; N is found</h2>
+              <div className="gn-note"><b>Tracking.</b> The receiver spins up a replica of the carrier and a phase-locked loop keeps it aligned with the incoming signal. It reads the <b>fractional phase</b> φ = <b>{fs.phaseFrac.toFixed(3)} cyc</b> to about <b>2 mm</b> and counts whole cycles as they slip by — but the number of cycles present when it first locked, the integer <b>N</b>, is unknown.</div>
+              <div className="gn-eq">range R = (N + φ) · λ<br />so &nbsp; N = round( R / λ − φ )</div>
+              <div className="gn-note"><b>Finding N.</b> The <b>code</b> gives a rough range ρ (here the clean, double-differenced range with clocks &amp; atmosphere removed, carrier-smoothed to a few cm). The true range must be a whole number of wavelengths plus φ, so the carrier lays down candidate ranges every <b>19 cm</b>; the one nearest ρ is the integer <b>N</b>.</div>
+              <div className="gn-eq">N = round( <b>{codeRange.toFixed(2)}</b> / 0.1903 − {fs.phaseFrac.toFixed(3)} ) = <b>{Nest.toLocaleString()}</b><br />R = (N + φ)·λ = <b>{fixedRange.toFixed(3)} m</b></div>
               <div className="gn-sub">Longitude of the rover</div>
               <div className="gn-lon">
                 <div className="gn-lonrow"><span>truth</span><b style={{ color: '#16202c' }}>{lonStr(roverOffset)}&deg;E</b></div>
                 <div className="gn-lonrow code"><span>code only (±{Math.abs(codeErr).toFixed(1)} m)</span><b>{lonStr(data.code.Rx)}&deg;E</b></div>
-                <div className="gn-lonrow rtk"><span>phase-fixed, N resolved (±{(rtkErr * 100).toFixed(0)} cm)</span><b>{lonStr(roverOffset + rtkErr * (noise[0] || 0.3))}&deg;E</b></div>
+                <div className="gn-lonrow rtk"><span>phase, N fixed (±{(rtkErr * 100).toFixed(0)} cm)</span><b>{lonStr(roverOffset + rtkErr * (noise[0] || 0.3))}&deg;E</b></div>
               </div>
-              <div className="gn-note good">Once the integers N are fixed, the millimetre carrier phase takes over from the metre-level code — the rover longitude sharpens by two more decimal places.</div>
+              <div className="gn-note good">Repeating this for every satellite (a double-difference between satellites removes the receiver clock) fixes all the integers — then the millimetre carrier phase, not the metre-level code, sets the rover longitude.</div>
             </section>
           </div>
         </div>
