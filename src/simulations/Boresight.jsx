@@ -37,6 +37,15 @@ const navToScene = (v) => [v[0], -v[1], -v[2]];
 const NAV_AXES = [navToScene([1, 0, 0]), navToScene([0, 1, 0]), navToScene([0, 0, 1])];
 // LiDAR = nav frame rotated by the boresight roll/pitch/yaw.
 const lidarAxes = (roll, pitch, yaw) => eulerAxes(roll, pitch, yaw).map(navToScene);
+// Compose a body vector through a set of world-column axes.
+const toWorld = (axes, v) => add(add(scale(axes[0], v[0]), scale(axes[1], v[1])), scale(axes[2], v[2]));
+// Rigid-body rotation for the drone attitude the IMU records. `att` is the
+// aircraft roll/pitch/yaw about the nav (NED) axes; this returns a function
+// that rotates any scene-space (body) vector by that attitude. Identity at 0.
+function makeAttitude(att) {
+  const ned = eulerAxes(att[0], att[1], att[2]);
+  return (v) => navToScene(toWorld(ned, navToScene(v)));
+}
 // GPS antenna triad = the ECEF axes. Compute each ECEF axis direction in NED
 // at (lat,lon), then map into scene coordinates.
 function ecefAxes(lat, lon) {
@@ -137,28 +146,29 @@ const DRONE = (() => {
 
 const DRONE_FILL = { body: 'rgba(150,180,210,0.05)', wing: 'rgba(150,180,210,0.11)', fin: 'rgba(150,180,210,0.11)' };
 
-function drawDrone(ctx, proj, eye) {
-  DRONE.faces.map((f) => ({ f, depth: norm(sub(scale(f.pts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / f.pts.length), eye)) }))
+function drawDrone(ctx, proj, eye, xf) {
+  const P = (p) => proj(xf(p)); // project a body point after applying the attitude
+  DRONE.faces.map((f) => ({ f, depth: norm(sub(scale(f.pts.reduce((s, p) => add(s, xf(p)), [0, 0, 0]), 1 / f.pts.length), eye)) }))
     .sort((a, b) => b.depth - a.depth)
     .forEach(({ f }) => {
-      const pr = f.pts.map(proj); if (pr.some((p) => !p)) return;
+      const pr = f.pts.map(P); if (pr.some((p) => !p)) return;
       ctx.beginPath(); pr.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath();
       ctx.fillStyle = DRONE_FILL[f.kind] || DRONE_FILL.body; ctx.fill();
     });
   ctx.strokeStyle = 'rgba(178,202,226,0.5)'; ctx.lineWidth = 1;
-  DRONE.edges.forEach(([a, b]) => { const pa = proj(a); const pb = proj(b); if (pa && pb) { ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke(); } });
+  DRONE.edges.forEach(([a, b]) => { const pa = P(a); const pb = P(b); if (pa && pb) { ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke(); } });
   // propeller: dashed arc + blades + hub
   const hub = [DRONE.propX, 0, 0];
   ctx.strokeStyle = 'rgba(178,202,226,0.35)'; ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.beginPath();
-  for (let i = 0; i <= 24; i += 1) { const a = i / 24 * Math.PI * 2; const p = proj([DRONE.propX, DRONE.propR * Math.cos(a), DRONE.propR * Math.sin(a)]); if (p) (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); }
+  for (let i = 0; i <= 24; i += 1) { const a = i / 24 * Math.PI * 2; const p = P([DRONE.propX, DRONE.propR * Math.cos(a), DRONE.propR * Math.sin(a)]); if (p) (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); }
   ctx.stroke(); ctx.setLineDash([]);
   ctx.strokeStyle = 'rgba(198,216,236,0.75)'; ctx.lineWidth = 2.4;
-  for (let b = 0; b < 3; b += 1) { const a = b * Math.PI * 2 / 3; const ph = proj(hub); const pt = proj([DRONE.propX, DRONE.propR * Math.cos(a), DRONE.propR * Math.sin(a)]); if (ph && pt) { ctx.beginPath(); ctx.moveTo(ph[0], ph[1]); ctx.lineTo(pt[0], pt[1]); ctx.stroke(); } }
-  const ph = proj(hub); if (ph) { ctx.fillStyle = '#c6d6e2'; ctx.beginPath(); ctx.arc(ph[0], ph[1], 3, 0, Math.PI * 2); ctx.fill(); label(ctx, ph, 'propeller', 'rgba(198,214,226,.7)', 6, -8, '600 10px system-ui'); }
+  for (let b = 0; b < 3; b += 1) { const a = b * Math.PI * 2 / 3; const ph = P(hub); const pt = P([DRONE.propX, DRONE.propR * Math.cos(a), DRONE.propR * Math.sin(a)]); if (ph && pt) { ctx.beginPath(); ctx.moveTo(ph[0], ph[1]); ctx.lineTo(pt[0], pt[1]); ctx.stroke(); } }
+  const ph = P(hub); if (ph) { ctx.fillStyle = '#c6d6e2'; ctx.beginPath(); ctx.arc(ph[0], ph[1], 3, 0, Math.PI * 2); ctx.fill(); label(ctx, ph, 'propeller', 'rgba(198,214,226,.7)', 6, -8, '600 10px system-ui'); }
 }
 
 function render(canvas, state) {
-  const { orbit, arms, bores, height, showArms, showGhost, showLaser, sel } = state;
+  const { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel } = state;
   const ctx = canvas.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
   g.addColorStop(0, '#111d29'); g.addColorStop(1, '#0a1119');
@@ -166,34 +176,41 @@ function render(canvas, state) {
   const { proj, eye } = makeProjector(orbit);
   const groundZ = -height;
 
-  // Ground plane grid.
+  // The drone attitude the IMU records — a rigid-body rotation of the whole
+  // platform (drone, IMU body frame, GPS antenna & LiDAR positions/axes).
+  const rot = makeAttitude(att);
+
+  // Ground plane grid (the fixed nav/world frame — it does NOT rotate).
   for (let i = -8; i <= 8; i += 2) {
     line(ctx, proj([i, -8, groundZ]), proj([i, 8, groundZ]), 'rgba(90,120,150,.16)');
     line(ctx, proj([-8, i, groundZ]), proj([8, i, groundZ]), 'rgba(90,120,150,.16)');
   }
 
-  // Transparent fixed-wing drone (wireframe + faint fills, so the sensors and
-  // their vectors stay visible inside it).
-  drawDrone(ctx, proj, eye);
+  // Transparent fixed-wing drone, rotated by the attitude.
+  drawDrone(ctx, proj, eye, rot);
 
-  const gpsPos = arms.gps; const scanPos = arms.scanner;
+  // Rigid platform: every mount rotates with the drone about the IMU origin.
+  const gpsPos = rot(arms.gps); const scanPos = rot(arms.scanner);
 
   // Lever arm: the vector that physically ties the GPS antenna to the LiDAR.
-  // (There is deliberately no antenna→IMU line — the arm we care about spans
-  // the two sensors whose measurements must be fused.)
   if (showArms) {
     arrow3(ctx, proj, gpsPos, scanPos, '#c084fc', 2.6);
     const armVec = sub(scanPos, gpsPos);
     label(ctx, proj(scale(add(gpsPos, scanPos), 0.5)), `lever arm = ${norm(armVec).toFixed(2)} m`, '#c084fc', 8, -6, '700 11px system-ui');
   }
 
-  // IMU triad = local navigation frame: True North, East, Nadir.
-  triad(ctx, proj, [0, 0, 0], NAV_AXES, 1.8, 0.95, ['N', 'E', 'Nadir']);
+  // Fixed nav reference at the IMU origin — faint True North / East / Nadir.
+  triad(ctx, proj, [0, 0, 0], NAV_AXES, 1.7, 0.3, ['N', 'E', 'Nadir']);
+  // IMU body triad — rotates with the drone; its offset from the nav frame IS
+  // the roll/pitch/yaw the IMU records.
+  const imuAxes = eulerAxes(att[0], att[1], att[2]).map(navToScene);
+  triad(ctx, proj, [0, 0, 0], imuAxes, 1.7, 0.95, ['Xᵦ', 'Yᵦ', 'Zᵦ']);
   const oI = proj([0, 0, 0]);
-  if (oI) { ctx.fillStyle = '#e8eff5'; ctx.beginPath(); ctx.arc(oI[0], oI[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, oI, 'IMU (nav frame)', '#e8eff5', 8, 16); }
+  if (oI) { ctx.fillStyle = '#e8eff5'; ctx.beginPath(); ctx.arc(oI[0], oI[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, oI, 'IMU (records R/P/Y)', '#e8eff5', 8, 16); }
 
-  // GPS antenna: its triad is aligned with the ECEF axes.
-  triad(ctx, proj, gpsPos, ecefAxes(LAT, LON), sel === 'gps' ? 1.6 : 1.1, sel === 'gps' ? 0.95 : 0.6, ['Xₑ', 'Yₑ', 'Zₑ']);
+  // GPS antenna: earth-fixed ECEF triad (orientation does NOT rotate with the
+  // drone); only the mount point rides along.
+  triad(ctx, proj, gpsPos, ecefAxes(LAT, LON), sel === 'gps' ? 1.5 : 1.0, sel === 'gps' ? 0.9 : 0.55, ['Xₑ', 'Yₑ', 'Zₑ']);
   const pg = proj(gpsPos);
   if (pg) {
     ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(pg[0], pg[1] - 2, 15, 6, 0, 0, Math.PI * 2); ctx.stroke();
@@ -202,37 +219,41 @@ function render(canvas, state) {
     label(ctx, pg, 'GPS antenna (ECEF)', '#f59e0b', 9, sel === 'gps' ? 20 : 14, sel === 'gps' ? '700 12px system-ui' : '600 10px system-ui');
   }
 
-  // LiDAR: nav frame rotated by the boresight roll/pitch/yaw. The faint ghost
-  // shows the un-rotated nav axes so the boresight offset is visible.
-  const scanAxes = lidarAxes(...bores.scanner);
-  if (showGhost) triad(ctx, proj, scanPos, NAV_AXES, 1.2, 0.28, null);
+  // LiDAR = IMU body frame ∘ boresight, all carried by the attitude. The faint
+  // ghost shows the IMU body axes at the scanner, so the boresight offset shows.
+  const scanAxes = lidarAxes(...bores.scanner).map(rot); // attitude ∘ boresight
+  if (showGhost) triad(ctx, proj, scanPos, imuAxes, 1.2, 0.28, null);
   triad(ctx, proj, scanPos, scanAxes, sel === 'scanner' ? 1.6 : 1.1, sel === 'scanner' ? 0.95 : 0.6, ['Xₛ', 'Yₛ', 'Zₛ']);
   const ps = proj(scanPos);
   if (ps) {
     ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(ps[0], ps[1], sel === 'scanner' ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#0a1119'; ctx.lineWidth = 1.5; ctx.stroke();
-    label(ctx, ps, 'LiDAR (roll/pitch/yaw)', '#38bdf8', 9, sel === 'scanner' ? 20 : 14, sel === 'scanner' ? '700 12px system-ui' : '600 10px system-ui');
+    label(ctx, ps, 'LiDAR', '#38bdf8', 9, sel === 'scanner' ? 20 : 14, sel === 'scanner' ? '700 12px system-ui' : '600 10px system-ui');
   }
 
-  // Laser beam + boresight ground error.
+  // Laser beam. The physical ray swings with the drone (attitude + boresight).
+  // Because the IMU records the attitude, direct georeferencing removes it,
+  // leaving only the boresight residual as ground error.
   if (showLaser) {
     const sPos = scanPos;
-    const beam = normalize(scanAxes[2]); // LiDAR "down" (Zₛ), tilted by boresight
-    const nominal = [0, 0, -1]; // where it should point with zero boresight
-    const tHit = (groundZ - sPos[2]) / beam[2];
+    const beam = normalize(scanAxes[2]); // physical LiDAR down: attitude + boresight
+    const resid = normalize(lidarAxes(...bores.scanner)[2]); // boresight only (attitude removed)
+    const nominal = [0, 0, -1]; // true nadir
+    const tHit = beam[2] < -1e-3 ? (groundZ - sPos[2]) / beam[2] : -1;
+    const tRes = (groundZ - sPos[2]) / resid[2];
     const tNom = (groundZ - sPos[2]) / nominal[2];
-    if (tHit > 0 && tNom > 0) {
-      const hit = add(sPos, scale(beam, tHit));
+    if (tRes > 0 && tNom > 0) {
+      const resHit = add(sPos, scale(resid, tRes));
       const nomHit = add(sPos, scale(nominal, tNom));
       line(ctx, proj(sPos), proj(nomHit), 'rgba(126,224,196,.5)', 1.5, [5, 5]);
-      line(ctx, proj(sPos), proj(hit), '#ff6a5a', 2.6);
-      const ph = proj(hit); const pn = proj(nomHit);
-      if (pn) { ctx.strokeStyle = '#7ee0c4'; ctx.beginPath(); ctx.arc(pn[0], pn[1], 5, 0, Math.PI * 2); ctx.stroke(); label(ctx, pn, 'true (nadir)', '#7ee0c4', 8, 16, '600 10px system-ui'); }
-      if (ph) { ctx.fillStyle = '#ff6a5a'; ctx.beginPath(); ctx.arc(ph[0], ph[1], 5, 0, Math.PI * 2); ctx.fill(); label(ctx, ph, 'measured', '#ff6a5a', 8, 16, '600 10px system-ui'); }
-      line(ctx, ph, pn, '#f6c85f', 2);
-      const err = norm(sub([hit[0], hit[1], 0], [nomHit[0], nomHit[1], 0]));
-      const em = proj(scale(add(hit, nomHit), 0.5));
-      label(ctx, em, `ground error ≈ ${err.toFixed(2)} m`, '#f6c85f', 6, -6, '700 11px system-ui');
+      if (tHit > 0) { const hit = add(sPos, scale(beam, tHit)); line(ctx, proj(sPos), proj(hit), '#ff6a5a', 2.6); const ph = proj(hit); if (ph) { ctx.fillStyle = '#ff6a5a'; ctx.beginPath(); ctx.arc(ph[0], ph[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, ph, 'raw laser hit', '#ff6a5a', 8, 16, '600 10px system-ui'); } }
+      const pr = proj(resHit); const pn = proj(nomHit);
+      if (pn) { ctx.strokeStyle = '#7ee0c4'; ctx.beginPath(); ctx.arc(pn[0], pn[1], 5, 0, Math.PI * 2); ctx.stroke(); label(ctx, pn, 'true nadir', '#7ee0c4', 8, -6, '600 10px system-ui'); }
+      if (pr) { ctx.fillStyle = '#f6c85f'; ctx.beginPath(); ctx.arc(pr[0], pr[1], 5, 0, Math.PI * 2); ctx.fill(); label(ctx, pr, 'after IMU correction', '#f6c85f', 8, 16, '600 10px system-ui'); }
+      line(ctx, pr, pn, '#f6c85f', 2);
+      const err = norm(sub([resHit[0], resHit[1], 0], [nomHit[0], nomHit[1], 0]));
+      const em = proj(scale(add(resHit, nomHit), 0.5));
+      label(ctx, em, `residual ≈ ${err.toFixed(2)} m`, '#f6c85f', 6, -18, '700 11px system-ui');
     }
   }
 }
@@ -243,6 +264,7 @@ export default function Boresight() {
   const [orbit, setOrbit] = useState({ az: -0.6, el: 0.28, dist: 20 });
   const [arms, setArms] = useState({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice() });
   const [bores, setBores] = useState({ scanner: DEFAULTS.scanner.bore.slice() });
+  const [att, setAtt] = useState([12, -6, 15]); // drone attitude the IMU records
   const [height, setHeight] = useState(6);
   const [sel, setSel] = useState('scanner');
   const [showArms, setShowArms] = useState(true);
@@ -252,11 +274,12 @@ export default function Boresight() {
   const canvasRef = useRef(null); const drag = useRef(null);
 
   useEffect(() => {
-    render(canvasRef.current, { orbit, arms, bores, height, showArms, showGhost, showLaser, sel });
-  }, [orbit, arms, bores, height, showArms, showGhost, showLaser, sel]);
+    render(canvasRef.current, { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel });
+  }, [orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel]);
 
   const setArm = (key, i) => (e) => setArms((p) => { const a = { ...p, [key]: p[key].slice() }; a[key][i] = Number(e.target.value); return a; });
   const setBore = (key, i) => (e) => setBores((p) => { const b = { ...p, [key]: p[key].slice() }; b[key][i] = Number(e.target.value); return b; });
+  const setAt = (i) => (e) => setAtt((p) => { const a = p.slice(); a[i] = Number(e.target.value); return a; });
 
   const onDown = (e) => { drag.current = { x: e.clientX, y: e.clientY }; };
   const onMove = (e) => {
@@ -277,7 +300,7 @@ export default function Boresight() {
   }, [bores.scanner]);
   const scannerH = height + arms.scanner[2]; // scanner's true height above ground (arm z is negative)
   const groundErr = scannerH * Math.tan(boreMag * DEG);
-  const [roll, pitch, yaw] = bores.scanner;
+  const [aRoll, aPitch, aYaw] = att; // drone attitude the IMU records
   const leverArm = norm(sub(arms.scanner, arms.gps)); // antenna → LiDAR
   const s = SENSORS[sel]; const arm = arms[sel];
 
@@ -290,9 +313,9 @@ export default function Boresight() {
         <a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a>
         <div className="title-block">
           <h1>Boresight &amp; Lever-Arm <span className="native-badge">Native React</span></h1>
-          <span className="sub">Direct georeferencing: GPS antenna aligned to ECEF, IMU to North/Nadir, LiDAR by roll/pitch/yaw</span>
+          <span className="sub">Direct georeferencing: rotate the drone — the LiDAR rotates with it and the IMU records roll/pitch/yaw</span>
         </div>
-        <span className="score-chip">nav frame: <b>North · East · Nadir</b></span>
+        <span className="score-chip">IMU records: <b>{aRoll.toFixed(0)}° / {aPitch.toFixed(0)}° / {aYaw.toFixed(0)}°</b></span>
       </header>
 
       <div className="sim-layout">
@@ -302,15 +325,15 @@ export default function Boresight() {
             <canvas ref={canvasRef} className="bs-view3d" width={VIEW_W} height={VIEW_H}
               onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onWheel={onWheel} />
             <div className="bs-legend">
-              <span><i className="bs-dot" style={{ background: '#e8eff5' }} /> IMU — N / E / Nadir</span>
+              <span><i className="bs-dot" style={{ background: '#e8eff5' }} /> IMU body (rotates) vs faint N/E/Nadir</span>
               <span><i className="bs-dot" style={{ background: '#f59e0b' }} /> GPS antenna — ECEF axes</span>
-              <span><i className="bs-dot" style={{ background: '#38bdf8' }} /> LiDAR — roll/pitch/yaw</span>
+              <span><i className="bs-dot" style={{ background: '#38bdf8' }} /> LiDAR — rotates with the drone</span>
               <span><i className="bs-line" style={{ borderColor: '#c084fc' }} /> lever arm (antenna→LiDAR)</span>
               <span><i className="bs-line" style={{ borderColor: '#ff6a5a', borderStyle: 'solid' }} /> laser ray</span>
             </div>
             <div className="bs-toolbar">
               <label><input type="checkbox" checked={showArms} onChange={(e) => setShowArms(e.target.checked)} /> lever-arm vector</label>
-              <label><input type="checkbox" checked={showGhost} onChange={(e) => setShowGhost(e.target.checked)} /> nav-aligned ghost axes</label>
+              <label><input type="checkbox" checked={showGhost} onChange={(e) => setShowGhost(e.target.checked)} /> IMU-body ghost axes</label>
               <label><input type="checkbox" checked={showLaser} onChange={(e) => setShowLaser(e.target.checked)} /> laser &amp; ground error</label>
               <button className="bs-btn" onClick={() => setOrbit({ az: -0.6, el: 0.28, dist: 20 })}>reset view</button>
             </div>
@@ -319,7 +342,27 @@ export default function Boresight() {
 
         <div className="sim-col">
           <section className="sim-panel">
-            <h2><span className="stepno">2</span> Edit a component</h2>
+            <h2><span className="stepno">2</span> Fly the drone <small>&mdash; the IMU records this attitude</small></h2>
+            <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+              {['roll', 'pitch', 'yaw'].map((nm, i) => (
+                <label key={nm}>{nm} <b>{att[i].toFixed(0)}&deg;</b><input type="range" min="-30" max="30" step="1" value={att[i]} onChange={setAt(i)} /></label>
+              ))}
+            </div>
+            <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+              <div><span>IMU roll</span><b>{aRoll.toFixed(0)}&deg;</b></div>
+              <div><span>IMU pitch</span><b>{aPitch.toFixed(0)}&deg;</b></div>
+              <div><span>IMU yaw</span><b>{aYaw.toFixed(0)}&deg;</b></div>
+            </div>
+            <div className="bs-toolbar">
+              <button className="bs-btn" onClick={() => setAtt([0, 0, 0])}>level flight (0/0/0)</button>
+            </div>
+            <div className="bs-note">
+              Rotating the drone turns the whole rigid platform — the <b>LiDAR</b>, its beam and the antenna all swing with it about the IMU. The IMU measures that rotation as <b>roll / pitch / yaw</b>; because those are recorded, direct georeferencing can remove them and only the fixed <b>boresight</b> residual is left over.
+            </div>
+          </section>
+
+          <section className="sim-panel">
+            <h2><span className="stepno">3</span> Edit a component</h2>
             <div className="bs-seg">
               {Object.keys(SENSORS).map((k) => (
                 <button key={k} className={`bs-segbtn ${sel === k ? 'on' : ''}`} onClick={() => setSel(k)}>
@@ -350,36 +393,29 @@ export default function Boresight() {
               <div className="bs-note">The GPS antenna is a single phase-centre <b>point</b> with its triad locked to the <b>ECEF</b> axes — it has a lever arm but <b>no roll/pitch/yaw</b>, so there is no boresight for it.</div>
             )}
 
-            <div className="bs-sub">LiDAR attitude (roll / pitch / yaw)</div>
-            <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-              <div><span>roll</span><b>{roll.toFixed(1)}&deg;</b></div>
-              <div><span>pitch</span><b>{pitch.toFixed(1)}&deg;</b></div>
-              <div><span>yaw</span><b>{yaw.toFixed(1)}&deg;</b></div>
-            </div>
-
             <div className="bs-sub">Flying height &amp; impact</div>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
               <label>height above ground <b>{height} m</b><input type="range" min="2" max="12" step="0.5" value={height} onChange={(e) => setHeight(Number(e.target.value))} /></label>
             </div>
             <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-              <div><span>boresight β</span><b>{boreMag.toFixed(2)}&deg;</b></div>
+              <div><span>boresight β (residual)</span><b>{boreMag.toFixed(2)}&deg;</b></div>
               <div><span>flying height H</span><b>{height} m</b></div>
-              <div><span>ground error ≈ H·tanβ</span><b className={groundErr > 0.3 ? 'orange' : ''}>{(groundErr * 100).toFixed(0)} cm</b></div>
+              <div><span>residual ≈ H·tanβ</span><b className={groundErr > 0.3 ? 'orange' : ''}>{(groundErr * 100).toFixed(0)} cm</b></div>
             </div>
 
             <div className="rect-summary">
-              <b>Three frames, one measurement</b>
+              <b>Attitude is recorded; boresight is the leftover</b>
               <p>
-                Each device advertises its own frame: the <b>GPS antenna</b> reports its phase-centre in <b>ECEF</b> axes,
-                the <b>IMU</b> measures the aircraft's attitude in the local <b>North / East / Nadir</b> nav frame, and the
-                <b> LiDAR</b> is bolted on with a small <b>roll / pitch / yaw</b> offset from the IMU — that offset is the
-                <b> boresight</b>. The <b>lever arm</b> is the fixed <b>translation from the antenna to the LiDAR</b> (there is
-                no line to the IMU — it is the two sensors whose measurements must be fused). Watch the laser ray: an
-                uncalibrated boresight β turns into a ground error of about <b>H·tan β</b> — {(groundErr * 100).toFixed(0)} cm at {height} m here.
+                Rotate the drone and the whole rigid platform — the <b>IMU body frame</b>, the <b>GPS antenna</b> and the
+                <b> LiDAR</b> — swings together. The <b>IMU records</b> that motion as <b>roll / pitch / yaw</b> against the fixed
+                <b> North / East / Nadir</b> nav frame, so direct georeferencing can rotate the raw laser ray back and cancel it.
+                What it cannot cancel is the fixed <b>boresight</b> — the small mounting misalignment between the IMU and the
+                LiDAR — which leaves a ground error of about <b>H·tan β</b> ({(groundErr * 100).toFixed(0)} cm at {height} m here).
+                The <b>lever arm</b> is the fixed translation from the antenna to the LiDAR.
               </p>
             </div>
             <div className={`bs-note ${groundErr > 0.3 ? 'warn' : ''}`}>
-              Georeferencing a laser point: <b>X<sub>ECEF</sub> = X<sub>GPS</sub> + R<sub>ECEF</sub><sup>nav</sup> · R<sub>nav</sub><sup>body</sup> · ( R<sub>bore</sub> · r<sub>scan</sub> + a<sub>gps→ls</sub> )</b> — the antenna→LiDAR lever arm shifts the origin, the boresight R<sub>bore</sub> rotates the ray into the IMU/nav frame, and R<sub>ECEF</sub><sup>nav</sup> lifts it into ECEF.
+              Georeferencing a laser point: <b>X<sub>ECEF</sub> = X<sub>GPS</sub> + R<sub>ECEF</sub><sup>nav</sup> · R<sub>nav</sub><sup>body</sup>(roll,pitch,yaw) · ( R<sub>bore</sub> · r<sub>scan</sub> + a<sub>gps→ls</sub> )</b> — R<sub>nav</sub><sup>body</sup> is the attitude the IMU records, R<sub>bore</sub> the boresight, and the antenna→LiDAR lever arm shifts the origin.
             </div>
           </section>
         </div>
