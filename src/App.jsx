@@ -5,6 +5,7 @@ import LidarRanging from './simulations/LidarRanging.jsx';
 import AdaptiveTIN from './simulations/AdaptiveTIN.jsx';
 import BlockAdjustment from './simulations/BlockAdjustment.jsx';
 import Boresight from './simulations/Boresight.jsx';
+import Gnss from './simulations/Gnss.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -18,6 +19,7 @@ const simulators = [
   { title: 'True Ortho-Rectification — React', category: 'Photogrammetry', level: 'Intermediate', description: 'React migration workspace for the same rectification renderer, with the original interaction model preserved while the engine is split into React modules.', tags: ['React migration', 'Canvas engine', 'DSM vs DTM'], path: '?simulation=ortho', kind: 'ortho', status: 'React preview' },
   { title: 'Adaptive TIN Ground Filter', category: 'LiDAR', level: 'Intermediate', description: 'Classify ground vs. non-ground points in LiDAR point clouds using Axelsson’s adaptive triangulated irregular network (TIN) algorithm with customizable distance and angle thresholds.', tags: ['Axelsson algorithm', 'Delaunay TIN', 'Ground classification', 'Point cloud', 'Iterative filtering'], path: '?simulation=adaptive-tin', kind: 'tin', status: 'Native React' },
   { title: 'Boresight & Lever-Arm', category: 'LiDAR', level: 'Advanced', description: 'Visualize direct-georeferencing sensor integration in 3D: the lever-arm offsets from the IMU to the GPS antenna, laser scanner and camera, plus the boresight rotational misalignment — and see how an uncalibrated boresight becomes a ground error.', tags: ['Direct georeferencing', 'Lever arm', 'Boresight', 'IMU / GNSS', 'Sensor fusion'], path: '?simulation=boresight', kind: 'boresight', status: 'Native React' },
+  { title: 'GNSS Positioning', category: 'Positioning', level: 'Advanced', description: 'Watch satellites broadcast signals, form code pseudoranges (ρ = c·Δt), measure the carrier phase, and use differential GPS to resolve the integer number of wavelengths — solving the rover’s longitude from metres down to centimetres.', tags: ['Pseudorange', 'Carrier phase', 'Integer ambiguity', 'Differential / RTK', 'Least squares'], path: '?simulation=gnss', kind: 'gnss', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -30,6 +32,27 @@ function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
 }
 
 function Thumbnail({ kind }) {
+  if (kind === 'gnss') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="GNSS positioning with satellites and a rover">
+      <defs><linearGradient id="bg-gn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0a1a30" /><stop offset="1" stopColor="#14202a" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-gn)" /><Grid id="gn" tint="rgba(255,255,255,.05)" />
+      <rect y="300" width="640" height="60" fill="#26313b" /><line x1="0" y1="300" x2="640" y2="300" stroke="#4a5b68" strokeWidth="2" />
+      {/* satellites + signal rings + LOS to rover */}
+      {[[120, 70, '#5ad1ff'], [300, 46, '#f6c85f'], [520, 90, '#7ee0c4'], [470, 150, '#ff9f6b']].map(([x, y, c], i) => (
+        <g key={i}>
+          <line x1={x} y1={y} x2="320" y2="300" stroke={c} strokeWidth="2" opacity=".5" />
+          <circle cx={x} cy={y} r="20" fill="none" stroke={c} strokeWidth="2" opacity=".5" />
+          <circle cx={x} cy={y} r="34" fill="none" stroke={c} strokeWidth="1.5" opacity=".25" />
+          <rect x={x - 7} y={y - 5} width="14" height="10" fill="#dbe9f2" /><rect x={x - 19} y={y - 3} width="9" height="6" fill={c} /><rect x={x + 10} y={y - 3} width="9" height="6" fill={c} />
+        </g>
+      ))}
+      {/* rover */}
+      <line x1="320" y1="300" x2="320" y2="278" stroke="#4ade80" strokeWidth="3" /><circle cx="320" cy="276" r="4" fill="#4ade80" />
+      <text x="320" y="330" fill="#4ade80" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">ROVER</text>
+      <text x="120" y="345" fill="#8fd0ff" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">ρ = c·Δt</text>
+      <text x="500" y="345" fill="#7ee0c4" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">(N+φ)·λ</text>
+    </svg>
+  );
   if (kind === 'boresight') return (
     <svg viewBox="0 0 640 360" role="img" aria-label="Boresight and lever-arm sensor integration">
       <defs><linearGradient id="bg-bor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0c1a29" /><stop offset="1" stopColor="#122f47" /></linearGradient></defs>
@@ -221,7 +244,7 @@ function SimulatorCard({ simulator }) {
   );
 }
 
-const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Flight planning'];
+const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning'];
 
 function Landing() {
   const [filter, setFilter] = useState('All');
@@ -282,5 +305,6 @@ export default function App() {
   if (simulation === 'adaptive-tin') return <AdaptiveTIN />;
   if (simulation === 'block-adjustment') return <BlockAdjustment />;
   if (simulation === 'boresight') return <Boresight />;
+  if (simulation === 'gnss') return <Gnss />;
   return <Landing />;
 }
