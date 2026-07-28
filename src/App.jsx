@@ -6,6 +6,7 @@ import AdaptiveTIN from './simulations/AdaptiveTIN.jsx';
 import BlockAdjustment from './simulations/BlockAdjustment.jsx';
 import Boresight from './simulations/Boresight.jsx';
 import Gnss from './simulations/Gnss.jsx';
+import Gpr from './simulations/Gpr.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -20,6 +21,7 @@ const simulators = [
   { title: 'Adaptive TIN Ground Filter', category: 'LiDAR', level: 'Intermediate', description: 'Classify ground vs. non-ground points in LiDAR point clouds using Axelsson’s adaptive triangulated irregular network (TIN) algorithm with customizable distance and angle thresholds.', tags: ['Axelsson algorithm', 'Delaunay TIN', 'Ground classification', 'Point cloud', 'Iterative filtering'], path: '?simulation=adaptive-tin', kind: 'tin', status: 'Native React' },
   { title: 'Boresight & Lever-Arm', category: 'LiDAR', level: 'Advanced', description: 'Visualize direct-georeferencing frames in 3D: the GPS antenna aligned to the ECEF axes, the IMU to local North / East / Nadir, and the LiDAR rotated by its boresight roll/pitch/yaw — with the antenna→LiDAR lever arm and the ground error an uncalibrated boresight produces.', tags: ['Direct georeferencing', 'Lever arm', 'Boresight', 'IMU / GNSS', 'Sensor fusion'], path: '?simulation=boresight', kind: 'boresight', status: 'Native React' },
   { title: 'GNSS Positioning', category: 'Positioning', level: 'Advanced', description: 'Watch satellites broadcast signals, form code pseudoranges (ρ = c·Δt), measure the carrier phase, and use differential GPS to resolve the integer number of wavelengths — solving the rover’s longitude from metres down to centimetres.', tags: ['Pseudorange', 'Carrier phase', 'Integer ambiguity', 'Differential / RTK', 'Least squares'], path: '?simulation=gnss', kind: 'gnss', status: 'Native React' },
+  { title: 'Ground-Penetrating Radar', category: 'LiDAR', level: 'Intermediate', description: 'See how a GPR antenna sends a pulse into the ground and times the echo (t = 2R/v), how stacking traces as it moves turns a buried object into a hyperbola, and how the hyperbola’s apex and shape give the object’s depth d = v·t₀/2.', tags: ['Two-way travel time', 'Radargram / B-scan', 'Hyperbola', 'Soil velocity εr', 'Depth estimation'], path: '?simulation=gpr', kind: 'gpr', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -51,6 +53,27 @@ function Thumbnail({ kind }) {
       <text x="320" y="330" fill="#4ade80" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">ROVER</text>
       <text x="120" y="345" fill="#8fd0ff" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">ρ = c·Δt</text>
       <text x="500" y="345" fill="#7ee0c4" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">(N+φ)·λ</text>
+    </svg>
+  );
+  if (kind === 'gpr') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Ground-penetrating radar radargram with a hyperbola">
+      <defs><linearGradient id="bg-gpr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0e1a27" /><stop offset="1" stopColor="#241a12" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-gpr)" />
+      {/* surface + soil */}
+      <rect y="96" width="640" height="264" fill="#2e2116" /><line x1="0" y1="96" x2="640" y2="96" stroke="#c9a06a" strokeWidth="3" />
+      {/* antenna sweeping */}
+      <g>{[120, 200, 280, 360, 440].map((x, i) => <rect key={i} x={x - 14} y="72" width="28" height="14" rx="2" fill={i === 2 ? '#f6c85f' : 'rgba(246,200,95,.4)'} />)}</g>
+      {/* buried object + rays */}
+      <circle cx="280" cy="250" r="14" fill="#8b6b4a" stroke="#d7b98c" strokeWidth="2" />
+      <line x1="280" y1="86" x2="280" y2="236" stroke="#f6c85f" strokeWidth="2.5" />
+      <line x1="200" y1="86" x2="280" y2="250" stroke="rgba(246,200,95,.6)" strokeWidth="2" />
+      <line x1="360" y1="86" x2="280" y2="250" stroke="rgba(126,224,196,.7)" strokeWidth="2" />
+      {/* hyperbola */}
+      <path d="M120 300 Q280 150 440 300" fill="none" stroke="#38bdf8" strokeWidth="5" />
+      <circle cx="280" cy="196" r="6" fill="#38bdf8" />
+      <text x="300" y="188" fill="#8fd0ff" fontSize="17" fontFamily="system-ui" fontWeight="700">apex → depth</text>
+      <text x="16" y="30" fill="#8fd0ff" fontSize="18" fontFamily="ui-monospace,monospace" fontWeight="600">t = 2R / v</text>
+      <text x="470" y="345" fill="#f6c85f" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">d = v·t₀/2</text>
     </svg>
   );
   if (kind === 'boresight') return (
@@ -306,5 +329,6 @@ export default function App() {
   if (simulation === 'block-adjustment') return <BlockAdjustment />;
   if (simulation === 'boresight') return <Boresight />;
   if (simulation === 'gnss') return <Gnss />;
+  if (simulation === 'gpr') return <Gpr />;
   return <Landing />;
 }
