@@ -7,6 +7,7 @@ import BlockAdjustment from './simulations/BlockAdjustment.jsx';
 import Boresight from './simulations/Boresight.jsx';
 import Gnss from './simulations/Gnss.jsx';
 import Gpr from './simulations/Gpr.jsx';
+import BuildingLod from './simulations/BuildingLod.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -22,6 +23,7 @@ const simulators = [
   { title: 'Boresight & Lever-Arm', category: 'LiDAR', level: 'Advanced', description: 'Visualize direct-georeferencing frames in 3D: the GPS antenna aligned to the ECEF axes, the IMU to local North / East / Nadir, and the LiDAR rotated by its boresight roll/pitch/yaw — with the antenna→LiDAR lever arm and the ground error an uncalibrated boresight produces.', tags: ['Direct georeferencing', 'Lever arm', 'Boresight', 'IMU / GNSS', 'Sensor fusion'], path: '?simulation=boresight', kind: 'boresight', status: 'Native React' },
   { title: 'GNSS Positioning', category: 'Positioning', level: 'Advanced', description: 'Watch satellites broadcast signals, form code pseudoranges (ρ = c·Δt), measure the carrier phase, and use differential GPS to resolve the integer number of wavelengths — solving the rover’s longitude from metres down to centimetres.', tags: ['Pseudorange', 'Carrier phase', 'Integer ambiguity', 'Differential / RTK', 'Least squares'], path: '?simulation=gnss', kind: 'gnss', status: 'Native React' },
   { title: 'Ground-Penetrating Radar', category: 'LiDAR', level: 'Intermediate', description: 'See how a GPR antenna sends a pulse into the ground and times the echo (t = 2R/v), how stacking traces as it moves turns a buried object into a hyperbola, and how the hyperbola’s apex and shape give the object’s depth d = v·t₀/2.', tags: ['Two-way travel time', 'Radargram / B-scan', 'Hyperbola', 'Soil velocity εr', 'Depth estimation'], path: '?simulation=gpr', kind: 'gpr', status: 'Native React' },
+  { title: 'Building Levels of Detail', category: 'Photogrammetry', level: 'Intermediate', description: 'Explore a residential building across the refined 16-cell LOD grid: LOD0 flat footprint surfaces, LOD1 extruded blocks, LOD2 true roof shapes, LOD3 the full architectural exterior with windows, dormers and balconies — each generated in 3D with the included/not-included detail spelled out.', tags: ['Levels of Detail', '3D city models', 'CityGML', 'Generalisation', 'Three.js'], path: '?simulation=building-lod', kind: 'lod', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -53,6 +55,17 @@ function Thumbnail({ kind }) {
       <text x="320" y="330" fill="#4ade80" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">ROVER</text>
       <text x="120" y="345" fill="#8fd0ff" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">ρ = c·Δt</text>
       <text x="500" y="345" fill="#7ee0c4" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">(N+φ)·λ</text>
+    </svg>
+  );
+  if (kind === 'lod') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Building levels of detail from a footprint to a detailed house">
+      <defs><linearGradient id="bg-lod" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0f2233" /><stop offset="1" stopColor="#12303f" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-lod)" /><Grid id="lod" tint="rgba(255,255,255,.05)" />
+      <g transform="translate(78 250)"><polygon points="-46,10 24,-14 66,4 -4,28" fill="#4aa8e0" opacity=".85" /><text x="10" y="58" fill="#8fd0ff" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">LOD0</text></g>
+      <g transform="translate(228 235)"><polygon points="-40,20 20,-2 20,-52 -40,-30" fill="#4aa8e0" /><polygon points="20,-2 58,12 58,-38 20,-52" fill="#3d8ec6" /><polygon points="-40,-30 20,-52 58,-38 -2,-58" fill="#67b6e8" /><text x="6" y="66" fill="#8fd0ff" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">LOD1</text></g>
+      <g transform="translate(398 235)"><polygon points="-40,22 18,2 18,-36 -40,-16" fill="#d9dde3" /><polygon points="18,2 56,16 56,-22 18,-36" fill="#b9c0c8" /><polygon points="-40,-16 -8,-54 46,-38 56,-22 18,-36 0,-58" fill="#cc3a2f" /><polygon points="-40,-16 0,-58 -8,-54" fill="#a5332a" /><text x="8" y="70" fill="#f6b7ae" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">LOD2</text></g>
+      <g transform="translate(556 235)"><polygon points="-40,22 18,2 18,-36 -40,-16" fill="#d9dde3" /><polygon points="18,2 56,16 56,-22 18,-36" fill="#b9c0c8" /><polygon points="-40,-16 -8,-54 46,-38 56,-22 18,-36 0,-58" fill="#cc3a2f" /><g fill="#3f6fa8"><rect x="-32" y="-6" width="9" height="12" /><rect x="-17" y="-9" width="9" height="12" /><rect x="-1" y="-12" width="9" height="12" /><rect x="30" y="-12" width="8" height="10" /><rect x="43" y="-8" width="8" height="10" /></g><rect x="-24" y="8" width="9" height="14" fill="#6b4a2e" /><text x="8" y="70" fill="#f6b7ae" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">LOD3</text></g>
+      <text x="320" y="34" fill="#cfe0ef" fontSize="17" fontFamily="system-ui" fontWeight="600" textAnchor="middle">One building · 16 Levels of Detail</text>
     </svg>
   );
   if (kind === 'gpr') return (
@@ -330,5 +343,6 @@ export default function App() {
   if (simulation === 'boresight') return <Boresight />;
   if (simulation === 'gnss') return <Gnss />;
   if (simulation === 'gpr') return <Gpr />;
+  if (simulation === 'building-lod') return <BuildingLod />;
   return <Landing />;
 }
