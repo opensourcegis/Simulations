@@ -27,10 +27,12 @@ const FLOOR_H = 3; const EAVE = 9;
 function massing(lod, variant) {
   const mainFull = { cx: 0, cz: 0, w: 42, d: 16, h: 9, rh: 3.8 };
   const main = { cx: -6, cz: 0, w: 30, d: 16, h: 9, rh: 3.6 };
-  const wing = { cx: 12, cz: -3, w: 12, d: 10, h: 6, rh: 2.6 }; // lower end-wing sharing the main end + front walls
-  const entrance = { cx: -3, cz: -9, w: 6, d: 6, h: 4, rh: 1.9 }; // porch projecting from the front centre
-  const garage = { cx: -15, cz: -9, w: 7, d: 6, h: 4.5, rh: 2.0 }; // block projecting from the front-left
-  const tower = { cx: 4, cz: -9, w: 6, d: 5, h: 11, rh: 0 };
+  // Each secondary block PROJECTS from the front wall so it reads as its own
+  // attached volume (an in-line flush wing merges into the main block).
+  const wing = { cx: -14, cz: -9, w: 9, d: 7, h: 6, rh: 2.6 }; // lower wing, front-left
+  const entrance = { cx: 2, cz: -10, w: 7, d: 6, h: 4, rh: 1.9 }; // porch, front-centre
+  const garage = { cx: 12, cz: -8, w: 8, d: 6, h: 4.5, rh: 2.0 }; // block, front-right end
+  const tower = { cx: -19, cz: -2, w: 6, d: 5, h: 11, rh: 0 };
   if (lod <= 1) {
     // Abstract representations: x.0 is a single prism, refined across columns.
     if (variant === 0) return [mainFull];
