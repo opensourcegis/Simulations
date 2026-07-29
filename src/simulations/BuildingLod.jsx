@@ -27,9 +27,9 @@ const FLOOR_H = 3; const EAVE = 9;
 function massing(lod, variant) {
   const mainFull = { cx: 0, cz: 0, w: 42, d: 16, h: 9, rh: 3.8 };
   const main = { cx: -6, cz: 0, w: 30, d: 16, h: 9, rh: 3.6 };
-  const wing = { cx: 16, cz: 3, w: 12, d: 10, h: 6, rh: 2.6 };
-  const entrance = { cx: -15, cz: -10, w: 7, d: 6, h: 4, rh: 1.9 };
-  const garage = { cx: -20, cz: 9, w: 9, d: 7, h: 4.5, rh: 2.0 };
+  const wing = { cx: 12, cz: -3, w: 12, d: 10, h: 6, rh: 2.6 }; // lower extension sharing the main end + front walls
+  const entrance = { cx: -15, cz: -9, w: 7, d: 6, h: 4, rh: 1.9 }; // porch overlapping the front wall
+  const garage = { cx: -19, cz: 8, w: 9, d: 7, h: 4.5, rh: 2.0 };
   const tower = { cx: 4, cz: -9, w: 6, d: 5, h: 11, rh: 0 };
   if (lod <= 1) {
     // Abstract representations: x.0 is a single prism, refined across columns.
@@ -74,18 +74,6 @@ function gableRoof(w, d, rh, mat) {
   return new THREE.Mesh(g, mat);
 }
 
-// A small balcony (slab + railing) projecting OUT from a facade at floor
-// level. `side` is +1 for the +Z facade, −1 for the −Z facade; the balcony
-// projects away from the wall (z + side·offset).
-function addBalcony(group, x, y, z, side, mats) {
-  group.add(box(2.6, 0.16, 1.1, x, y, z + side * 0.55, mats.trim)); // slab
-  const zr = z + side * 1.05; const ry = y + 0.5;
-  group.add(box(2.6, 0.09, 0.09, x, ry, zr, mats.trim)); // outer top rail
-  group.add(box(0.09, 0.5, 1.1, x - 1.28, y + 0.27, z + side * 0.55, mats.trim));
-  group.add(box(0.09, 0.5, 1.1, x + 1.28, y + 0.27, z + side * 0.55, mats.trim));
-  for (let bx = -1.05; bx <= 1.05; bx += 0.35) group.add(box(0.05, 0.5, 0.05, x + bx, y + 0.27, zr, mats.trim)); // balusters
-}
-
 // Rows of windows (and ground-floor doors) on the long facades of a block.
 // Openings only appear from the x.1 column (LOD3.0 keeps plain walls); doors
 // only from the x.2 column.
@@ -107,29 +95,28 @@ function addOpenings(group, m, mats, variant, lod) {
           continue;
         }
         group.add(box(wW + 0.34, wH + 0.34, 0.1, x, y, z - side * 0.02, mats.trim)); // frame
-        group.add(box(wW, wH, 0.12, x, y, z - side * recess, mats.glass)); // glass
+        group.add(box(wW, wH, 0.12, x, y, z - side * recess, mats.glass)); // recessed glass
         group.add(box(wW + 0.3, 0.1, 0.18, x, y - wH / 2 - 0.1, z - side * 0.05, mats.trim)); // sill
-        // balconies on the front upper floor of the tall block, from x.2
-        if (lod === 3 && variant >= 2 && side === -1 && f === 1 && m.h >= 9 && i % 2 === 1) addBalcony(group, x, f * FLOOR_H + 0.1, z, side, mats);
       }
     }
   });
 }
 
-// Dormers + chimney on the MAIN roof only (never the small wings). Dormers
-// show on every LOD3 variant and on LOD2 from the x.2 column; the chimney from
-// the x.2 column. Dormers sit on the front (−Z) roof slope.
+// Exactly three dormers + a chimney on the MAIN roof only (never the wings).
+// Dormers show on every LOD3 variant and on LOD2 from the x.2 column; the
+// chimney from the x.2 column. Dormers sit on the front (−Z) roof slope with
+// the window flush in the dormer face (never projecting past it).
 function addRoofDetail(group, m, mats, variant, lod, isMain) {
   if (m.rh <= 0 || !isMain) return;
   const showDormers = lod === 3 || variant >= 2;
   if (showDormers) {
-    const nD = lod === 3 ? 3 : (variant >= 3 ? 3 : 2);
-    const frontZ = m.cz - m.d / 2; const inset = 2.2; const zc = frontZ + inset;
+    const nD = 3;
+    const frontZ = m.cz - m.d / 2; const inset = 2.2; const zc = frontZ + inset; const cheekD = 1.7;
     const surfY = m.h + m.rh * (inset / (m.d / 2)); // roof height where the dormer sits
     for (let i = 0; i < nD; i += 1) {
       const x = m.cx + (i - (nD - 1) / 2) * 7;
-      group.add(box(1.9, 1.4, 1.7, x, surfY + 0.55, zc, mats.wall)); // dormer cheeks
-      group.add(box(1.2, 0.9, 0.12, x, surfY + 0.55, zc - 0.9, mats.glass)); // dormer window (−Z)
+      group.add(box(1.9, 1.4, cheekD, x, surfY + 0.55, zc, mats.wall)); // dormer cheeks
+      group.add(box(1.2, 0.9, 0.1, x, surfY + 0.55, zc - cheekD / 2 + 0.06, mats.glass)); // window flush in the front face
       const cap = gableRoof(2.1, 1.9, 0.7, mats.roof); cap.position.set(x, surfY + 1.2, zc); group.add(cap);
     }
   }
@@ -152,9 +139,10 @@ function buildModel(lod, variant, mats) {
       group.add(box(m.w, m.h, m.d, m.cx, m.h / 2, m.cz, mats.lod));
       return;
     }
-    // LOD2 & LOD3: solid walls + pitched roof (eaves overhang from LOD3.2).
+    // LOD2 & LOD3: solid walls + pitched roof. The eaves overhang only at the
+    // x.3 column — that projecting roof is what sets x.3 apart from x.2.
     group.add(box(m.w, m.h, m.d, m.cx, m.h / 2, m.cz, mats.wall));
-    const ov = lod === 3 && variant >= 2 ? 0.6 : 0; // roof projects past the walls
+    const ov = variant === 3 ? 0.7 : 0; // roof projects past the walls at x.3
     if (m.rh > 0) { const r = gableRoof(m.w + 2 * ov, m.d + 2 * ov, m.rh, mats.roof); r.position.set(m.cx, m.h, m.cz); group.add(r); }
     else group.add(box(m.w + 0.4, 0.3, m.d + 0.4, m.cx, m.h + 0.15, m.cz, mats.trim)); // flat-roof parapet (tower)
     addRoofDetail(group, m, mats, variant, lod, mi === 0);
@@ -179,7 +167,7 @@ const DESCRIPTIONS = [
   'LOD0 — a 2.5D representation: horizontal footprint and roof-edge polygons only, with no volume. The x.0→x.3 variants refine the outline from a single rectangle to the articulated plan.',
   'LOD1 — a prismatic block model: the footprint extruded to a single height with a flat top. Variants add wings and stepped heights, but still no roof shape.',
   'LOD2 — the generalised exterior with a real roof shape (here a pitched roof) plus superstructures such as dormers and chimneys. Walls and roof are distinct surfaces, but the facade is closed.',
-  'LOD3 — the detailed architectural exterior: openings appear as recessed windows and doors, with frames, sills/balconies and materials added across the x.0→x.3 variants.',
+  'LOD3 — the detailed architectural exterior: recessed windows and dormers appear, with doors, frames, sills and a projecting roof added across the x.0→x.3 variants.',
 ];
 
 export default function BuildingLod() {
