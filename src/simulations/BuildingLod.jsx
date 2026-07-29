@@ -90,13 +90,14 @@ function addWindows(g, mats, full) {
 }
 
 function addBalcony(g, mats, railings) {
-  const x = 2; const y = 3.5; const z = -3.5;
-  g.add(box(3, 0.16, 1.1, x, y, z - 0.55, mats.trim)); // slab
+  // Centred under the upper-floor window at x = 1.6, slab at that window's sill.
+  const x = 1.6; const y = 3.0; const z = -3.5; const hw = 1.2;
+  g.add(box(2.4, 0.16, 1.1, x, y, z - 0.55, mats.trim)); // slab
   if (railings) {
-    g.add(box(3, 0.08, 0.08, x, y + 0.5, z - 1.05, mats.trim));
-    g.add(box(0.08, 0.5, 1.1, x - 1.45, y + 0.27, z - 0.55, mats.trim));
-    g.add(box(0.08, 0.5, 1.1, x + 1.45, y + 0.27, z - 0.55, mats.trim));
-    for (let bx = -1.3; bx <= 1.3; bx += 0.34) g.add(box(0.05, 0.5, 0.05, x + bx, y + 0.27, z - 1.05, mats.trim));
+    g.add(box(2.4, 0.08, 0.08, x, y + 0.85, z - 1.05, mats.trim)); // top rail
+    g.add(box(0.08, 0.85, 1.1, x - hw, y + 0.42, z - 0.55, mats.trim));
+    g.add(box(0.08, 0.85, 1.1, x + hw, y + 0.42, z - 0.55, mats.trim));
+    for (let bx = -1.0; bx <= 1.0; bx += 0.29) g.add(box(0.05, 0.85, 0.05, x + bx, y + 0.42, z - 1.05, mats.trim)); // balusters
   }
 }
 
@@ -113,7 +114,7 @@ function buildHouse(g, lod, variant, mats) {
   const chimney = (lod === 2 && variant >= 1) || lod === 3;
   const entrance = (lod === 2 && variant >= 1) || lod === 3;
   const dormers = (lod === 2 && variant >= 2) || lod === 3;
-  const nDorm = (lod === 2 && variant >= 3) || (lod === 3 && variant >= 2) ? 3 : 2;
+  const nDorm = 2; // always two dormers
   const windows = lod === 3;
   const fullWindows = lod === 3 && variant >= 1;
   const roofEquip = (lod === 2 && variant >= 3) || (lod === 3 && variant >= 2);
