@@ -24,12 +24,24 @@ const FLOOR_H = 3; const EAVE = 9;
 // the building, articulated more as the variant increases (single box → L →
 // with entrance → with a stair tower). Centred on the origin, X is the long
 // axis, Z the depth.
-function massing(variant) {
+function massing(lod, variant) {
+  const mainFull = { cx: 0, cz: 0, w: 42, d: 16, h: 9, rh: 3.8 };
   const main = { cx: -6, cz: 0, w: 30, d: 16, h: 9, rh: 3.6 };
-  if (variant === 0) return [{ cx: 0, cz: 0, w: 42, d: 16, h: 9, rh: 3.8 }];
-  if (variant === 1) return [main, { cx: 16, cz: 3, w: 12, d: 10, h: 6, rh: 2.6 }];
-  if (variant === 2) return [main, { cx: 16, cz: 3, w: 12, d: 10, h: 6, rh: 2.6 }, { cx: -17, cz: -10, w: 8, d: 6, h: 4, rh: 1.9 }];
-  return [main, { cx: 16, cz: 3, w: 12, d: 10, h: 6, rh: 2.6 }, { cx: -17, cz: -10, w: 8, d: 6, h: 4, rh: 1.9 }, { cx: 4, cz: -9, w: 6, d: 5, h: 11, rh: 0 }];
+  const wing = { cx: 16, cz: 3, w: 12, d: 10, h: 6, rh: 2.6 };
+  const entrance = { cx: -15, cz: -10, w: 7, d: 6, h: 4, rh: 1.9 };
+  const garage = { cx: -20, cz: 9, w: 9, d: 7, h: 4.5, rh: 2.0 };
+  const tower = { cx: 4, cz: -9, w: 6, d: 5, h: 11, rh: 0 };
+  if (lod <= 1) {
+    // Abstract representations: x.0 is a single prism, refined across columns.
+    if (variant === 0) return [mainFull];
+    if (variant === 1) return [main, wing];
+    if (variant === 2) return [main, wing, entrance];
+    return [main, wing, entrance, tower];
+  }
+  // LOD2 / LOD3 keep the real massing even at x.0 — main gable + lower wing.
+  if (variant === 0) return [main, wing];
+  if (variant === 1) return [main, wing, entrance];
+  return [main, wing, entrance, garage];
 }
 
 const COL = {
@@ -62,8 +74,20 @@ function gableRoof(w, d, rh, mat) {
   return new THREE.Mesh(g, mat);
 }
 
+// A small balcony (slab + railing) projecting OUT from a facade at floor
+// level. `side` is +1 for the +Z facade, −1 for the −Z facade; the balcony
+// projects away from the wall (z + side·offset).
+function addBalcony(group, x, y, z, side, mats) {
+  group.add(box(2.6, 0.16, 1.1, x, y, z + side * 0.55, mats.trim)); // slab
+  const zr = z + side * 1.05; const ry = y + 0.5;
+  group.add(box(2.6, 0.09, 0.09, x, ry, zr, mats.trim)); // outer top rail
+  group.add(box(0.09, 0.5, 1.1, x - 1.28, y + 0.27, z + side * 0.55, mats.trim));
+  group.add(box(0.09, 0.5, 1.1, x + 1.28, y + 0.27, z + side * 0.55, mats.trim));
+  for (let bx = -1.05; bx <= 1.05; bx += 0.35) group.add(box(0.05, 0.5, 0.05, x + bx, y + 0.27, zr, mats.trim)); // balusters
+}
+
 // Rows of windows (and ground-floor doors) on the long facades of a block.
-function addOpenings(group, m, mats, variant) {
+function addOpenings(group, m, mats, variant, lod) {
   const floors = Math.max(1, Math.round(m.h / FLOOR_H));
   const wW = 1.3; const wH = 1.5; const recess = variant >= 1 ? 0.18 : 0.06;
   const spacing = 3.2; const count = Math.max(1, Math.floor((m.w - 2) / spacing));
@@ -80,17 +104,19 @@ function addOpenings(group, m, mats, variant) {
           continue;
         }
         if (variant >= 1) group.add(box(wW + 0.34, wH + 0.34, 0.1, x, y, z - side * 0.02, mats.trim)); // frame
-        const g = box(wW, wH, 0.12, x, y, z - side * recess, mats.glass); group.add(g);
-        if (variant >= 2 && f > 0) group.add(box(wW + 0.5, 0.12, 0.5, x, y - wH / 2 - 0.15, z - side * 0.28, mats.trim)); // sill / balcony
+        group.add(box(wW, wH, 0.12, x, y, z - side * recess, mats.glass)); // glass
+        if (variant >= 1) group.add(box(wW + 0.3, 0.1, 0.18, x, y - wH / 2 - 0.1, z - side * 0.05, mats.trim)); // sill
+        // balconies on the front upper floor of the tall block, from x.2
+        if (lod === 3 && variant >= 2 && side === -1 && f === 1 && m.h >= 9 && i % 2 === 1) addBalcony(group, x, f * FLOOR_H + 0.1, z, side, mats);
       }
     }
   });
 }
 
-// Small dormers / chimney on the main roof for the richer variants.
+// Small dormers / chimney on the main roof — only from the x.2 column.
 function addRoofDetail(group, m, mats, variant) {
   if (m.rh <= 0) return;
-  const nD = variant >= 3 ? 3 : variant >= 1 ? 2 : 0;
+  const nD = variant >= 3 ? 3 : variant >= 2 ? 2 : 0;
   const front = m.cz + m.d / 2;
   for (let i = 0; i < nD; i += 1) {
     const x = m.cx + (i - (nD - 1) / 2) * 6;
@@ -104,7 +130,7 @@ function addRoofDetail(group, m, mats, variant) {
 
 function buildModel(lod, variant, mats) {
   const group = new THREE.Group();
-  const masses = massing(variant);
+  const masses = massing(lod, variant);
 
   masses.forEach((m) => {
     if (lod === 0) {
@@ -123,7 +149,7 @@ function buildModel(lod, variant, mats) {
     if (m.rh > 0) { const r = gableRoof(m.w, m.d, m.rh, mats.roof); r.position.set(m.cx, m.h, m.cz); group.add(r); }
     else group.add(box(m.w + 0.4, 0.3, m.d + 0.4, m.cx, m.h + 0.15, m.cz, mats.trim)); // flat-roof parapet (tower)
     addRoofDetail(group, m, mats, variant);
-    if (lod === 3) addOpenings(group, m, mats, variant);
+    if (lod === 3) addOpenings(group, m, mats, variant, lod);
   });
 
   // outline edges to read the massing clearly
@@ -167,7 +193,7 @@ export default function BuildingLod() {
     scene.fog = new THREE.Fog(0xdfe7ef, 120, 260);
 
     const camera = new THREE.PerspectiveCamera(45, w / h, 0.5, 2000);
-    camera.position.set(52, 34, 56);
+    camera.position.set(46, 30, -56);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.08; controls.target.set(0, 5, 0);
@@ -220,7 +246,7 @@ export default function BuildingLod() {
 
   useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin; }, [spin]);
 
-  const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(52, 34, 56); t.controls.target.set(0, 5, 0); };
+  const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(46, 30, -56); t.controls.target.set(0, 5, 0); };
 
   return (
     <div className="sim-app">
