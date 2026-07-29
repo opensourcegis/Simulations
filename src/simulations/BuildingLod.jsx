@@ -87,9 +87,12 @@ function addBalcony(group, x, y, z, side, mats) {
 }
 
 // Rows of windows (and ground-floor doors) on the long facades of a block.
+// Openings only appear from the x.1 column (LOD3.0 keeps plain walls); doors
+// only from the x.2 column.
 function addOpenings(group, m, mats, variant, lod) {
+  if (variant < 1) return; // LOD3.0 — no facade openings
   const floors = Math.max(1, Math.round(m.h / FLOOR_H));
-  const wW = 1.3; const wH = 1.5; const recess = variant >= 1 ? 0.18 : 0.06;
+  const wW = 1.3; const wH = 1.5; const recess = 0.18;
   const spacing = 3.2; const count = Math.max(1, Math.floor((m.w - 2) / spacing));
   const start = -((count - 1) * spacing) / 2;
   [-1, 1].forEach((side) => {
@@ -98,14 +101,14 @@ function addOpenings(group, m, mats, variant, lod) {
       const y = f * FLOOR_H + 1.6;
       for (let i = 0; i < count; i += 1) {
         const x = m.cx + start + i * spacing;
-        // ground-floor centre door on the front (-Z) facade
+        // ground-floor centre door on the front (−Z) facade — from the x.2 column
         if (f === 0 && side === -1 && Math.abs(start + i * spacing) < 0.1) {
-          group.add(box(1.3, 2.3, 0.14, x, 1.15, z - side * 0.02, mats.door));
+          if (variant >= 2) group.add(box(1.3, 2.3, 0.14, x, 1.15, z + side * 0.02, mats.door));
           continue;
         }
-        if (variant >= 1) group.add(box(wW + 0.34, wH + 0.34, 0.1, x, y, z - side * 0.02, mats.trim)); // frame
+        group.add(box(wW + 0.34, wH + 0.34, 0.1, x, y, z - side * 0.02, mats.trim)); // frame
         group.add(box(wW, wH, 0.12, x, y, z - side * recess, mats.glass)); // glass
-        if (variant >= 1) group.add(box(wW + 0.3, 0.1, 0.18, x, y - wH / 2 - 0.1, z - side * 0.05, mats.trim)); // sill
+        group.add(box(wW + 0.3, 0.1, 0.18, x, y - wH / 2 - 0.1, z - side * 0.05, mats.trim)); // sill
         // balconies on the front upper floor of the tall block, from x.2
         if (lod === 3 && variant >= 2 && side === -1 && f === 1 && m.h >= 9 && i % 2 === 1) addBalcony(group, x, f * FLOOR_H + 0.1, z, side, mats);
       }
@@ -113,26 +116,31 @@ function addOpenings(group, m, mats, variant, lod) {
   });
 }
 
-// Small dormers / chimney on the main roof — only from the x.2 column.
-function addRoofDetail(group, m, mats, variant) {
-  if (m.rh <= 0) return;
-  const nD = variant >= 3 ? 3 : variant >= 2 ? 2 : 0;
-  const front = m.cz + m.d / 2;
-  for (let i = 0; i < nD; i += 1) {
-    const x = m.cx + (i - (nD - 1) / 2) * 6;
-    const y = m.h + m.rh * 0.42;
-    const d = box(1.7, 1.4, 1.7, x, y, front - 1.3, mats.wall); group.add(d);
-    group.add(box(1.3, 1.0, 0.1, x, y, front - 0.5, mats.glass));
-    const cap = gableRoof(1.9, 1.9, 0.9, mats.roof); cap.position.set(x, y + 0.7, front - 1.3); group.add(cap);
+// Dormers + chimney on the MAIN roof only (never the small wings). Dormers
+// show on every LOD3 variant and on LOD2 from the x.2 column; the chimney from
+// the x.2 column. Dormers sit on the front (−Z) roof slope.
+function addRoofDetail(group, m, mats, variant, lod, isMain) {
+  if (m.rh <= 0 || !isMain) return;
+  const showDormers = lod === 3 || variant >= 2;
+  if (showDormers) {
+    const nD = lod === 3 ? 3 : (variant >= 3 ? 3 : 2);
+    const frontZ = m.cz - m.d / 2; const inset = 2.2; const zc = frontZ + inset;
+    const surfY = m.h + m.rh * (inset / (m.d / 2)); // roof height where the dormer sits
+    for (let i = 0; i < nD; i += 1) {
+      const x = m.cx + (i - (nD - 1) / 2) * 7;
+      group.add(box(1.9, 1.4, 1.7, x, surfY + 0.55, zc, mats.wall)); // dormer cheeks
+      group.add(box(1.2, 0.9, 0.12, x, surfY + 0.55, zc - 0.9, mats.glass)); // dormer window (−Z)
+      const cap = gableRoof(2.1, 1.9, 0.7, mats.roof); cap.position.set(x, surfY + 1.2, zc); group.add(cap);
+    }
   }
-  if (variant >= 2) { const cx = m.cx - m.w / 2 + 3; group.add(box(0.9, 2.2, 0.9, cx, m.h + m.rh + 0.4, m.cz, mats.chimney)); }
+  if (variant >= 2) group.add(box(0.9, 2.2, 0.9, m.cx - m.w / 2 + 5, m.h + m.rh + 0.4, m.cz, mats.chimney));
 }
 
 function buildModel(lod, variant, mats) {
   const group = new THREE.Group();
   const masses = massing(lod, variant);
 
-  masses.forEach((m) => {
+  masses.forEach((m, mi) => {
     if (lod === 0) {
       // Flat plates: footprint at ground, roof-edge outline at eave height.
       const foot = box(m.w, 0.12, m.d, m.cx, 0.06, m.cz, mats.lod); group.add(foot);
@@ -144,11 +152,12 @@ function buildModel(lod, variant, mats) {
       group.add(box(m.w, m.h, m.d, m.cx, m.h / 2, m.cz, mats.lod));
       return;
     }
-    // LOD2 & LOD3: solid walls + pitched roof.
+    // LOD2 & LOD3: solid walls + pitched roof (eaves overhang from LOD3.2).
     group.add(box(m.w, m.h, m.d, m.cx, m.h / 2, m.cz, mats.wall));
-    if (m.rh > 0) { const r = gableRoof(m.w, m.d, m.rh, mats.roof); r.position.set(m.cx, m.h, m.cz); group.add(r); }
+    const ov = lod === 3 && variant >= 2 ? 0.6 : 0; // roof projects past the walls
+    if (m.rh > 0) { const r = gableRoof(m.w + 2 * ov, m.d + 2 * ov, m.rh, mats.roof); r.position.set(m.cx, m.h, m.cz); group.add(r); }
     else group.add(box(m.w + 0.4, 0.3, m.d + 0.4, m.cx, m.h + 0.15, m.cz, mats.trim)); // flat-roof parapet (tower)
-    addRoofDetail(group, m, mats, variant);
+    addRoofDetail(group, m, mats, variant, lod, mi === 0);
     if (lod === 3) addOpenings(group, m, mats, variant, lod);
   });
 
