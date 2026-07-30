@@ -8,6 +8,7 @@ import Boresight from './simulations/Boresight.jsx';
 import Gnss from './simulations/Gnss.jsx';
 import Gpr from './simulations/Gpr.jsx';
 import BuildingLod from './simulations/BuildingLod.jsx';
+import Gsd from './simulations/Gsd.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -24,6 +25,7 @@ const simulators = [
   { title: 'GNSS Positioning', category: 'Positioning', level: 'Advanced', description: 'Watch satellites broadcast signals, form code pseudoranges (ρ = c·Δt), measure the carrier phase, and use differential GPS to resolve the integer number of wavelengths — solving the rover’s longitude from metres down to centimetres.', tags: ['Pseudorange', 'Carrier phase', 'Integer ambiguity', 'Differential / RTK', 'Least squares'], path: '?simulation=gnss', kind: 'gnss', status: 'Native React' },
   { title: 'Ground-Penetrating Radar', category: 'LiDAR', level: 'Intermediate', description: 'See how a GPR antenna sends a pulse into the ground and times the echo (t = 2R/v), how stacking traces as it moves turns a buried object into a hyperbola, and how the hyperbola’s apex and shape give the object’s depth d = v·t₀/2.', tags: ['Two-way travel time', 'Radargram / B-scan', 'Hyperbola', 'Soil velocity εr', 'Depth estimation'], path: '?simulation=gpr', kind: 'gpr', status: 'Native React' },
   { title: 'Building Levels of Detail', category: 'Photogrammetry', level: 'Intermediate', description: 'Explore a residential building across the refined 16-cell LOD grid: LOD0 flat footprint surfaces, LOD1 extruded blocks, LOD2 true roof shapes, LOD3 the full architectural exterior with windows, dormers and balconies — each generated in 3D with the included/not-included detail spelled out.', tags: ['Levels of Detail', '3D city models', 'CityGML', 'Generalisation', 'Three.js'], path: '?simulation=building-lod', kind: 'lod', status: 'Native React' },
+  { title: 'Ground Sampling Distance', category: 'Photogrammetry', level: 'Beginner', description: 'See in 3D how each sensor pixel maps to a patch of ground through the camera lens, and watch the Ground Sampling Distance GSD = p·H/f change as you adjust focal length, flying height, sensor size and resolution.', tags: ['GSD', 'Pixel pitch', 'Focal length', 'Flying height', 'Pinhole model'], path: '?simulation=gsd', kind: 'gsd', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -55,6 +57,24 @@ function Thumbnail({ kind }) {
       <text x="320" y="330" fill="#4ade80" fontSize="15" fontFamily="system-ui" fontWeight="700" textAnchor="middle">ROVER</text>
       <text x="120" y="345" fill="#8fd0ff" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">ρ = c·Δt</text>
       <text x="500" y="345" fill="#7ee0c4" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">(N+φ)·λ</text>
+    </svg>
+  );
+  if (kind === 'gsd') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Ground sampling distance: sensor pixels, lens and ground grid">
+      <defs><linearGradient id="bg-gsd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0d1c2b" /><stop offset="1" stopColor="#13303f" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-gsd)" /><Grid id="gsd" tint="rgba(255,255,255,.05)" />
+      {/* sensor grid (top) */}
+      <g transform="translate(276 44)"><rect width="88" height="60" fill="#274b6e" stroke="#9fc0e0" strokeWidth="1.5" />{[1, 2, 3].map((i) => <line key={`sv${i}`} x1={i * 22} y1="0" x2={i * 22} y2="60" stroke="#9fc0e0" strokeWidth="1" />)}{[1, 2].map((i) => <line key={`sh${i}`} x1="0" y1={i * 20} x2="88" y2={i * 20} stroke="#9fc0e0" strokeWidth="1" />)}<rect x="44" y="20" width="22" height="20" fill="#ffd85e" /></g>
+      {/* lens */}
+      <ellipse cx="320" cy="176" rx="46" ry="15" fill="none" stroke="#cfe0ef" strokeWidth="4" /><ellipse cx="320" cy="176" rx="30" ry="9" fill="#8fbfe0" opacity=".5" />
+      {/* rays converging at lens */}
+      <g stroke="#f6b74a" strokeWidth="1.6" opacity=".55">
+        <path d="M120 300 L320 176 L298 60" /><path d="M247 300 L320 176 L320 60" /><path d="M393 300 L320 176 L342 104" /><path d="M520 300 L320 176 L364 60" />
+      </g>
+      <path d="M247 300 L320 176 L342 104" stroke="#ffd85e" strokeWidth="2.6" fill="none" />
+      {/* ground grid (bottom) */}
+      <g transform="translate(150 288)"><rect width="340" height="60" fill="rgba(120,210,150,.25)" stroke="#7ed99a" strokeWidth="2" />{[1, 2, 3, 4, 5].map((i) => <line key={`gv${i}`} x1={i * 56.7} y1="0" x2={i * 56.7} y2="60" stroke="#7ed99a" strokeWidth="1.3" />)}<line x1="0" y1="30" x2="340" y2="30" stroke="#7ed99a" strokeWidth="1.3" /><rect x="113" y="0" width="57" height="30" fill="#ffd85e" opacity=".85" /></g>
+      <text x="30" y="200" fill="#cfe0ef" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">GSD = p·H / f</text>
     </svg>
   );
   if (kind === 'lod') return (
@@ -344,5 +364,6 @@ export default function App() {
   if (simulation === 'gnss') return <Gnss />;
   if (simulation === 'gpr') return <Gpr />;
   if (simulation === 'building-lod') return <BuildingLod />;
+  if (simulation === 'gsd') return <Gsd />;
   return <Landing />;
 }
