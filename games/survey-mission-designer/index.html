@@ -1309,7 +1309,19 @@ function computePlan() {
     ? (SENSORS[S.payload].imgH * (gsdCm(S.payload, S.alt) / 100 / SENSORS[S.payload].gsdFactor) * (1 - S.front / 100)) / gsFast
     : null;
 
-  return { plan, endur, elevDerate, flightMin, transit, relief, gsd: g, dens, photoInt,
+  // number of photos: stations along each line at the photo base (set by the
+  // along-track footprint and forward overlap), summed over the lines (whose
+  // count is driven by height and side overlap), ×5 for the oblique rig.
+  let photoBase = null, stations = null, photos = null;
+  if (plan && S.payload && S.payload !== "lidar") {
+    const gm = gsdCm(S.payload, S.alt) / 100;    // m/px
+    photoBase = SENSORS[S.payload].imgH * gm / SENSORS[S.payload].gsdFactor * (1 - S.front / 100);
+    stations = 0;
+    plan.lens.forEach((len) => { stations += Math.ceil(len / Math.max(1, photoBase)) + 1; });
+    photos = stations * (S.payload === "oblique" ? 5 : 1);
+  }
+
+  return { plan, endur, elevDerate, flightMin, transit, relief, gsd: g, dens, photoInt, photoBase, stations, photos,
            wind, gsA, gsB, crossComp, headComp, windBlocked,
            margin: (plan && flightMin != null) ? (endur - flightMin) / endur : null };
 }
@@ -1343,8 +1355,15 @@ function recalc() {
 
   if (r.plan) {
     cells.push(metricCell("Flight lines", fmt(r.plan.n), `spacing ${fmt(r.plan.spacing)} m`));
+    if (r.photos != null) {
+      cells.push(metricCell("Photos", fmt(r.photos),
+        `${fmt(r.stations)} stations · ${fmt(r.photoBase)} m apart${S.payload === "oblique" ? " · ×5 cams" : ""}`));
+    } else {
+      cells.push(metricCell("Photos", "—", "LiDAR — no photos"));
+    }
   } else {
     cells.push(metricCell("Flight lines", "—", "choose a payload"));
+    cells.push(metricCell("Photos", "—", "choose a payload"));
   }
   cells.push(metricCell("Block", "2.00 km²", `fixed tasking · ${(AOI_W / 1000).toFixed(1)} × ${(AOI_H / 1000).toFixed(2)} km`));
 
