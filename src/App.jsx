@@ -10,6 +10,7 @@ import Gpr from './simulations/Gpr.jsx';
 import BuildingLod from './simulations/BuildingLod.jsx';
 import Gsd from './simulations/Gsd.jsx';
 import Snell from './simulations/Snell.jsx';
+import MapProjections from './simulations/MapProjections.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -28,6 +29,7 @@ const simulators = [
   { title: 'Building Levels of Detail', category: 'Photogrammetry', level: 'Intermediate', description: 'Explore a residential building across the refined 16-cell LOD grid: LOD0 flat footprint surfaces, LOD1 extruded blocks, LOD2 true roof shapes, LOD3 the full architectural exterior with windows, dormers and balconies — each generated in 3D with the included/not-included detail spelled out.', tags: ['Levels of Detail', '3D city models', 'CityGML', 'Generalisation', 'Three.js'], path: '?simulation=building-lod', kind: 'lod', status: 'Native React' },
   { title: 'Ground Sampling Distance', category: 'Photogrammetry', level: 'Beginner', description: 'See in 3D how each sensor pixel maps to a patch of ground through the camera lens, and watch the Ground Sampling Distance GSD = p·H/f change as you adjust focal length, flying height, sensor size and resolution.', tags: ['GSD', 'Pixel pitch', 'Focal length', 'Flying height', 'Pinhole model'], path: '?simulation=gsd', kind: 'gsd', status: 'Native React' },
   { title: 'Snell’s Law & Camera Optics', category: 'Photogrammetry', level: 'Beginner', description: 'Bend a ray across an interface with Snell’s law n₁sinθ₁ = n₂sinθ₂ (with total internal reflection), see how a lens is stacked refraction that focuses light at f, and why real optics distort straight lines — the radial distortion photogrammetric calibration must remove.', tags: ['Snell’s law', 'Refraction', 'Lens & focal length', 'Radial distortion', 'Camera calibration'], path: '?simulation=snell', kind: 'snell', status: 'Native React' },
+  { title: 'Map Projections', category: 'Cartography', level: 'Beginner', description: 'Spin a 3D globe and watch it unwrap onto a flat map five different ways — Mercator, Equirectangular, Mollweide, Albers Conic and Azimuthal. Draw your own polygon and see how its shape and area stretch as you switch projection, with Tissot indicatrices exposing the distortion.', tags: ['Projections', 'Mercator / Mollweide', 'Conic & azimuthal', 'Tissot distortion', 'Conformal vs equal-area'], path: '?simulation=map-projections', kind: 'mapproj', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -77,6 +79,30 @@ function Thumbnail({ kind }) {
       {/* ground grid (bottom) */}
       <g transform="translate(150 288)"><rect width="340" height="60" fill="rgba(120,210,150,.25)" stroke="#7ed99a" strokeWidth="2" />{[1, 2, 3, 4, 5].map((i) => <line key={`gv${i}`} x1={i * 56.7} y1="0" x2={i * 56.7} y2="60" stroke="#7ed99a" strokeWidth="1.3" />)}<line x1="0" y1="30" x2="340" y2="30" stroke="#7ed99a" strokeWidth="1.3" /><rect x="113" y="0" width="57" height="30" fill="#ffd85e" opacity=".85" /></g>
       <text x="30" y="200" fill="#cfe0ef" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">GSD = p·H / f</text>
+    </svg>
+  );
+  if (kind === 'mapproj') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="A 3D globe unwrapping into a flat world map">
+      <defs><linearGradient id="bg-mp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#07101b" /><stop offset="1" stopColor="#0b1a2b" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-mp)" /><Grid id="mp" tint="rgba(255,255,255,.05)" />
+      {/* globe */}
+      <g transform="translate(168 180)">
+        <circle r="96" fill="rgba(20,80,138,.5)" stroke="#7fb0dd" strokeWidth="2" />
+        {[-60, -30, 0, 30, 60].map((la, i) => { const ry = 96 * Math.cos(la * Math.PI / 180); const cy = 96 * Math.sin(la * Math.PI / 180); return <ellipse key={i} cx="0" cy={-cy} rx="96" ry={Math.max(ry * 0.28, 3)} fill="none" stroke="#9fc4e6" strokeWidth="1.3" opacity=".6" />; })}
+        {[-60, -20, 20, 60].map((lo, i) => <ellipse key={`m${i}`} cx="0" cy="0" rx={Math.max(96 * Math.abs(Math.sin(lo * Math.PI / 180)), 4)} ry="96" fill="none" stroke="#9fc4e6" strokeWidth="1.3" opacity=".5" />)}
+        <ellipse cx="0" cy="-14" rx="34" ry="26" fill="none" stroke="#35d07f" strokeWidth="3" />
+      </g>
+      {/* arrow */}
+      <g stroke="#f6c85f" strokeWidth="5" fill="none"><path d="M296 180 H344" /><path d="M334 168 L348 180 L334 192" /></g>
+      {/* flat map with Tissot ellipses */}
+      <g transform="translate(390 96)">
+        <rect width="216" height="168" rx="4" fill="rgba(20,80,138,.28)" stroke="#7fb0dd" strokeWidth="2" />
+        {[36, 84, 132, 180].map((x) => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="168" stroke="#9fc4e6" strokeWidth="1" opacity=".5" />)}
+        {[42, 84, 126].map((y) => <line key={`h${y}`} x1="0" y1={y} x2="216" y2={y} stroke="#9fc4e6" strokeWidth="1" opacity=".5" />)}
+        {[42, 84, 126].map((y, r) => [36, 108, 180].map((x, c) => { const k = 1 + Math.abs(y - 84) / 48; return <ellipse key={`t${r}-${c}`} cx={x} cy={y} rx={7} ry={7 * k} fill="none" stroke="#ffb703" strokeWidth="2" />; }))}
+        <path d="M70 40 H150 V96 H70 Z" fill="none" stroke="#35d07f" strokeWidth="3" />
+      </g>
+      <text x="320" y="336" fill="#bcd3e6" fontSize="16" fontFamily="system-ui" fontWeight="600" textAnchor="middle">globe → flat map · every projection stretches differently</text>
     </svg>
   );
   if (kind === 'snell') return (
@@ -326,7 +352,7 @@ function SimulatorCard({ simulator }) {
   );
 }
 
-const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning'];
+const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning', 'Cartography'];
 
 function Landing() {
   const [filter, setFilter] = useState('All');
@@ -408,5 +434,6 @@ export default function App() {
   if (simulation === 'building-lod') return <BuildingLod />;
   if (simulation === 'gsd') return <Gsd />;
   if (simulation === 'snell') return <Snell />;
+  if (simulation === 'map-projections') return <MapProjections />;
   return <Landing />;
 }
