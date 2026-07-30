@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import earthUrl from '../assets/earth.jpg';
 import './simulation.css';
 import './native.css';
 import './mapproj.css';
@@ -31,7 +32,7 @@ function sphereXYZ(phi, lam, rad = R) {
 
 // ---- projections (forward: φ,λ radians → [x,y] natural units) --------------
 function pEquirect(phi, lam) { return [lam, phi]; }
-function pMercator(phi, lam) { const p = clamp(phi, -1.4835, 1.4835); return [lam, Math.log(Math.tan(Math.PI / 4 + p / 2))]; }
+function pMercator(phi, lam) { const p = clamp(phi, -1.5359, 1.5359); return [lam, Math.log(Math.tan(Math.PI / 4 + p / 2))]; }
 function pUTM(phi, lam) { // transverse Mercator (UTM's underlying projection), central meridian 0
   const B = clamp(Math.cos(phi) * Math.sin(lam), -0.9995, 0.9995);
   return [0.5 * Math.log((1 + B) / (1 - B)), Math.atan2(Math.tan(phi), Math.cos(lam))];
@@ -62,7 +63,7 @@ function pLambert(phi, lam) {
 function pAzimuthal(phi, lam) { const rho = Math.PI / 2 - phi; return [rho * Math.sin(lam), -rho * Math.cos(lam)]; }
 
 const PROJECTIONS = [
-  { id: 'mercator', name: 'Mercator', family: 'Cylindrical', surface: 'cylinder', prop: 'conformal', fn: pMercator, blurb: 'A cylinder around the equator. Keeps angles & shapes (great for navigation) but blows up area toward the poles — Greenland looks as big as Africa.' },
+  { id: 'mercator', name: 'Mercator', family: 'Cylindrical', surface: 'cylinder', prop: 'conformal', fn: pMercator, fitLat: 80, blurb: 'A cylinder around the equator. Keeps angles & shapes (great for navigation) but blows up area toward the poles — Greenland looks as big as Africa.' },
   { id: 'utm', name: 'UTM · Transverse Mercator', family: 'Cylindrical (transverse)', surface: 'cylinderT', prop: 'conformal', fn: pUTM, blurb: 'A cylinder wrapped around a meridian instead of the equator. Distortion is tiny near the central meridian, so UTM slices the world into 60 narrow 6°-wide zones (scale 0.9996) — each nearly true; only the whole-world view looks wild.' },
   { id: 'equirect', name: 'Equirectangular', family: 'Cylindrical', surface: 'cylinder', prop: 'equidistant', fn: pEquirect, blurb: 'The simplest rule: x = longitude, y = latitude. True scale along meridians but stretches east–west away from the equator.' },
   { id: 'mollweide', name: 'Mollweide', family: 'Pseudocylindrical', surface: 'cylinder', prop: 'equalarea', fn: pMollweide, blurb: 'An ellipse with curved meridians. Every region keeps its true relative area, so it is a favourite for thematic world maps; shapes shear near the edges.' },
@@ -109,9 +110,9 @@ function polygonSegs(poly) {
   return segs;
 }
 
-function fitTransform(fn) {
+function fitTransform(fn, fitLat = 90) {
   let minX = 1e9; let maxX = -1e9; let minY = 1e9; let maxY = -1e9;
-  for (let lat = -90; lat <= 90; lat += 5) for (let lon = -180; lon <= 180; lon += 10) {
+  for (let lat = -fitLat; lat <= fitLat; lat += 5) for (let lon = -180; lon <= 180; lon += 10) {
     const [x, y] = fn(lat * D2R, lon * D2R);
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
@@ -128,25 +129,6 @@ function areaScale(fn, latDeg) {
   return det / Math.max(Math.cos(phi), 1e-4);
 }
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
-
-// rough continents drawn onto an equirectangular canvas → globe texture
-function makeEarthTexture() {
-  const w = 1024; const h = 512; const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const g = cv.getContext('2d');
-  const grd = g.createLinearGradient(0, 0, 0, h); grd.addColorStop(0, '#11324e'); grd.addColorStop(0.5, '#164a72'); grd.addColorStop(1, '#11324e');
-  g.fillStyle = grd; g.fillRect(0, 0, w, h);
-  // lon [-180,180]→x, lat [90,-90]→y
-  const XY = (lon, lat) => [(lon + 180) / 360 * w, (90 - lat) / 180 * h];
-  const blob = (pts, fill) => { g.fillStyle = fill; g.beginPath(); pts.forEach(([lo, la], i) => { const [x, y] = XY(lo, la); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fill(); };
-  const land = '#3f7a45'; const land2 = '#4b8a4f';
-  blob([[-165, 62], [-125, 70], [-90, 68], [-52, 60], [-70, 42], [-82, 26], [-105, 22], [-125, 40], [-160, 55]], land); // N America
-  blob([[-80, 10], [-60, 6], [-35, -8], [-40, -34], [-58, -52], [-72, -50], [-80, -18], [-82, -2]], land2); // S America
-  blob([[-16, 34], [10, 36], [34, 32], [50, 12], [42, -12], [22, -34], [16, -22], [8, -2], [-14, 6], [-18, 18]], land); // Africa
-  blob([[-10, 44], [30, 60], [60, 55], [45, 40], [10, 40], [-6, 44]], land2); // Europe
-  blob([[40, 60], [120, 68], [178, 66], [150, 44], [120, 30], [95, 22], [66, 25], [50, 40]], land); // Asia
-  blob([[112, -12], [140, -14], [152, -30], [130, -38], [114, -34], [114, -22]], land2); // Australia
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return tex;
-}
 
 export default function MapProjections() {
   const [projId, setProjId] = useState('mercator');
@@ -185,7 +167,8 @@ export default function MapProjections() {
     const group = new THREE.Group(); scene.add(group);
 
     // rough textured Earth — morphs from globe to flat map
-    const earthGeo = new THREE.SphereGeometry(R, 96, 64);
+    // trim the caps (±88°) so pole vertices don't pile up under cylindrical projections
+    const earthGeo = new THREE.SphereGeometry(R, 96, 64, 0, Math.PI * 2, 2 * D2R, 176 * D2R);
     const pos = earthGeo.attributes.position; const NV = pos.count;
     const vLL = new Float32Array(NV * 2); const vSph = new Float32Array(NV * 3);
     for (let i = 0; i < NV; i += 1) {
@@ -193,8 +176,15 @@ export default function MapProjections() {
       const phi = Math.asin(clamp(y / R, -1, 1)); const lam = Math.atan2(x, z);
       vLL[i * 2] = phi; vLL[i * 2 + 1] = lam; vSph[i * 3] = x; vSph[i * 3 + 1] = y; vSph[i * 3 + 2] = z;
     }
-    const earth = new THREE.Mesh(earthGeo, new THREE.MeshPhongMaterial({ map: makeEarthTexture(), shininess: 8, side: THREE.DoubleSide }));
+    const earthMat = new THREE.MeshPhongMaterial({ color: 0x8ba0b8, shininess: 6, side: THREE.DoubleSide });
+    const earth = new THREE.Mesh(earthGeo, earthMat);
     group.add(earth);
+    // real NASA Blue Marble satellite texture (bundled) — align image Greenwich to λ=0 (+Z)
+    new THREE.TextureLoader().load(earthUrl, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.RepeatWrapping; tex.offset.x = 0.25;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      earthMat.map = tex; earthMat.color.set(0xffffff); earthMat.needsUpdate = true;
+    });
 
     // thick graticule / tissot / polygon (fat lines) that morph to the projection
     const mkFat = (segs, color, px, op) => {
@@ -221,7 +211,7 @@ export default function MapProjections() {
     G.current = {
       scene, camera, renderer, controls, group, earth, earthGeo, vLL, vSph, NV,
       grat, tiss, pol, optics, bulb, plight, rays, surf, surfMat, rayMat, bulbMat,
-      fnNow: proj.fn, tr: fitTransform(proj.fn), angle: 0, lastT: -1, raf: 0, disposed: false,
+      fnNow: proj.fn, tr: fitTransform(proj.fn, proj.fitLat), angle: 0, lastT: -1, raf: 0, disposed: false,
     };
     buildOptics(proj);
     applyMorph(0);
@@ -283,8 +273,9 @@ export default function MapProjections() {
     for (let i = 0; i < set.ll.length; i += 1) {
       const { phi, lam } = set.ll[i];
       const s = sphereXYZ(phi, lam, R * 1.004); const f = flatXY(fn, tr, phi, lam);
+      const fy = clamp(f[1], -HALF_H, HALF_H); // fold overflow (e.g. Mercator caps) onto the edge
       arr[i * 3] = s[0] + (f[0] - s[0]) * t;
-      arr[i * 3 + 1] = s[1] + (f[1] - s[1]) * t;
+      arr[i * 3 + 1] = s[1] + (fy - s[1]) * t;
       arr[i * 3 + 2] = s[2] + (0.008 - s[2]) * t;
     }
     set.geo.setPositions(arr);
@@ -297,7 +288,8 @@ export default function MapProjections() {
       const phi = g.vLL[i * 2]; const lam = g.vLL[i * 2 + 1];
       const sx = g.vSph[i * 3]; const sy = g.vSph[i * 3 + 1]; const sz = g.vSph[i * 3 + 2];
       const f = flatXY(fn, tr, phi, lam);
-      pos.setXYZ(i, sx + (f[0] - sx) * t, sy + (f[1] - sy) * t, sz + (0 - sz) * t);
+      const fy = clamp(f[1], -HALF_H, HALF_H); // fold overflow (e.g. Mercator caps) onto the edge
+      pos.setXYZ(i, sx + (f[0] - sx) * t, sy + (fy - sy) * t, sz + (0 - sz) * t);
     }
     pos.needsUpdate = true; g.earth.geometry.computeVertexNormals();
     fillFat(g.grat, t); fillFat(g.tiss, t); fillFat(g.pol, t);
@@ -322,7 +314,7 @@ export default function MapProjections() {
     g.rays.geometry.dispose(); const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); g.rays.geometry = rg;
   }
 
-  useEffect(() => { const g = G.current; if (!g) return; g.fnNow = proj.fn; g.tr = fitTransform(proj.fn); buildOptics(proj); dirtyRef.current = true; /* eslint-disable-next-line */ }, [projId]);
+  useEffect(() => { const g = G.current; if (!g) return; g.fnNow = proj.fn; g.tr = fitTransform(proj.fn, proj.fitLat); buildOptics(proj); dirtyRef.current = true; /* eslint-disable-next-line */ }, [projId]);
   useEffect(() => {
     const g = G.current; if (!g) return;
     const segs = polygonSegs(poly); g.pol.ll = segs;
