@@ -32,6 +32,43 @@ function computeGsd(f, H, sensorW, pixels) {
   return { pitchUm, gsdCm, footprintM };
 }
 
+// ---- ground check-marker imaging -----------------------------------------
+// Pattern value at (u,v) in [0,1]²: 0 = black, 1 = white.
+function patternVal(target, u, v) {
+  if (target === 'bowtie') { const du = u - 0.5; const dv = v - 0.5; return Math.abs(du) >= Math.abs(dv) ? 0 : 1; }
+  return (u < 0.5) === (v < 0.5) ? 0 : 1; // 2×2 checkerboard
+}
+let gCache = 0; let gHave = false;
+function gauss() { // standard normal (Box–Muller, cached pair)
+  if (gHave) { gHave = false; return gCache; }
+  let a = 0; let b = 0; while (a === 0) a = Math.random(); while (b === 0) b = Math.random();
+  const r = Math.sqrt(-2 * Math.log(a)); gCache = r * Math.sin(2 * Math.PI * b); gHave = true;
+  return r * Math.cos(2 * Math.PI * b);
+}
+// The crisp physical target on the ground.
+function drawGround(cv, target) {
+  const ctx = cv.getContext('2d'); const W = cv.width; const img = ctx.createImageData(W, W); const d = img.data;
+  for (let py = 0; py < W; py += 1) for (let px = 0; px < W; px += 1) {
+    const c = patternVal(target, (px + 0.5) / W, (py + 0.5) / W) * 255;
+    const p = (py * W + px) * 4; d[p] = c; d[p + 1] = c; d[p + 2] = c; d[p + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+// The photo: the target sampled at the current GSD (each pixel box-averages a
+// GSD patch of ground) with shot noise that grows as the pixel pitch shrinks
+// (smaller pixels catch less light → lower SNR).
+function drawCaptured(cv, target, targetM, gsdM, pitchUm) {
+  const ctx = cv.getContext('2d'); const W = cv.width; ctx.clearRect(0, 0, W, W);
+  const n = clamp(Math.round(targetM / gsdM), 1, 220); // pixels across the target
+  const cell = W / n; const sigma = 0.05 * (5 / pitchUm); // noise ∝ 1/pitch
+  for (let i = 0; i < n; i += 1) for (let j = 0; j < n; j += 1) {
+    let sum = 0; const s = 3;
+    for (let a = 0; a < s; a += 1) for (let b = 0; b < s; b += 1) sum += patternVal(target, (i + (a + 0.5) / s) / n, (j + (b + 0.5) / s) / n);
+    const val = clamp(sum / (s * s) + gauss() * sigma, 0, 1); const c = Math.round(val * 255);
+    ctx.fillStyle = `rgb(${c},${c},${c})`; ctx.fillRect(i * cell, j * cell, cell + 0.7, cell + 0.7);
+  }
+}
+
 function label(text, color = '#16202c', bg = 'rgba(255,255,255,0.88)') {
   const font = 'bold 27px system-ui'; const pad = 20;
   const meas = document.createElement('canvas').getContext('2d'); meas.font = font;
@@ -154,9 +191,12 @@ export default function Gsd() {
   const [pixels, setPixels] = useState(4000);
   const [sel, setSel] = useState({ i: 1, j: 3 });
   const [spin, setSpin] = useState(true);
+  const [target, setTarget] = useState('check');
+  const [targetM, setTargetM] = useState(2);
   const M = gridM(pixels);
 
   const mountRef = useRef(null); const three = useRef(null);
+  const groundRef = useRef(null); const imgRef = useRef(null);
 
   useEffect(() => {
     const mount = mountRef.current; const w = mount.clientWidth; const h = mount.clientHeight;
@@ -211,9 +251,15 @@ export default function Gsd() {
 
   useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin; }, [spin]);
   useEffect(() => { setSel((s) => (s.i < M && s.j < M ? s : { i: Math.min(s.i, M - 1), j: Math.min(s.j, M - 1) })); }, [M]);
+  useEffect(() => {
+    const gg = computeGsd(f, H, sensorW, pixels);
+    if (groundRef.current) drawGround(groundRef.current, target);
+    if (imgRef.current) drawCaptured(imgRef.current, target, targetM, gg.gsdCm / 100, gg.pitchUm);
+  }, [target, targetM, f, H, sensorW, pixels]);
   const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(7.5, 4.6, 8.5); t.controls.target.set(0, 3.7, 0); };
 
   const { pitchUm, gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
+  const nAcross = Math.max(1, Math.round(targetM / (gsdCm / 100)));
 
   return (
     <div className="sim-app">
@@ -246,11 +292,25 @@ export default function Gsd() {
               <button className="gsd-btn" onClick={resetView}>reset view</button>
             </div>
           </section>
+
+          <section className="sim-panel">
+            <h2><span className="stepno">2</span> The check-marker in the photo <small>&mdash; sampled at this GSD</small></h2>
+            <div className="gsd-targets">
+              <button className={`gsd-tbtn ${target === 'check' ? 'on' : ''}`} onClick={() => setTarget('check')}>▦ Checkerboard</button>
+              <button className={`gsd-tbtn ${target === 'bowtie' ? 'on' : ''}`} onClick={() => setTarget('bowtie')}>⧗ Bowtie</button>
+              <label className="gsd-tsize">target size <b>{targetM.toFixed(1)} m</b><input type="range" min="0.3" max="4" step="0.1" value={targetM} onChange={(e) => setTargetM(Number(e.target.value))} /></label>
+            </div>
+            <div className="gsd-imgrow">
+              <figure><canvas ref={groundRef} width={200} height={200} /><figcaption><b>on the ground</b> · {targetM.toFixed(1)} m target</figcaption></figure>
+              <figure><canvas ref={imgRef} width={200} height={200} /><figcaption><b>in the image</b> · {nAcross} px across · pitch {pitchUm.toFixed(1)} µm</figcaption></figure>
+            </div>
+            <div className="gsd-note">Each photo pixel averages a <b>GSD-sized</b> patch of ground, so the marker is only readable when it spans several pixels (GSD ≪ target). Fly <b>higher</b> or shorten the <b>lens</b> → GSD grows → the pattern smears toward grey. <b>Smaller pixels</b> (more resolution / smaller sensor) sample finer but each collects <b>less light</b>, so the photo gets <b>noisier</b>.</div>
+          </section>
         </div>
 
         <div className="sim-col">
           <section className="sim-panel">
-            <h2><span className="stepno">2</span> Camera &amp; flight</h2>
+            <h2><span className="stepno">3</span> Camera &amp; flight</h2>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <label>focal length f <b>{f.toFixed(0)} mm</b><input type="range" min="10" max="120" step="1" value={f} onChange={(e) => setF(Number(e.target.value))} /></label>
               <label>flying height H <b>{H.toFixed(0)} m</b><input type="range" min="20" max="300" step="5" value={H} onChange={(e) => setH(Number(e.target.value))} /></label>
