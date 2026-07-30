@@ -12,6 +12,7 @@ import Gsd from './simulations/Gsd.jsx';
 import Snell from './simulations/Snell.jsx';
 import MapProjections from './simulations/MapProjections.jsx';
 import SarImaging from './simulations/SarImaging.jsx';
+import IotDigitalTwin from './simulations/IotDigitalTwin.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -32,6 +33,7 @@ const simulators = [
   { title: 'Snell’s Law & Camera Optics', category: 'Photogrammetry', level: 'Beginner', description: 'Bend a ray across an interface with Snell’s law n₁sinθ₁ = n₂sinθ₂ (with total internal reflection), see how a lens is stacked refraction that focuses light at f, and why real optics distort straight lines — the radial distortion photogrammetric calibration must remove.', tags: ['Snell’s law', 'Refraction', 'Lens & focal length', 'Radial distortion', 'Camera calibration'], path: '?simulation=snell', kind: 'snell', status: 'Native React' },
   { title: 'Map Projections', category: 'Cartography', level: 'Beginner', description: 'Spin a 3D globe and watch it unwrap onto a flat map five different ways — Mercator, Equirectangular, Mollweide, Albers Conic and Azimuthal. Draw your own polygon and see how its shape and area stretch as you switch projection, with Tissot indicatrices exposing the distortion.', tags: ['Projections', 'Mercator / Mollweide', 'Conic & azimuthal', 'Tissot distortion', 'Conformal vs equal-area'], path: '?simulation=map-projections', kind: 'mapproj', status: 'Native React' },
   { title: 'Synthetic Aperture Radar', category: 'Radar', level: 'Advanced', description: 'See how a side-looking radar builds a sharp all-weather image: the swath geometry, range resolution from chirp pulse-compression (δR = c/2B), the synthesised aperture that gives azimuth resolution δaz = D/2, the Doppler history, plus imaging modes, polarimetry, geometric distortion, speckle and InSAR.', tags: ['SAR', 'Chirp / pulse compression', 'Synthetic aperture', 'Doppler / azimuth', 'InSAR & polarimetry'], path: '?simulation=sar', kind: 'sar', status: 'Native React' },
+  { title: 'IoT Digital Twin', category: 'IoT', level: 'Intermediate', description: 'Run a live smart factory where three machines stream sensor telemetry through an edge gateway and MQTT broker into a cloud digital twin that mirrors them, detects anomalies, predicts remaining life and closes the loop with actuation. Inject faults and watch the twin drift out of sync when you starve it of data.', tags: ['Digital twin', 'IoT telemetry', 'Edge & MQTT', 'Anomaly & RUL', 'Closed-loop control'], path: '?simulation=iot-twin', kind: 'iot', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -81,6 +83,40 @@ function Thumbnail({ kind }) {
       {/* ground grid (bottom) */}
       <g transform="translate(150 288)"><rect width="340" height="60" fill="rgba(120,210,150,.25)" stroke="#7ed99a" strokeWidth="2" />{[1, 2, 3, 4, 5].map((i) => <line key={`gv${i}`} x1={i * 56.7} y1="0" x2={i * 56.7} y2="60" stroke="#7ed99a" strokeWidth="1.3" />)}<line x1="0" y1="30" x2="340" y2="30" stroke="#7ed99a" strokeWidth="1.3" /><rect x="113" y="0" width="57" height="30" fill="#ffd85e" opacity=".85" /></g>
       <text x="30" y="200" fill="#cfe0ef" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">GSD = p·H / f</text>
+    </svg>
+  );
+  if (kind === 'iot') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="IoT digital twin: machines streaming telemetry to a cloud twin">
+      <defs><linearGradient id="bg-iot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0c1826" /><stop offset="1" stopColor="#0a1420" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-iot)" /><Grid id="iot" tint="rgba(255,255,255,.05)" />
+      {/* physical machines (left) */}
+      <g>{[90, 190, 290].map((y, i) => (
+        <g key={i}>
+          <rect x="40" y={y - 22} width="70" height="44" rx="7" fill="#1b2b3c" stroke="#37506a" strokeWidth="2" />
+          <circle cx="54" cy={y - 10} r="4" fill={i === 1 ? '#e0503b' : '#39c07a'} />
+          <circle cx="98" cy={y - 12} r="4.5" fill="#5ad1ff" />
+          <line x1="110" y1={y} x2="300" y2="180" stroke="rgba(90,209,255,.3)" strokeWidth="1.5" />
+        </g>
+      ))}</g>
+      <text x="75" y="330" fill="#8fd0ff" fontSize="13" fontFamily="system-ui" fontWeight="700" textAnchor="middle">physical</text>
+      {/* telemetry packets */}
+      <g fill="#5ad1ff">{[[150, 120], [230, 150], [310, 178], [390, 176]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="5" />)}</g>
+      {/* broker */}
+      <g transform="translate(300 180)"><circle r="26" fill="rgba(201,179,255,.12)" stroke="#c9b3ff" strokeWidth="2" /><text y="6" fill="#c9b3ff" fontSize="22" textAnchor="middle">☁</text></g>
+      {/* twin (right) */}
+      <g transform="translate(470 180)">
+        <rect x="0" y="-70" width="150" height="140" rx="12" fill="rgba(120,150,200,.10)" stroke="#4a6b8f" strokeWidth="2" />
+        <rect x="8" y="-62" width="134" height="124" rx="8" fill="none" stroke="rgba(143,208,255,.25)" strokeWidth="1" strokeDasharray="3 3" />
+        <text x="16" y="-44" fill="#bcd3e6" fontSize="12" fontFamily="system-ui" fontWeight="700">⌘ DIGITAL TWIN</text>
+        <text x="16" y="-8" fill="#ff8f6b" fontSize="30" fontFamily="ui-monospace,monospace" fontWeight="700">82.4</text>
+        <text x="92" y="-8" fill="#8fa9c0" fontSize="13" fontFamily="system-ui">°C</text>
+        <text x="16" y="16" fill="#ffca5f" fontSize="13" fontFamily="ui-monospace,monospace">vib 9.1</text>
+        <rect x="16" y="30" width="118" height="8" rx="3" fill="rgba(255,255,255,.1)" /><rect x="16" y="30" width="42" height="8" rx="3" fill="#e0503b" />
+        <text x="16" y="56" fill="#e0503b" fontSize="12" fontFamily="system-ui" fontWeight="600">⚠ anomaly · RUL 210h</text>
+      </g>
+      {/* actuation return */}
+      <path d="M470 250 Q300 300 110 250" fill="none" stroke="#ffb703" strokeWidth="2.5" strokeDasharray="7 6" />
+      <text x="300" y="300" fill="#ffca5f" fontSize="13" fontFamily="system-ui" fontWeight="600" textAnchor="middle">actuation command</text>
     </svg>
   );
   if (kind === 'sar') return (
@@ -376,7 +412,7 @@ function SimulatorCard({ simulator }) {
   );
 }
 
-const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning', 'Cartography', 'Radar'];
+const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning', 'Cartography', 'Radar', 'IoT'];
 
 function Landing() {
   const [filter, setFilter] = useState('All');
@@ -460,5 +496,6 @@ export default function App() {
   if (simulation === 'snell') return <Snell />;
   if (simulation === 'map-projections') return <MapProjections />;
   if (simulation === 'sar') return <SarImaging />;
+  if (simulation === 'iot-twin') return <IotDigitalTwin />;
   return <Landing />;
 }
