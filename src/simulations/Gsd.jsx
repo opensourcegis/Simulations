@@ -21,7 +21,9 @@ import './gsd.css';
 // ---------------------------------------------------------------------------
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const M = 6; // shown block: 6×6 pixels and their 6×6 ground cells
+// Number of pixels shown per side of the block — grows with the resolution
+// slider (the sensor size stays fixed; more pixels just divide it more finely).
+const gridM = (pixels) => clamp(Math.round(pixels / 650), 3, 12);
 
 function computeGsd(f, H, sensorW, pixels) {
   const pitchUm = (sensorW / pixels) * 1000; // µm
@@ -47,7 +49,7 @@ function label(text, color = '#16202c', bg = 'rgba(255,255,255,0.88)') {
 
 // A filled M×M grid plane (in the XZ plane) at height y, with grid lines and
 // one highlighted cell (hi = [i, j] or null).
-function gridPlane(size, y, faceMat, lineMat, hiMat, hi) {
+function gridPlane(size, M, y, faceMat, lineMat, hiMat, hi) {
   const g = new THREE.Group();
   const cell = size / M; const half = size / 2;
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(size, size), faceMat);
@@ -68,8 +70,6 @@ function gridPlane(size, y, faceMat, lineMat, hiMat, hi) {
   return g;
 }
 
-function cellCenter(size, i, j, y) { const cell = size / M; const half = size / 2; return [-half + (i + 0.5) * cell, y, -half + (j + 0.5) * cell]; }
-
 // A small arrow (shaft + cone) pointing up (+Y) or down (−Y).
 function arrowMesh(h, mat, up) {
   const grp = new THREE.Group();
@@ -80,19 +80,22 @@ function arrowMesh(h, mat, up) {
 
 function buildScene(f, H, sensorW, pixels, sel, mats) {
   const g = new THREE.Group();
-  const { gsdCm } = computeGsd(f, H, sensorW, pixels);
+  const { gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
+  const M = gridM(pixels);                          // pixels per side ∝ resolution
 
   // Thin-lens layout (compressed): ground object at y=0, lens at gY, real
   // image on the sensor at gY+sY. Diagram magnification m = sY/gY (the true
   // f/H is far smaller, so the sensor is drawn hugely exaggerated).
   const gY = clamp(2.8 + H / 55, 3.2, 6.4);       // object → lens distance ∝ H
   const sY = clamp(1.0 + f / 60, 1.1, 2.6);       // lens → image distance ∝ f
-  const groundSize = clamp(2.4 * Math.cbrt(gsdCm), 1.6, 6.2); // ground block ∝ GSD
+  // Block sizes depend only on the physical footprint (sensor width, H, f) —
+  // NOT on resolution. More resolution just adds more/finer pixels (M ↑).
+  const groundSize = clamp(1.35 * Math.cbrt(footprintM), 1.6, 6.2); // ∝ ground footprint
   const mag = sY / gY;                             // sensor is the reduced, inverted image
-  const sensorSize = groundSize * mag;
+  const sensorSize = groundSize * mag;             // ∝ sensor width, fixed vs resolution
   const lensY = gY; const sensorY = gY + sY;
   const lensP = new THREE.Vector3(0, lensY, 0);
-  const hiI = sel.i; const hiJ = sel.j;            // the user-selected ground cell / pixel
+  const hiI = clamp(sel.i, 0, M - 1); const hiJ = clamp(sel.j, 0, M - 1); // selected pixel
 
   // optical axis (dashed) + ground context plane
   const gp = new THREE.Mesh(new THREE.CircleGeometry(40, 48), mats.ground); gp.rotation.x = -Math.PI / 2; gp.position.y = -0.03; g.add(gp);
@@ -100,8 +103,8 @@ function buildScene(f, H, sensorW, pixels, sel, mats) {
   const axis = new THREE.Line(axisG, mats.axis); axis.computeLineDistances(); g.add(axis);
 
   // ground GSD grid (object) + small sensor grid (inverted real image)
-  g.add(gridPlane(groundSize, 0.02, mats.groundFace, mats.line, mats.groundHi, [hiI, hiJ]));
-  g.add(gridPlane(sensorSize, sensorY, mats.sensorFace, mats.lineS, mats.sensorHi, [M - 1 - hiI, M - 1 - hiJ]));
+  g.add(gridPlane(groundSize, M, 0.02, mats.groundFace, mats.line, mats.groundHi, [hiI, hiJ]));
+  g.add(gridPlane(sensorSize, M, sensorY, mats.sensorFace, mats.lineS, mats.sensorHi, [M - 1 - hiI, M - 1 - hiJ]));
 
   // small biconvex lens (thin oblate glass) + rim
   const lens = new THREE.Mesh(new THREE.SphereGeometry(0.8, 28, 18), mats.glass); lens.scale.set(1, 0.24, 1); lens.position.copy(lensP); g.add(lens);
@@ -151,6 +154,7 @@ export default function Gsd() {
   const [pixels, setPixels] = useState(4000);
   const [sel, setSel] = useState({ i: 1, j: 3 });
   const [spin, setSpin] = useState(true);
+  const M = gridM(pixels);
 
   const mountRef = useRef(null); const three = useRef(null);
 
@@ -206,6 +210,7 @@ export default function Gsd() {
   }, [f, H, sensorW, pixels, sel]);
 
   useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin; }, [spin]);
+  useEffect(() => { setSel((s) => (s.i < M && s.j < M ? s : { i: Math.min(s.i, M - 1), j: Math.min(s.j, M - 1) })); }, [M]);
   const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(7.5, 4.6, 8.5); t.controls.target.set(0, 3.7, 0); };
 
   const { pitchUm, gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
@@ -253,8 +258,8 @@ export default function Gsd() {
               <label>resolution <b>{pixels} px</b><input type="range" min="1500" max="8000" step="100" value={pixels} onChange={(e) => setPixels(Number(e.target.value))} /></label>
             </div>
 
-            <div className="gsd-sub">Trace one pixel &mdash; pick a ground cell</div>
-            <div className="gsd-pick">
+            <div className="gsd-sub">Trace one pixel &mdash; pick a ground cell <span style={{ textTransform: 'none', color: '#9aa7b4', fontWeight: 400 }}>({M}×{M} shown)</span></div>
+            <div className="gsd-pick" style={{ gridTemplateColumns: `repeat(${M}, 1fr)`, maxWidth: `${Math.min(260, M * 34)}px` }}>
               {Array.from({ length: M }, (_, r) => Array.from({ length: M }, (_, c) => (
                 <button key={`${r}-${c}`} className={`gsd-px ${sel.i === c && sel.j === r ? 'on' : ''}`} onClick={() => setSel({ i: c, j: r })} aria-label={`cell ${c},${r}`} />
               )))}
