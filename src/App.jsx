@@ -304,7 +304,14 @@ const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight pla
 
 function Landing() {
   const [filter, setFilter] = useState('All');
-  const shown = filter === 'All' ? simulators : simulators.filter((s) => s.category === filter);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const shown = simulators.filter((s) => {
+    if (filter !== 'All' && s.category !== filter) return false;
+    if (!q) return true;
+    const hay = `${s.title} ${s.category} ${s.level} ${s.description} ${(s.tags || []).join(' ')}`.toLowerCase();
+    return q.split(/\s+/).every((w) => hay.includes(w));
+  });
 
   return (
     <>
@@ -336,12 +343,21 @@ function Landing() {
 
         <div className="section-head" id="simulators">
           <h2>Simulators</h2>
+          <div className="search">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20 L16 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            <input type="text" value={query} placeholder="Search simulators…" aria-label="Search simulators" onChange={(e) => setQuery(e.target.value)} />
+            {query && <button className="search-clear" aria-label="Clear search" onClick={() => setQuery('')}>&times;</button>}
+          </div>
           <div className="filters">
             {CATEGORIES.map((c) => <button key={c} className={`filter ${filter === c ? 'active' : ''}`} onClick={() => setFilter(c)}>{c}</button>)}
           </div>
         </div>
 
-        <div className="grid">{shown.map((s) => <SimulatorCard key={s.title} simulator={s} />)}</div>
+        {shown.length > 0 ? (
+          <div className="grid">{shown.map((s) => <SimulatorCard key={s.title} simulator={s} />)}</div>
+        ) : (
+          <p className="no-results">No simulators match <b>“{query}”</b>{filter !== 'All' ? <> in <b>{filter}</b></> : null}. <button className="link-btn" onClick={() => { setQuery(''); setFilter('All'); }}>Clear</button></p>
+        )}
 
         <footer>
           <span>GeoSim Labs — browser-based geospatial simulators.</span>

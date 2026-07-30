@@ -62,7 +62,17 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent-2); outl
 /* ---- filters ---- */
 .section-head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 34px 0 18px; }
 .section-head h2 { margin: 0; color: var(--text-faint); font-size: 13px; letter-spacing: 1.2px; text-transform: uppercase; }
-.filters { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.search { margin-left: auto; display: flex; align-items: center; gap: 7px; padding: 0 10px; height: 34px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); color: var(--text-faint); }
+.search:focus-within { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px rgba(16,137,79,.12); }
+.search input { border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; width: 168px; }
+.search input::placeholder { color: var(--text-faint); }
+.search-clear { border: 0; background: transparent; color: var(--text-faint); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.search-clear:hover { color: var(--accent); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.no-results { color: var(--text-dim); font-size: 14px; padding: 24px 2px; }
+.no-results b { color: var(--text); }
+.link-btn { border: 0; background: transparent; color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; padding: 0; }
+.link-btn:hover { text-decoration: underline; }
 .filter { padding: 7px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); color: var(--text-dim); font-size: 13px; cursor: pointer; transition: all .15s ease; }
 .filter:hover { border-color: var(--accent); color: var(--accent); }
 .filter.active { border-color: var(--accent); background: var(--accent); color: #fff; box-shadow: 0 4px 12px rgba(16,137,79,.28); }
@@ -95,5 +105,5 @@ footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; mar
 footer a { color: var(--text-dim); } footer a:hover { color: var(--accent); }
 .spacer { margin-left: auto; }
 
-@media (max-width: 560px) { .spacer { display: none; } .filters { width: 100%; } }
+@media (max-width: 560px) { .spacer { display: none; } .filters { width: 100%; } .search { width: 100%; margin-left: 0; } .search input { width: 100%; flex: 1; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
