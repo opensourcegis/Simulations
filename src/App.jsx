@@ -11,6 +11,7 @@ import BuildingLod from './simulations/BuildingLod.jsx';
 import Gsd from './simulations/Gsd.jsx';
 import Snell from './simulations/Snell.jsx';
 import MapProjections from './simulations/MapProjections.jsx';
+import SarImaging from './simulations/SarImaging.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -30,6 +31,7 @@ const simulators = [
   { title: 'Ground Sampling Distance', category: 'Photogrammetry', level: 'Beginner', description: 'See in 3D how each sensor pixel maps to a patch of ground through the camera lens, and watch the Ground Sampling Distance GSD = p·H/f change as you adjust focal length, flying height, sensor size and resolution.', tags: ['GSD', 'Pixel pitch', 'Focal length', 'Flying height', 'Pinhole model'], path: '?simulation=gsd', kind: 'gsd', status: 'Native React' },
   { title: 'Snell’s Law & Camera Optics', category: 'Photogrammetry', level: 'Beginner', description: 'Bend a ray across an interface with Snell’s law n₁sinθ₁ = n₂sinθ₂ (with total internal reflection), see how a lens is stacked refraction that focuses light at f, and why real optics distort straight lines — the radial distortion photogrammetric calibration must remove.', tags: ['Snell’s law', 'Refraction', 'Lens & focal length', 'Radial distortion', 'Camera calibration'], path: '?simulation=snell', kind: 'snell', status: 'Native React' },
   { title: 'Map Projections', category: 'Cartography', level: 'Beginner', description: 'Spin a 3D globe and watch it unwrap onto a flat map five different ways — Mercator, Equirectangular, Mollweide, Albers Conic and Azimuthal. Draw your own polygon and see how its shape and area stretch as you switch projection, with Tissot indicatrices exposing the distortion.', tags: ['Projections', 'Mercator / Mollweide', 'Conic & azimuthal', 'Tissot distortion', 'Conformal vs equal-area'], path: '?simulation=map-projections', kind: 'mapproj', status: 'Native React' },
+  { title: 'Synthetic Aperture Radar', category: 'Radar', level: 'Advanced', description: 'See how a side-looking radar builds a sharp all-weather image: the swath geometry, range resolution from chirp pulse-compression (δR = c/2B), the synthesised aperture that gives azimuth resolution δaz = D/2, the Doppler history, plus imaging modes, polarimetry, geometric distortion, speckle and InSAR.', tags: ['SAR', 'Chirp / pulse compression', 'Synthetic aperture', 'Doppler / azimuth', 'InSAR & polarimetry'], path: '?simulation=sar', kind: 'sar', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -79,6 +81,28 @@ function Thumbnail({ kind }) {
       {/* ground grid (bottom) */}
       <g transform="translate(150 288)"><rect width="340" height="60" fill="rgba(120,210,150,.25)" stroke="#7ed99a" strokeWidth="2" />{[1, 2, 3, 4, 5].map((i) => <line key={`gv${i}`} x1={i * 56.7} y1="0" x2={i * 56.7} y2="60" stroke="#7ed99a" strokeWidth="1.3" />)}<line x1="0" y1="30" x2="340" y2="30" stroke="#7ed99a" strokeWidth="1.3" /><rect x="113" y="0" width="57" height="30" fill="#ffd85e" opacity=".85" /></g>
       <text x="30" y="200" fill="#cfe0ef" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">GSD = p·H / f</text>
+    </svg>
+  );
+  if (kind === 'sar') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Synthetic aperture radar: a satellite side-looking at a ground swath">
+      <defs><linearGradient id="bg-sar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0b1622" /><stop offset="1" stopColor="#0e1c2b" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-sar)" /><Grid id="sar" tint="rgba(255,255,255,.05)" />
+      {/* ground + swath */}
+      <rect y="300" width="640" height="60" fill="#26333f" /><line x1="0" y1="300" x2="640" y2="300" stroke="#5c7488" strokeWidth="2" />
+      <polygon points="120,70 300,300 470,300" fill="rgba(90,209,255,.16)" stroke="#5ad1ff" strokeWidth="2" />
+      {/* satellite + flight arrow */}
+      <g transform="translate(120 70)"><rect x="-24" y="-13" width="48" height="26" rx="6" fill="#e8eff5" /><rect x="-36" y="-4" width="10" height="8" fill="#5ad1ff" /><rect x="26" y="-4" width="10" height="8" fill="#5ad1ff" /></g>
+      <line x1="120" y1="40" x2="200" y2="40" stroke="#9be3b0" strokeWidth="3" /><path d="M196 34 L206 40 L196 46" fill="none" stroke="#9be3b0" strokeWidth="3" />
+      <text x="210" y="40" fill="#9be3b0" fontSize="15" fontFamily="system-ui" fontWeight="600">azimuth</text>
+      {/* slant range */}
+      <line x1="120" y1="70" x2="385" y2="300" stroke="#ffb703" strokeWidth="3" />
+      {/* swath bracket */}
+      <line x1="300" y1="316" x2="470" y2="316" stroke="#ffd27a" strokeWidth="3" />
+      <text x="385" y="336" fill="#ffd27a" fontSize="15" fontFamily="system-ui" fontWeight="600" textAnchor="middle">swath</text>
+      {/* chirp */}
+      <path d="M410 120 q8 -20 16 0 q7 18 14 0 q6 -16 12 0 q5 15 10 0 q4 -13 8 0 q4 12 7 0 q3 -10 6 0" fill="none" stroke="#5ad1ff" strokeWidth="2.5" transform="translate(60,0)" />
+      <text x="500" y="150" fill="#8fe3ff" fontSize="15" fontFamily="ui-monospace,monospace" fontWeight="600" textAnchor="middle">chirp</text>
+      <text x="30" y="30" fill="#bcd3e6" fontSize="17" fontFamily="ui-monospace,monospace" fontWeight="600">δaz = D/2 · δR = c/2B</text>
     </svg>
   );
   if (kind === 'mapproj') return (
@@ -352,7 +376,7 @@ function SimulatorCard({ simulator }) {
   );
 }
 
-const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning', 'Cartography'];
+const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning', 'Cartography', 'Radar'];
 
 function Landing() {
   const [filter, setFilter] = useState('All');
@@ -435,5 +459,6 @@ export default function App() {
   if (simulation === 'gsd') return <Gsd />;
   if (simulation === 'snell') return <Snell />;
   if (simulation === 'map-projections') return <MapProjections />;
+  if (simulation === 'sar') return <SarImaging />;
   return <Landing />;
 }
