@@ -261,8 +261,8 @@ export default function Gsd() {
             </div>
 
             <div className="gsd-eq">
-              pixel pitch&nbsp; p = sensor width / pixels = <b>{pitchUm.toFixed(2)} µm</b><br />
-              <span className="big">GSD = <b>p · H / f</b> = {(pitchUm / 1000).toFixed(3)} mm · {H} m / {f} mm = <b>{gsdCm.toFixed(2)} cm/px</b></span>
+              pixel pitch&nbsp; p = sensor width / pixels = {sensorW.toFixed(1)} mm / {pixels} = <b>{pitchUm.toFixed(2)} µm</b><br />
+              <span className="big">GSD = <b>p · H / f</b> = {pitchUm.toFixed(2)} µm · {H} m / {f} mm = <b>{gsdCm.toFixed(2)} cm/px</b></span>
             </div>
 
             <div className="readouts" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
