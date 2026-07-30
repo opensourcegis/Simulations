@@ -18,3 +18,7 @@
 .gsd-toolbar input[type=checkbox]{accent-color:#0f8a4d}
 .gsd-btn{padding:6px 11px;border:1px solid #d6dee7;border-radius:8px;background:#fff;color:#56677a;font-size:12px;cursor:pointer}
 .gsd-btn:hover{border-color:#0f8a4d;color:#0f8a4d}
+.gsd-pick{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;max-width:220px}
+.gsd-px{aspect-ratio:1;border:1px solid #cdd8c9;border-radius:5px;background:#eaf4ec;cursor:pointer;padding:0}
+.gsd-px:hover{background:#d7ecdb;border-color:#9fc9a8}
+.gsd-px.on{background:#ffd85e;border-color:#e0a800;box-shadow:0 0 0 1px #e0a800 inset}

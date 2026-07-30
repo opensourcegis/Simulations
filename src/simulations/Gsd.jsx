@@ -31,14 +31,17 @@ function computeGsd(f, H, sensorW, pixels) {
 }
 
 function label(text, color = '#16202c', bg = 'rgba(255,255,255,0.88)') {
-  const c = document.createElement('canvas'); const s = 2; c.width = 260 * s; c.height = 66 * s;
+  const font = 'bold 27px system-ui'; const pad = 20;
+  const meas = document.createElement('canvas').getContext('2d'); meas.font = font;
+  const W = Math.ceil(meas.measureText(text).width + pad * 2); const Hh = 64;
+  const c = document.createElement('canvas'); const s = 2; c.width = W * s; c.height = Hh * s;
   const x = c.getContext('2d'); x.scale(s, s);
-  x.fillStyle = bg; x.beginPath(); x.roundRect(2, 2, 256, 62, 12); x.fill();
-  x.fillStyle = color; x.font = 'bold 27px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(text, 130, 33);
+  x.fillStyle = bg; x.beginPath(); x.roundRect(1, 2, W - 2, Hh - 4, 12); x.fill();
+  x.fillStyle = color; x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, W / 2, Hh / 2);
   const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  spr.scale.set(2.6, 0.66, 1); spr.renderOrder = 10;
+  spr.scale.set(W / 100, Hh / 100, 1); spr.renderOrder = 10;
   return spr;
 }
 
@@ -67,66 +70,74 @@ function gridPlane(size, y, faceMat, lineMat, hiMat, hi) {
 
 function cellCenter(size, i, j, y) { const cell = size / M; const half = size / 2; return [-half + (i + 0.5) * cell, y, -half + (j + 0.5) * cell]; }
 
-function buildScene(f, H, sensorW, pixels, mats) {
+// A small arrow (shaft + cone) pointing up (+Y) or down (−Y).
+function arrowMesh(h, mat, up) {
+  const grp = new THREE.Group();
+  const s = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, h * 0.78, 10), mat); s.position.y = (up ? 1 : -1) * h * 0.39;
+  const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, h * 0.28, 14), mat); t.position.y = (up ? 1 : -1) * h * 0.9; if (!up) t.rotation.x = Math.PI;
+  grp.add(s, t); return grp;
+}
+
+function buildScene(f, H, sensorW, pixels, sel, mats) {
   const g = new THREE.Group();
   const { gsdCm } = computeGsd(f, H, sensorW, pixels);
 
-  // Schematic layout: ground at y=0, lens at gY, sensor at gY+sY.
-  const gY = clamp(2.6 + H / 45, 3, 7);          // lens height ∝ flying height
-  const sY = clamp(0.7 + f / 55, 0.8, 2.4);      // sensor distance behind lens ∝ focal length
-  const groundSize = clamp(2.3 * Math.cbrt(gsdCm), 1.1, 6.4); // ground block ∝ GSD (one pixel's coverage)
-  const sensorSize = 2.1;                         // sensor block — the chip is a constant size
+  // Thin-lens layout (compressed): ground object at y=0, lens at gY, real
+  // image on the sensor at gY+sY. Diagram magnification m = sY/gY (the true
+  // f/H is far smaller, so the sensor is drawn hugely exaggerated).
+  const gY = clamp(2.8 + H / 55, 3.2, 6.4);       // object → lens distance ∝ H
+  const sY = clamp(1.0 + f / 60, 1.1, 2.6);       // lens → image distance ∝ f
+  const groundSize = clamp(2.4 * Math.cbrt(gsdCm), 1.6, 6.2); // ground block ∝ GSD
+  const mag = sY / gY;                             // sensor is the reduced, inverted image
+  const sensorSize = groundSize * mag;
   const lensY = gY; const sensorY = gY + sY;
   const lensP = new THREE.Vector3(0, lensY, 0);
-  const hiI = 4; const hiJ = 4;                    // highlighted pixel / ground cell
+  const hiI = sel.i; const hiJ = sel.j;            // the user-selected ground cell / pixel
 
-  // ground plane (context) + GSD grid block
+  // optical axis (dashed) + ground context plane
   const gp = new THREE.Mesh(new THREE.CircleGeometry(40, 48), mats.ground); gp.rotation.x = -Math.PI / 2; gp.position.y = -0.03; g.add(gp);
+  const axisG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, sensorY + 0.5, 0)]);
+  const axis = new THREE.Line(axisG, mats.axis); axis.computeLineDistances(); g.add(axis);
+
+  // ground GSD grid (object) + small sensor grid (inverted real image)
   g.add(gridPlane(groundSize, 0.02, mats.groundFace, mats.line, mats.groundHi, [hiI, hiJ]));
-  // sensor grid block (inverted image → highlight opposite corner)
   g.add(gridPlane(sensorSize, sensorY, mats.sensorFace, mats.lineS, mats.sensorHi, [M - 1 - hiI, M - 1 - hiJ]));
 
-  // lens (ring) + camera body
-  const lens = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.14, 16, 40), mats.lens); lens.rotation.x = Math.PI / 2; lens.position.copy(lensP); g.add(lens);
-  const glass = new THREE.Mesh(new THREE.CircleGeometry(0.8, 32), mats.glass); glass.rotation.x = -Math.PI / 2; glass.position.set(0, lensY, 0); g.add(glass);
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.78, sY, 28), mats.body);
-  barrel.position.set(0, lensY + sY / 2, 0); g.add(barrel);
+  // small biconvex lens (thin oblate glass) + rim
+  const lens = new THREE.Mesh(new THREE.SphereGeometry(0.8, 28, 18), mats.glass); lens.scale.set(1, 0.24, 1); lens.position.copy(lensP); g.add(lens);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.04, 12, 40), mats.rim); rim.rotation.x = Math.PI / 2; rim.position.copy(lensP); g.add(rim);
+  // focal points at ±f from the lens (image forms ~at the focal plane)
+  [-1, 1].forEach((s) => { const fp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), mats.focal); fp.position.set(0, lensY + s * sY, 0); g.add(fp); });
 
-  // rays: every ground cell → lens → its (inverted) sensor pixel
-  const base = []; const hiPts = [];
-  for (let i = 0; i < M; i += 1) for (let j = 0; j < M; j += 1) {
-    const gc = cellCenter(groundSize, i, j, 0.05);
-    const sc = cellCenter(sensorSize, M - 1 - i, M - 1 - j, sensorY - 0.02);
-    const arr = (i === hiI && j === hiJ) ? hiPts : base;
-    arr.push(gc[0], gc[1], gc[2], lensP.x, lensP.y, lensP.z);
-    arr.push(lensP.x, lensP.y, lensP.z, sc[0], sc[1], sc[2]);
-  }
-  const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(base, 3));
-  g.add(new THREE.LineSegments(bg, mats.ray));
-
-  // the highlighted pixel's light cone: 4 corner rays ground-cell → lens → pixel
-  const cellG = groundSize / M; const halfG = groundSize / 2; const cellS = sensorSize / M; const halfS = sensorSize / 2;
+  // Focus on ONE selected pixel: the light of its ground GSD cell fills the
+  // lens and converges to that single (inverted) pixel. Object & real-image
+  // arrows make the inversion explicit.
+  const cellG = groundSize / M; const halfG = groundSize / 2;
   const gcx = -halfG + (hiI + 0.5) * cellG; const gcz = -halfG + (hiJ + 0.5) * cellG;
-  const scx = -halfS + (M - 1 - hiI + 0.5) * cellS; const scz = -halfS + (M - 1 - hiJ + 0.5) * cellS;
-  const gCorners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => new THREE.Vector3(gcx + sx * cellG / 2, 0.06, gcz + sz * cellG / 2));
-  const sCorners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => new THREE.Vector3(scx + sx * cellS / 2, sensorY - 0.02, scz + sz * cellS / 2));
-  // translucent double-cone faces (ground→lens and lens→sensor)
-  const coneV = [];
-  for (let k = 0; k < 4; k += 1) { const a = gCorners[k]; const b = gCorners[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
-  for (let k = 0; k < 4; k += 1) { const a = sCorners[k]; const b = sCorners[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
-  const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(coneV, 3)); cg.computeVertexNormals();
-  g.add(new THREE.Mesh(cg, mats.cone));
-  hiPts.length = 0;
-  gCorners.forEach((c) => { hiPts.push(c.x, c.y, c.z, lensP.x, lensP.y, lensP.z); });
-  sCorners.forEach((c) => { hiPts.push(lensP.x, lensP.y, lensP.z, c.x, c.y, c.z); });
-  const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(hiPts, 3));
+  const ah = Math.min(cellG * 1.05, 0.9);
+  const oArrow = arrowMesh(ah, mats.obj, true); oArrow.position.set(gcx, 0, gcz); g.add(oArrow);
+  const iArrow = arrowMesh(ah * mag, mats.obj, false); iArrow.position.set(-gcx * mag, sensorY, -gcz * mag); g.add(iArrow);
+
+  // corner rays: ground cell corners → through the lens → matching pixel corners
+  const gC = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => new THREE.Vector3(gcx + sx * cellG / 2, 0.05, gcz + sz * cellG / 2));
+  const sC = gC.map((c) => new THREE.Vector3(-c.x * mag, sensorY, -c.z * mag)); // inverted image corners
+  const rays = [];
+  gC.forEach((c, k) => { rays.push(c.x, c.y, c.z, lensP.x, lensP.y, lensP.z, lensP.x, lensP.y, lensP.z, sC[k].x, sC[k].y, sC[k].z); });
+  const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(rays, 3));
   g.add(new THREE.LineSegments(hg, mats.rayHi));
 
+  // translucent double-cone (ground cell → lens → pixel)
+  const coneV = [];
+  for (let k = 0; k < 4; k += 1) { const a = gC[k]; const b = gC[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
+  for (let k = 0; k < 4; k += 1) { const a = sC[k]; const b = sC[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
+  const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(coneV, 3)); cg.computeVertexNormals();
+  g.add(new THREE.Mesh(cg, mats.cone));
+
   // labels
-  const l1 = label('sensor — pixels', '#1d3b57'); l1.position.set(0, sensorY + 0.8, 0); g.add(l1);
-  const l2 = label(`lens  f = ${f.toFixed(0)} mm`, '#7a4a00'); l2.position.set(1.9, lensY + 0.2, 0); g.add(l2);
-  const l3 = label(`ground · 1 px = GSD = ${gsdCm.toFixed(2)} cm`, '#0f5a34'); l3.position.set(gcx, 0.9, gcz); l3.scale.set(3.0, 0.76, 1); g.add(l3);
-  const l4 = label(`H = ${H.toFixed(0)} m`, '#334'); l4.position.set(-groundSize / 2 - 1.4, lensY / 2, 0); g.add(l4);
+  const l1 = label('real image (sensor) ×20', '#1d3b57'); l1.position.set(0, sensorY + 0.7, 0); g.add(l1);
+  const l2 = label(`lens · f = ${f.toFixed(0)} mm`, '#7a4a00'); l2.position.set(1.8, lensY + 0.1, 0); g.add(l2);
+  const l3 = label(`1 px → GSD = ${gsdCm.toFixed(2)} cm`, '#0f5a34'); l3.position.set(gcx, ah + 0.6, gcz); g.add(l3);
+  const l4 = label(`object · H = ${H.toFixed(0)} m`, '#334'); l4.position.set(-groundSize / 2 - 1.6, lensY / 2, 0); g.add(l4);
 
   return g;
 }
@@ -138,6 +149,7 @@ export default function Gsd() {
   const [H, setH] = useState(100);
   const [sensorW, setSensorW] = useState(17.3);
   const [pixels, setPixels] = useState(4000);
+  const [sel, setSel] = useState({ i: 1, j: 3 });
   const [spin, setSpin] = useState(true);
 
   const mountRef = useRef(null); const three = useRef(null);
@@ -149,10 +161,10 @@ export default function Gsd() {
     renderer.toneMapping = THREE.ACESFilmicToneMapping; mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe7ef); scene.fog = new THREE.Fog(0xdfe7ef, 40, 90);
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.4, 500); camera.position.set(11, 7, 12);
+    const camera = new THREE.PerspectiveCamera(45, w / h, 0.4, 500); camera.position.set(7.5, 4.6, 8.5);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; controls.dampingFactor = 0.08; controls.target.set(0, 3.2, 0);
-    controls.minDistance = 6; controls.maxDistance = 45; controls.maxPolarAngle = Math.PI * 0.52;
+    controls.enableDamping = true; controls.dampingFactor = 0.08; controls.target.set(0, 3.7, 0);
+    controls.minDistance = 5; controls.maxDistance = 40; controls.maxPolarAngle = Math.PI * 0.54;
     controls.autoRotate = true; controls.autoRotateSpeed = 0.9;
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa6b2, 1.1));
@@ -165,13 +177,14 @@ export default function Gsd() {
       sensorFace: new THREE.MeshStandardMaterial({ color: 0x274b6e, roughness: 0.5, metalness: 0.2 }),
       sensorHi: new THREE.MeshStandardMaterial({ color: 0xffd85e, roughness: 0.5, emissive: 0x6a5500, emissiveIntensity: 0.6 }),
       line: new THREE.LineBasicMaterial({ color: 0x2f7a4b, transparent: true, opacity: 0.75 }),
-      lineS: new THREE.LineBasicMaterial({ color: 0x9fc0e0, transparent: true, opacity: 0.85 }),
-      lens: new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.4, metalness: 0.6 }),
-      glass: new THREE.MeshStandardMaterial({ color: 0x8fbfe0, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-      body: new THREE.MeshStandardMaterial({ color: 0x3a4048, roughness: 0.7 }),
-      ray: new THREE.LineBasicMaterial({ color: 0xf6b74a, transparent: true, opacity: 0.28 }),
-      rayHi: new THREE.LineBasicMaterial({ color: 0xffcf3a }),
-      cone: new THREE.MeshBasicMaterial({ color: 0xffd85e, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }),
+      lineS: new THREE.LineBasicMaterial({ color: 0x6f93b4, transparent: true, opacity: 0.9 }),
+      glass: new THREE.MeshStandardMaterial({ color: 0xbcd8ee, roughness: 0.1, metalness: 0.05, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+      rim: new THREE.MeshStandardMaterial({ color: 0x6c86a0, roughness: 0.5 }),
+      focal: new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.5 }),
+      obj: new THREE.MeshStandardMaterial({ color: 0x2e9e4f, roughness: 0.6 }),
+      axis: new THREE.LineDashedMaterial({ color: 0x9aa7b4, dashSize: 0.16, gapSize: 0.13, transparent: true, opacity: 0.8 }),
+      rayHi: new THREE.LineBasicMaterial({ color: 0xe8443a }),
+      cone: new THREE.MeshBasicMaterial({ color: 0xe8544a, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }),
     };
 
     three.current = { renderer, scene, camera, controls, mats, modelRef: { current: null } };
@@ -189,11 +202,11 @@ export default function Gsd() {
   useEffect(() => {
     const t = three.current; if (!t) return;
     if (t.modelRef.current) { t.scene.remove(t.modelRef.current); disposeGroup(t.modelRef.current); }
-    const grp = buildScene(f, H, sensorW, pixels, t.mats); t.scene.add(grp); t.modelRef.current = grp;
-  }, [f, H, sensorW, pixels]);
+    const grp = buildScene(f, H, sensorW, pixels, sel, t.mats); t.scene.add(grp); t.modelRef.current = grp;
+  }, [f, H, sensorW, pixels, sel]);
 
   useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin; }, [spin]);
-  const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(11, 7, 12); t.controls.target.set(0, 3.2, 0); };
+  const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(7.5, 4.6, 8.5); t.controls.target.set(0, 3.7, 0); };
 
   const { pitchUm, gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
 
@@ -217,9 +230,10 @@ export default function Gsd() {
               <div className="gsd-hint">drag = orbit · scroll = zoom</div>
             </div>
             <div className="gsd-legend">
-              <span><i className="gsd-sw" style={{ background: '#274b6e' }} /> sensor pixels</span>
-              <span><i className="gsd-sw" style={{ background: '#2a2f36' }} /> lens (focal length f)</span>
-              <span><i className="gsd-sw" style={{ background: '#bfe3c9' }} /> ground GSD grid</span>
+              <span><i className="gsd-sw" style={{ background: '#bfe3c9' }} /> object · ground GSD grid</span>
+              <span><i className="gsd-sw" style={{ background: '#bcd8ee' }} /> lens (focal length f)</span>
+              <span><i className="gsd-sw" style={{ background: '#274b6e' }} /> sensor · real image (×20)</span>
+              <span><i className="gsd-sw" style={{ background: '#e8443a' }} /> light rays</span>
               <span><i className="gsd-sw" style={{ background: '#ffd85e' }} /> one pixel &harr; one GSD cell</span>
             </div>
             <div className="gsd-toolbar">
@@ -237,6 +251,13 @@ export default function Gsd() {
               <label>flying height H <b>{H.toFixed(0)} m</b><input type="range" min="20" max="300" step="5" value={H} onChange={(e) => setH(Number(e.target.value))} /></label>
               <label>sensor width <b>{sensorW.toFixed(1)} mm</b><input type="range" min="6" max="36" step="0.1" value={sensorW} onChange={(e) => setSensorW(Number(e.target.value))} /></label>
               <label>resolution <b>{pixels} px</b><input type="range" min="1500" max="8000" step="100" value={pixels} onChange={(e) => setPixels(Number(e.target.value))} /></label>
+            </div>
+
+            <div className="gsd-sub">Trace one pixel &mdash; pick a ground cell</div>
+            <div className="gsd-pick">
+              {Array.from({ length: M }, (_, r) => Array.from({ length: M }, (_, c) => (
+                <button key={`${r}-${c}`} className={`gsd-px ${sel.i === c && sel.j === r ? 'on' : ''}`} onClick={() => setSel({ i: c, j: r })} aria-label={`cell ${c},${r}`} />
+              )))}
             </div>
 
             <div className="gsd-eq">
