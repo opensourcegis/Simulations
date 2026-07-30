@@ -25,6 +25,21 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // slider (the sensor size stays fixed; more pixels just divide it more finely).
 const gridM = (pixels) => clamp(Math.round(pixels / 650), 3, 12);
 
+// Standard digital-camera sensor sizes (sensor WIDTH in mm, native aspect ratio
+// W/H). Ordered largest → smallest, as in the classic sensor-comparison chart.
+const SENSORS = [
+  { label: 'Full-frame', sub: '36 × 24 mm', w: 36.0, aspect: 3 / 2 },
+  { label: 'APS-C', sub: '1.5× crop', w: 23.5, aspect: 3 / 2 },
+  { label: 'APS-C', sub: '1.6× crop', w: 22.3, aspect: 3 / 2 },
+  { label: 'Four Thirds', sub: '2× crop', w: 17.3, aspect: 4 / 3 },
+  { label: '1″ Type', sub: '2.7× crop', w: 13.2, aspect: 4 / 3 },
+  { label: '1/1.7″', sub: '4.6× crop', w: 7.6, aspect: 4 / 3 },
+  { label: '1/2.5″', sub: '6.0× crop', w: 5.76, aspect: 4 / 3 },
+];
+// Resolution choices in megapixels; pixels-across = √(MP · aspect).
+const MPS = [16, 20.1, 24, 48];
+const pixelsAcross = (mp, aspect) => Math.round(Math.sqrt(mp * 1e6 * aspect));
+
 function computeGsd(f, H, sensorW, pixels) {
   const pitchUm = (sensorW / pixels) * 1000; // µm
   const gsdCm = (sensorW * H) / (pixels * f) * 100; // cm / pixel
@@ -192,8 +207,11 @@ function disposeGroup(group) { group.traverse((o) => { if (o.geometry) o.geometr
 export default function Gsd() {
   const [f, setF] = useState(50);
   const [H, setH] = useState(100);
-  const [sensorW, setSensorW] = useState(17.3);
-  const [pixels, setPixels] = useState(4000);
+  const [si, setSi] = useState(0); // sensor size index (default: full-frame)
+  const [mp, setMp] = useState(24); // resolution in megapixels
+  const sensor = SENSORS[si];
+  const sensorW = sensor.w;
+  const pixels = pixelsAcross(mp, sensor.aspect);
   const [sel, setSel] = useState({ i: 1, j: 3 });
   const [spin, setSpin] = useState(true);
   const [target, setTarget] = useState('check');
@@ -252,7 +270,7 @@ export default function Gsd() {
     const t = three.current; if (!t) return;
     if (t.modelRef.current) { t.scene.remove(t.modelRef.current); disposeGroup(t.modelRef.current); }
     const grp = buildScene(f, H, sensorW, pixels, sel, t.mats); t.scene.add(grp); t.modelRef.current = grp;
-  }, [f, H, sensorW, pixels, sel]);
+  }, [f, H, si, mp, sel]);
 
   useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin; }, [spin]);
   useEffect(() => { setSel((s) => (s.i < M && s.j < M ? s : { i: Math.min(s.i, M - 1), j: Math.min(s.j, M - 1) })); }, [M]);
@@ -260,7 +278,7 @@ export default function Gsd() {
     const gg = computeGsd(f, H, sensorW, pixels);
     if (groundRef.current) drawGround(groundRef.current, target);
     if (imgRef.current) drawCaptured(imgRef.current, target, targetM, gg.gsdCm / 100, gg.pitchUm);
-  }, [target, targetM, f, H, sensorW, pixels]);
+  }, [target, targetM, f, H, si, mp]);
   const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(7.5, 4.6, 8.5); t.controls.target.set(0, 3.7, 0); };
 
   const { pitchUm, gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
@@ -317,10 +335,24 @@ export default function Gsd() {
           <section className="sim-panel">
             <h2><span className="stepno">3</span> Camera &amp; flight</h2>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <label>focal length f <b>{f.toFixed(0)} mm</b><input type="range" min="10" max="120" step="1" value={f} onChange={(e) => setF(Number(e.target.value))} /></label>
+              <label>focal length f <b>{f.toFixed(0)} mm</b><input type="range" min="16" max="80" step="1" value={f} onChange={(e) => setF(Number(e.target.value))} /></label>
               <label>flying height H <b>{H.toFixed(0)} m</b><input type="range" min="20" max="300" step="5" value={H} onChange={(e) => setH(Number(e.target.value))} /></label>
-              <label>sensor width <b>{sensorW.toFixed(1)} mm</b><input type="range" min="6" max="36" step="0.1" value={sensorW} onChange={(e) => setSensorW(Number(e.target.value))} /></label>
-              <label>resolution <b>{pixels} px</b><input type="range" min="1500" max="8000" step="100" value={pixels} onChange={(e) => setPixels(Number(e.target.value))} /></label>
+            </div>
+
+            <div className="gsd-sub">Sensor size <span style={{ textTransform: 'none', color: '#9aa7b4', fontWeight: 400 }}>({sensorW.toFixed(2)} mm wide)</span></div>
+            <div className="gsd-presets">
+              {SENSORS.map((s, k) => (
+                <button key={`${s.label}-${s.sub}`} className={`gsd-pbtn ${si === k ? 'on' : ''}`} onClick={() => setSi(k)}>
+                  <b>{s.label}</b><span>{s.sub}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="gsd-sub">Resolution <span style={{ textTransform: 'none', color: '#9aa7b4', fontWeight: 400 }}>({pixels.toLocaleString()} px across)</span></div>
+            <div className="gsd-presets">
+              {MPS.map((m) => (
+                <button key={m} className={`gsd-pbtn wide ${mp === m ? 'on' : ''}`} onClick={() => setMp(m)}><b>{m} MP</b></button>
+              ))}
             </div>
 
             <div className="gsd-sub">Trace one pixel &mdash; pick a ground cell <span style={{ textTransform: 'none', color: '#9aa7b4', fontWeight: 400 }}>({M}×{M} shown)</span></div>
@@ -331,7 +363,7 @@ export default function Gsd() {
             </div>
 
             <div className="gsd-eq">
-              pixel pitch&nbsp; p = sensor width / pixels = {sensorW.toFixed(1)} mm / {pixels} = <b>{pitchUm.toFixed(2)} µm</b><br />
+              pixel pitch&nbsp; p = sensor width / pixels-across = {sensorW.toFixed(2)} mm / {pixels.toLocaleString()} ({mp} MP) = <b>{pitchUm.toFixed(2)} µm</b><br />
               <span className="big">GSD = <b>p · H / f</b> = {pitchUm.toFixed(2)} µm · {H} m / {f} mm = <b>{gsdCm.toFixed(2)} cm/px</b></span>
             </div>
 
