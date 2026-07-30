@@ -64,7 +64,7 @@ function pAzimuthal(phi, lam) { const rho = Math.PI / 2 - phi; return [rho * Mat
 
 const PROJECTIONS = [
   { id: 'mercator', name: 'Mercator', family: 'Cylindrical', surface: 'cylinder', prop: 'conformal', fn: pMercator, fitLat: 80, blurb: 'A cylinder around the equator. Keeps angles & shapes (great for navigation) but blows up area toward the poles — Greenland looks as big as Africa.' },
-  { id: 'utm', name: 'UTM · Transverse Mercator', family: 'Cylindrical (transverse)', surface: 'cylinderT', prop: 'conformal', fn: pUTM, blurb: 'A cylinder wrapped around a meridian instead of the equator. Distortion is tiny near the central meridian, so UTM slices the world into 60 narrow 6°-wide zones (scale 0.9996) — each nearly true; only the whole-world view looks wild.' },
+  { id: 'utm', name: 'UTM · Transverse Mercator', family: 'Cylindrical (transverse)', surface: 'cylinderT', prop: 'conformal', fn: pUTM, band: 18, blurb: 'A cylinder wrapped around a meridian, not the equator. Distortion stays tiny only near the central meridian, so UTM never maps the whole world — it slices it into 60 narrow 6°-wide zones (scale 0.9996). Here we project just one strip of a few zones; each is nearly true.' },
   { id: 'equirect', name: 'Equirectangular', family: 'Cylindrical', surface: 'cylinder', prop: 'equidistant', fn: pEquirect, blurb: 'The simplest rule: x = longitude, y = latitude. True scale along meridians but stretches east–west away from the equator.' },
   { id: 'mollweide', name: 'Mollweide', family: 'Pseudocylindrical', surface: 'cylinder', prop: 'equalarea', fn: pMollweide, blurb: 'An ellipse with curved meridians. Every region keeps its true relative area, so it is a favourite for thematic world maps; shapes shear near the edges.' },
   { id: 'albers', name: 'Albers Conic', family: 'Conic', surface: 'cone', prop: 'equalarea', fn: pAlbers, blurb: 'A cone on two standard parallels (20°/50°). Equal-area with low distortion across a mid-latitude band — the classic choice for country & continent maps.' },
@@ -73,17 +73,19 @@ const PROJECTIONS = [
 ];
 
 // ---- graticule / tissot / polygon as segment-pair vertex lists -------------
-function meridiansParallels() {
-  const segs = [];
+// `band` (deg) restricts content to a ±band longitude strip (used by UTM zones).
+function meridiansParallels(band) {
+  const segs = []; const B = band || 180; const mstep = band ? 6 : 30;
   const pushLine = (pts) => { for (let i = 0; i < pts.length - 1; i += 1) { segs.push(pts[i], pts[i + 1]); } };
-  for (let lon = -180; lon <= 180; lon += 30) { const pts = []; for (let lat = -88; lat <= 88; lat += 4) pts.push({ phi: lat * D2R, lam: lon * D2R }); pushLine(pts); }
-  for (let lat = -60; lat <= 60; lat += 30) { const pts = []; for (let lon = -180; lon <= 180; lon += 4) pts.push({ phi: lat * D2R, lam: lon * D2R }); pushLine(pts); }
+  for (let lon = -B; lon <= B; lon += mstep) { const pts = []; for (let lat = -88; lat <= 88; lat += 4) pts.push({ phi: lat * D2R, lam: lon * D2R }); pushLine(pts); }
+  for (let lat = -60; lat <= 60; lat += 30) { const pts = []; for (let lon = -B; lon <= B; lon += 3) pts.push({ phi: lat * D2R, lam: lon * D2R }); pushLine(pts); }
   return segs;
 }
-function tissotSegs() {
+function tissotSegs(band) {
   const segs = []; const delta = 6 * D2R; const K = 26;
   const centers = [];
-  for (let lat = -60; lat <= 60; lat += 30) for (let lon = -150; lon <= 150; lon += 30) centers.push([lat * D2R, lon * D2R]);
+  const lonC = band ? [-Math.round(band * 0.6), 0, Math.round(band * 0.6)] : [-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
+  for (let lat = -60; lat <= 60; lat += 30) lonC.forEach((lon) => centers.push([lat * D2R, lon * D2R]));
   centers.forEach(([p0, l0]) => {
     const ring = [];
     for (let k = 0; k <= K; k += 1) {
@@ -96,23 +98,24 @@ function tissotSegs() {
   });
   return segs;
 }
-function polygonSegs(poly) {
+function polygonSegs(poly, band) {
   if (poly.length < 2) return [];
+  const cl = (lo) => (band ? clamp(lo, -band + 0.5, band - 0.5) : lo); // keep on the strip
   const segs = []; const STEP = 10; const loop = [...poly, poly[0]];
   for (let e = 0; e < loop.length - 1; e += 1) {
     const [la1, lo1] = loop[e]; const [la2, lo2] = loop[e + 1]; let prev = null;
     for (let s = 0; s <= STEP; s += 1) {
       const f = s / STEP;
-      const v = { phi: (la1 + (la2 - la1) * f) * D2R, lam: (lo1 + (lo2 - lo1) * f) * D2R };
+      const v = { phi: (la1 + (la2 - la1) * f) * D2R, lam: cl(lo1 + (lo2 - lo1) * f) * D2R };
       if (prev) segs.push(prev, v); prev = v;
     }
   }
   return segs;
 }
 
-function fitTransform(fn, fitLat = 90) {
+function fitTransform(fn, fitLat = 90, lonLim = 180) {
   let minX = 1e9; let maxX = -1e9; let minY = 1e9; let maxY = -1e9;
-  for (let lat = -fitLat; lat <= fitLat; lat += 5) for (let lon = -180; lon <= 180; lon += 10) {
+  for (let lat = -fitLat; lat <= fitLat; lat += 5) for (let lon = -lonLim; lon <= lonLim; lon += Math.max(2, lonLim / 18)) {
     const [x, y] = fn(lat * D2R, lon * D2R);
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
@@ -130,6 +133,13 @@ function areaScale(fn, latDeg) {
 }
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
 
+// align the equirectangular texture: full globe, or a ±band° longitude strip
+function applyTexBand(tex, band) {
+  tex.wrapS = THREE.RepeatWrapping;
+  if (band) { tex.repeat.x = (2 * band) / 360; tex.offset.x = 0.5 - band / 360; } else { tex.repeat.x = 1; tex.offset.x = 0.25; }
+  tex.needsUpdate = true;
+}
+
 export default function MapProjections() {
   const [projId, setProjId] = useState('mercator');
   const [unfold, setUnfold] = useState(0);
@@ -146,6 +156,7 @@ export default function MapProjections() {
   const drawRef = useRef(drawMode); drawRef.current = drawMode;
   const dirtyRef = useRef(true);
   const playRef = useRef(null);
+  const polyRef = useRef(poly); polyRef.current = poly;
 
   const proj = PROJECTIONS.find((p) => p.id === projId);
   const projRef = useRef(proj); projRef.current = proj;
@@ -179,11 +190,15 @@ export default function MapProjections() {
     const earthMat = new THREE.MeshPhongMaterial({ color: 0x8ba0b8, shininess: 6, side: THREE.DoubleSide });
     const earth = new THREE.Mesh(earthGeo, earthMat);
     group.add(earth);
+    // faint full-globe wireframe kept round for context when only a strip is projected
+    const ctxSphere = new THREE.Mesh(new THREE.SphereGeometry(R * 0.992, 36, 24), new THREE.MeshBasicMaterial({ color: 0x2c516f, wireframe: true, transparent: true, opacity: 0.16 }));
+    ctxSphere.visible = false; group.add(ctxSphere);
     // real NASA Blue Marble satellite texture (bundled) — align image Greenwich to λ=0 (+Z)
     new THREE.TextureLoader().load(earthUrl, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.RepeatWrapping; tex.offset.x = 0.25;
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      applyTexBand(tex, projRef.current.band);
       earthMat.map = tex; earthMat.color.set(0xffffff); earthMat.needsUpdate = true;
+      if (G.current) G.current.tex = tex;
     });
 
     // thick graticule / tissot / polygon (fat lines) that morph to the projection
@@ -209,9 +224,9 @@ export default function MapProjections() {
     let surf = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 5, 40, 1, true), surfMat); optics.add(surf);
 
     G.current = {
-      scene, camera, renderer, controls, group, earth, earthGeo, vLL, vSph, NV,
-      grat, tiss, pol, optics, bulb, plight, rays, surf, surfMat, rayMat, bulbMat,
-      fnNow: proj.fn, tr: fitTransform(proj.fn, proj.fitLat), angle: 0, lastT: -1, raf: 0, disposed: false,
+      scene, camera, renderer, controls, group, earth, earthGeo, vLL, vSph, NV, ctxSphere, tex: null,
+      grat, tiss, pol, optics, bulb, plight, rays, surf, surfMat, rayMat, bulbMat, curBand: 0,
+      fnNow: proj.fn, tr: fitTransform(proj.fn, proj.fitLat, proj.band || 180), angle: 0, lastT: -1, raf: 0, disposed: false,
     };
     buildOptics(proj);
     applyMorph(0);
@@ -244,6 +259,7 @@ export default function MapProjections() {
       if (tRaw > 0.6) g.angle += (0 - g.angle) * Math.min(1, dt * 3);
       g.group.rotation.y = g.angle;
       g.optics.visible = opticsRef.current && tRaw < 0.985;
+      if (g.ctxSphere.visible) g.ctxSphere.material.opacity = 0.16 * clamp(1 - t * 1.4, 0, 1);
       if (dirtyRef.current || Math.abs(t - g.lastT) > 1e-4) { applyMorph(t); g.lastT = t; dirtyRef.current = false; }
       g.controls.update(); g.renderer.render(g.scene, g.camera);
     };
@@ -314,10 +330,37 @@ export default function MapProjections() {
     g.rays.geometry.dispose(); const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); g.rays.geometry = rg;
   }
 
-  useEffect(() => { const g = G.current; if (!g) return; g.fnNow = proj.fn; g.tr = fitTransform(proj.fn, proj.fitLat); buildOptics(proj); dirtyRef.current = true; /* eslint-disable-next-line */ }, [projId]);
+  // swap the earth to a ±band° gore (and filtered graticule) when the projection needs a strip
+  function rebuildForBand(band) {
+    const g = G.current; if (!g) return; const b = band || 0;
+    if (g.curBand !== b) {
+      const phiStart = band ? Math.PI / 2 - band * D2R : 0;
+      const phiLen = band ? 2 * band * D2R : Math.PI * 2;
+      const geo = new THREE.SphereGeometry(R, band ? 64 : 96, 64, phiStart, phiLen, 2 * D2R, 176 * D2R);
+      const p = geo.attributes.position; const NV = p.count;
+      const vLL = new Float32Array(NV * 2); const vSph = new Float32Array(NV * 3);
+      for (let i = 0; i < NV; i += 1) {
+        const x = p.getX(i); const y = p.getY(i); const z = p.getZ(i);
+        vLL[i * 2] = Math.asin(clamp(y / R, -1, 1)); vLL[i * 2 + 1] = Math.atan2(x, z);
+        vSph[i * 3] = x; vSph[i * 3 + 1] = y; vSph[i * 3 + 2] = z;
+      }
+      g.earth.geometry.dispose(); g.earth.geometry = geo; g.vLL = vLL; g.vSph = vSph; g.NV = NV;
+      if (g.tex) applyTexBand(g.tex, band);
+      g.grat.ll = meridiansParallels(band); g.tiss.ll = tissotSegs(band);
+      g.ctxSphere.visible = !!band; g.curBand = b;
+    }
+    g.pol.ll = polygonSegs(polyRef.current, band);
+  }
+
   useEffect(() => {
     const g = G.current; if (!g) return;
-    const segs = polygonSegs(poly); g.pol.ll = segs;
+    g.fnNow = proj.fn; g.tr = fitTransform(proj.fn, proj.fitLat, proj.band || 180);
+    rebuildForBand(proj.band); buildOptics(proj); dirtyRef.current = true;
+    /* eslint-disable-next-line */
+  }, [projId]);
+  useEffect(() => {
+    const g = G.current; if (!g) return;
+    const segs = polygonSegs(poly, projRef.current.band); g.pol.ll = segs;
     if (segs.length === 0) g.pol.geo.setPositions(new Float32Array(6)); // empty
     dirtyRef.current = true;
   }, [poly]);
