@@ -58,15 +58,20 @@ function drawGround(cv, target) {
 // GSD patch of ground) with shot noise that grows as the pixel pitch shrinks
 // (smaller pixels catch less light → lower SNR).
 function drawCaptured(cv, target, targetM, gsdM, pitchUm) {
-  const ctx = cv.getContext('2d'); const W = cv.width; ctx.clearRect(0, 0, W, W);
-  const n = clamp(Math.round(targetM / gsdM), 1, 220); // pixels across the target
-  const cell = W / n; const sigma = 0.05 * (5 / pitchUm); // noise ∝ 1/pitch
-  for (let i = 0; i < n; i += 1) for (let j = 0; j < n; j += 1) {
-    let sum = 0; const s = 3;
+  const n = clamp(Math.round(targetM / gsdM), 1, 200); // sensor pixels across the target
+  // The canvas buffer IS the sensor grid: one buffer pixel per sensor pixel.
+  // CSS (image-rendering:pixelated) upscales it to 200px, so each sensor pixel
+  // shows as a crisp block — few big blocks at coarse GSD, sharp when GSD is fine.
+  cv.width = n; cv.height = n;
+  const ctx = cv.getContext('2d'); const img = ctx.createImageData(n, n); const d = img.data;
+  const sigma = 0.05 * (5 / pitchUm); const s = 3; // noise ∝ 1/pitch; 3×3 box-average
+  for (let j = 0; j < n; j += 1) for (let i = 0; i < n; i += 1) {
+    let sum = 0;
     for (let a = 0; a < s; a += 1) for (let b = 0; b < s; b += 1) sum += patternVal(target, (i + (a + 0.5) / s) / n, (j + (b + 0.5) / s) / n);
     const val = clamp(sum / (s * s) + gauss() * sigma, 0, 1); const c = Math.round(val * 255);
-    ctx.fillStyle = `rgb(${c},${c},${c})`; ctx.fillRect(i * cell, j * cell, cell + 0.7, cell + 0.7);
+    const p = (j * n + i) * 4; d[p] = c; d[p + 1] = c; d[p + 2] = c; d[p + 3] = 255;
   }
+  ctx.putImageData(img, 0, 0);
 }
 
 function label(text, color = '#16202c', bg = 'rgba(255,255,255,0.88)') {
@@ -259,7 +264,7 @@ export default function Gsd() {
   const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(7.5, 4.6, 8.5); t.controls.target.set(0, 3.7, 0); };
 
   const { pitchUm, gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
-  const nAcross = Math.max(1, Math.round(targetM / (gsdCm / 100)));
+  const nAcross = clamp(Math.round(targetM / (gsdCm / 100)), 1, 200);
 
   return (
     <div className="sim-app">
