@@ -78,7 +78,7 @@ function arrowMesh(h, mat, up) {
   grp.add(s, t); return grp;
 }
 
-function buildScene(f, H, sensorW, pixels, mats) {
+function buildScene(f, H, sensorW, pixels, sel, mats) {
   const g = new THREE.Group();
   const { gsdCm } = computeGsd(f, H, sensorW, pixels);
 
@@ -92,7 +92,7 @@ function buildScene(f, H, sensorW, pixels, mats) {
   const sensorSize = groundSize * mag;
   const lensY = gY; const sensorY = gY + sY;
   const lensP = new THREE.Vector3(0, lensY, 0);
-  const hiI = 1; const hiJ = 3;                    // highlighted ground cell (off-centre → shows inversion)
+  const hiI = sel.i; const hiJ = sel.j;            // the user-selected ground cell / pixel
 
   // optical axis (dashed) + ground context plane
   const gp = new THREE.Mesh(new THREE.CircleGeometry(40, 48), mats.ground); gp.rotation.x = -Math.PI / 2; gp.position.y = -0.03; g.add(gp);
@@ -109,33 +109,29 @@ function buildScene(f, H, sensorW, pixels, mats) {
   // focal points at ±f from the lens (image forms ~at the focal plane)
   [-1, 1].forEach((s) => { const fp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), mats.focal); fp.position.set(0, lensY + s * sY, 0); g.add(fp); });
 
-  // chief rays: every ground cell → straight through the lens centre → its
-  // (inverted) image pixel. Faint for all, the highlighted one gets the full
-  // two-ray construction below.
-  const base = [];
+  // Focus on ONE selected pixel: the light of its ground GSD cell fills the
+  // lens and converges to that single (inverted) pixel. Object & real-image
+  // arrows make the inversion explicit.
   const cellG = groundSize / M; const halfG = groundSize / 2;
-  for (let i = 0; i < M; i += 1) for (let j = 0; j < M; j += 1) {
-    if (i === hiI && j === hiJ) continue;
-    const gc = cellCenter(groundSize, i, j, 0.04);
-    const sx = -gc[0] * mag; const sz = -gc[2] * mag; // image = −object·m
-    base.push(gc[0], gc[1], gc[2], sx, sensorY, sz);
-  }
-  const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(base, 3));
-  g.add(new THREE.LineSegments(bg, mats.ray));
-
-  // highlighted point: object arrow → real inverted image, with the classic
-  // two rays (chief through centre + parallel-then-refract).
   const gcx = -halfG + (hiI + 0.5) * cellG; const gcz = -halfG + (hiJ + 0.5) * cellG;
-  const ah = Math.min(cellG * 1.1, 0.9);
+  const ah = Math.min(cellG * 1.05, 0.9);
   const oArrow = arrowMesh(ah, mats.obj, true); oArrow.position.set(gcx, 0, gcz); g.add(oArrow);
   const iArrow = arrowMesh(ah * mag, mats.obj, false); iArrow.position.set(-gcx * mag, sensorY, -gcz * mag); g.add(iArrow);
-  const oTip = new THREE.Vector3(gcx, ah * 1.02, gcz);
-  const iTip = new THREE.Vector3(-gcx * mag, sensorY - ah * mag * 1.02, -gcz * mag);
-  const bend = new THREE.Vector3(gcx, lensY, gcz); // where the parallel ray meets the lens plane
-  const rays = [oTip.x, oTip.y, oTip.z, iTip.x, iTip.y, iTip.z, // chief (through centre)
-    oTip.x, oTip.y, oTip.z, bend.x, bend.y, bend.z, bend.x, bend.y, bend.z, iTip.x, iTip.y, iTip.z]; // parallel → refracted
+
+  // corner rays: ground cell corners → through the lens → matching pixel corners
+  const gC = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => new THREE.Vector3(gcx + sx * cellG / 2, 0.05, gcz + sz * cellG / 2));
+  const sC = gC.map((c) => new THREE.Vector3(-c.x * mag, sensorY, -c.z * mag)); // inverted image corners
+  const rays = [];
+  gC.forEach((c, k) => { rays.push(c.x, c.y, c.z, lensP.x, lensP.y, lensP.z, lensP.x, lensP.y, lensP.z, sC[k].x, sC[k].y, sC[k].z); });
   const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(rays, 3));
   g.add(new THREE.LineSegments(hg, mats.rayHi));
+
+  // translucent double-cone (ground cell → lens → pixel)
+  const coneV = [];
+  for (let k = 0; k < 4; k += 1) { const a = gC[k]; const b = gC[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
+  for (let k = 0; k < 4; k += 1) { const a = sC[k]; const b = sC[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
+  const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(coneV, 3)); cg.computeVertexNormals();
+  g.add(new THREE.Mesh(cg, mats.cone));
 
   // labels
   const l1 = label('real image (sensor) ×20', '#1d3b57'); l1.position.set(0, sensorY + 0.7, 0); g.add(l1);
@@ -153,6 +149,7 @@ export default function Gsd() {
   const [H, setH] = useState(100);
   const [sensorW, setSensorW] = useState(17.3);
   const [pixels, setPixels] = useState(4000);
+  const [sel, setSel] = useState({ i: 1, j: 3 });
   const [spin, setSpin] = useState(true);
 
   const mountRef = useRef(null); const three = useRef(null);
@@ -186,8 +183,8 @@ export default function Gsd() {
       focal: new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.5 }),
       obj: new THREE.MeshStandardMaterial({ color: 0x2e9e4f, roughness: 0.6 }),
       axis: new THREE.LineDashedMaterial({ color: 0x9aa7b4, dashSize: 0.16, gapSize: 0.13, transparent: true, opacity: 0.8 }),
-      ray: new THREE.LineBasicMaterial({ color: 0xe8544a, transparent: true, opacity: 0.3 }),
       rayHi: new THREE.LineBasicMaterial({ color: 0xe8443a }),
+      cone: new THREE.MeshBasicMaterial({ color: 0xe8544a, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }),
     };
 
     three.current = { renderer, scene, camera, controls, mats, modelRef: { current: null } };
@@ -205,8 +202,8 @@ export default function Gsd() {
   useEffect(() => {
     const t = three.current; if (!t) return;
     if (t.modelRef.current) { t.scene.remove(t.modelRef.current); disposeGroup(t.modelRef.current); }
-    const grp = buildScene(f, H, sensorW, pixels, t.mats); t.scene.add(grp); t.modelRef.current = grp;
-  }, [f, H, sensorW, pixels]);
+    const grp = buildScene(f, H, sensorW, pixels, sel, t.mats); t.scene.add(grp); t.modelRef.current = grp;
+  }, [f, H, sensorW, pixels, sel]);
 
   useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin; }, [spin]);
   const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(7.5, 4.6, 8.5); t.controls.target.set(0, 3.7, 0); };
@@ -254,6 +251,13 @@ export default function Gsd() {
               <label>flying height H <b>{H.toFixed(0)} m</b><input type="range" min="20" max="300" step="5" value={H} onChange={(e) => setH(Number(e.target.value))} /></label>
               <label>sensor width <b>{sensorW.toFixed(1)} mm</b><input type="range" min="6" max="36" step="0.1" value={sensorW} onChange={(e) => setSensorW(Number(e.target.value))} /></label>
               <label>resolution <b>{pixels} px</b><input type="range" min="1500" max="8000" step="100" value={pixels} onChange={(e) => setPixels(Number(e.target.value))} /></label>
+            </div>
+
+            <div className="gsd-sub">Trace one pixel &mdash; pick a ground cell</div>
+            <div className="gsd-pick">
+              {Array.from({ length: M }, (_, r) => Array.from({ length: M }, (_, c) => (
+                <button key={`${r}-${c}`} className={`gsd-px ${sel.i === c && sel.j === r ? 'on' : ''}`} onClick={() => setSel({ i: c, j: r })} aria-label={`cell ${c},${r}`} />
+              )))}
             </div>
 
             <div className="gsd-eq">
