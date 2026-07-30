@@ -9,6 +9,7 @@ import Gnss from './simulations/Gnss.jsx';
 import Gpr from './simulations/Gpr.jsx';
 import BuildingLod from './simulations/BuildingLod.jsx';
 import Gsd from './simulations/Gsd.jsx';
+import Snell from './simulations/Snell.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -26,6 +27,7 @@ const simulators = [
   { title: 'Ground-Penetrating Radar', category: 'LiDAR', level: 'Intermediate', description: 'See how a GPR antenna sends a pulse into the ground and times the echo (t = 2R/v), how stacking traces as it moves turns a buried object into a hyperbola, and how the hyperbola’s apex and shape give the object’s depth d = v·t₀/2.', tags: ['Two-way travel time', 'Radargram / B-scan', 'Hyperbola', 'Soil velocity εr', 'Depth estimation'], path: '?simulation=gpr', kind: 'gpr', status: 'Native React' },
   { title: 'Building Levels of Detail', category: 'Photogrammetry', level: 'Intermediate', description: 'Explore a residential building across the refined 16-cell LOD grid: LOD0 flat footprint surfaces, LOD1 extruded blocks, LOD2 true roof shapes, LOD3 the full architectural exterior with windows, dormers and balconies — each generated in 3D with the included/not-included detail spelled out.', tags: ['Levels of Detail', '3D city models', 'CityGML', 'Generalisation', 'Three.js'], path: '?simulation=building-lod', kind: 'lod', status: 'Native React' },
   { title: 'Ground Sampling Distance', category: 'Photogrammetry', level: 'Beginner', description: 'See in 3D how each sensor pixel maps to a patch of ground through the camera lens, and watch the Ground Sampling Distance GSD = p·H/f change as you adjust focal length, flying height, sensor size and resolution.', tags: ['GSD', 'Pixel pitch', 'Focal length', 'Flying height', 'Pinhole model'], path: '?simulation=gsd', kind: 'gsd', status: 'Native React' },
+  { title: 'Snell’s Law & Camera Optics', category: 'Photogrammetry', level: 'Beginner', description: 'Bend a ray across an interface with Snell’s law n₁sinθ₁ = n₂sinθ₂ (with total internal reflection), see how a lens is stacked refraction that focuses light at f, and why real optics distort straight lines — the radial distortion photogrammetric calibration must remove.', tags: ['Snell’s law', 'Refraction', 'Lens & focal length', 'Radial distortion', 'Camera calibration'], path: '?simulation=snell', kind: 'snell', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -75,6 +77,30 @@ function Thumbnail({ kind }) {
       {/* ground grid (bottom) */}
       <g transform="translate(150 288)"><rect width="340" height="60" fill="rgba(120,210,150,.25)" stroke="#7ed99a" strokeWidth="2" />{[1, 2, 3, 4, 5].map((i) => <line key={`gv${i}`} x1={i * 56.7} y1="0" x2={i * 56.7} y2="60" stroke="#7ed99a" strokeWidth="1.3" />)}<line x1="0" y1="30" x2="340" y2="30" stroke="#7ed99a" strokeWidth="1.3" /><rect x="113" y="0" width="57" height="30" fill="#ffd85e" opacity=".85" /></g>
       <text x="30" y="200" fill="#cfe0ef" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">GSD = p·H / f</text>
+    </svg>
+  );
+  if (kind === 'snell') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Snell's law: a ray refracting across an interface into glass">
+      <defs><linearGradient id="bg-sn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0d1c2b" /><stop offset="1" stopColor="#123047" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#bg-sn)" /><Grid id="sn" tint="rgba(255,255,255,.05)" />
+      {/* two media + interface */}
+      <rect y="188" width="640" height="172" fill="rgba(90,150,210,.22)" />
+      <line x1="0" y1="188" x2="640" y2="188" stroke="#dbe9f2" strokeWidth="3" />
+      {/* normal */}
+      <line x1="320" y1="44" x2="320" y2="332" stroke="rgba(219,233,242,.45)" strokeWidth="2" strokeDasharray="7 6" />
+      {/* incident, reflected, refracted */}
+      <line x1="150" y1="70" x2="320" y2="188" stroke="#5ad1ff" strokeWidth="4" />
+      <line x1="320" y1="188" x2="470" y2="92" stroke="rgba(90,209,255,.35)" strokeWidth="2.5" />
+      <line x1="320" y1="188" x2="430" y2="330" stroke="#ffb703" strokeWidth="4" />
+      <circle cx="320" cy="188" r="5" fill="#fff" />
+      {/* angle arcs */}
+      <path d="M320 154 A34 34 0 0 0 296 168" fill="none" stroke="#5ad1ff" strokeWidth="2.5" />
+      <path d="M320 222 A34 34 0 0 0 340 216" fill="none" stroke="#ffb703" strokeWidth="2.5" />
+      <text x="256" y="150" fill="#8fe3ff" fontSize="18" fontFamily="system-ui" fontWeight="700">θ₁</text>
+      <text x="356" y="238" fill="#ffca5f" fontSize="18" fontFamily="system-ui" fontWeight="700">θ₂</text>
+      <text x="16" y="176" fill="#bcd3e6" fontSize="15" fontFamily="ui-monospace,monospace">n₁</text>
+      <text x="16" y="214" fill="#bcd3e6" fontSize="15" fontFamily="ui-monospace,monospace">n₂</text>
+      <text x="470" y="345" fill="#cfe0ef" fontSize="17" fontFamily="ui-monospace,monospace" fontWeight="600">n₁sinθ₁ = n₂sinθ₂</text>
     </svg>
   );
   if (kind === 'lod') return (
@@ -381,5 +407,6 @@ export default function App() {
   if (simulation === 'gpr') return <Gpr />;
   if (simulation === 'building-lod') return <BuildingLod />;
   if (simulation === 'gsd') return <Gsd />;
+  if (simulation === 'snell') return <Snell />;
   return <Landing />;
 }
