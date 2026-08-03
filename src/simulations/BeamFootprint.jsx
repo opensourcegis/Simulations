@@ -44,7 +44,7 @@ function labelSprite(text, color = '#eaf3ec') {
   x.fillStyle = color; x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, w / 2, h / 2);
   const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sp.scale.set(w / 72, h / 72, 1); sp.renderOrder = 10; return sp;
+  sp.scale.set(w / 155, h / 155, 1); sp.renderOrder = 10; return sp;
 }
 
 function buildBeam(H, gmrad, thetaDeg, d0mm, mats) {
