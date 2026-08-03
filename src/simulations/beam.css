@@ -1,0 +1,26 @@
+.beam-stage{position:relative;width:100%;height:460px;border:1px solid #e5ebf1;border-radius:10px;overflow:hidden;background:linear-gradient(180deg,#0c1a12,#0a1420);cursor:grab;touch-action:none}
+.beam-stage:active{cursor:grabbing}
+.beam-stage canvas{display:block}
+.beam-badge{position:absolute;top:10px;left:12px;padding:6px 12px;border-radius:999px;background:rgba(15,32,44,.74);color:#fff;font-size:13px;font-weight:700}
+.beam-badge b{color:#ffd85e}
+.beam-hint{position:absolute;bottom:10px;right:12px;padding:4px 9px;border-radius:8px;background:rgba(255,255,255,.12);color:#cfe0d6;font-size:11px}
+.beam-exag{position:absolute;bottom:10px;left:12px;padding:4px 9px;border-radius:8px;background:rgba(255,255,255,.1);color:#ffd8a0;font-size:11px}
+.beam-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px;font-size:11.5px;color:#56677a}
+.beam-legend span{display:inline-flex;align-items:center;gap:6px}
+.beam-sw{width:12px;height:12px;border-radius:3px;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+.beam-toolbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;font-size:12px;color:#56677a}
+.beam-toolbar label{display:inline-flex;align-items:center;gap:5px}
+.beam-toolbar input[type=checkbox]{accent-color:#0f8a4d}
+.beam-btn{padding:6px 11px;border:1px solid #d6dee7;border-radius:8px;background:#fff;color:#56677a;font-size:12px;cursor:pointer}
+.beam-btn:hover{border-color:#0f8a4d;color:#0f8a4d}
+.beam-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.beam-inset{flex:none}
+.beam-inset canvas{display:block;width:230px;height:230px;border:1px solid #e5ebf1;border-radius:8px;background:#0c1826}
+.beam-inset figcaption{margin-top:6px;font-size:11.5px;color:#56677a;text-align:center}
+.beam-charts{display:flex;gap:12px;flex-wrap:wrap}
+.beam-charts figure{margin:0;flex:1;min-width:210px}
+.beam-charts canvas{display:block;width:100%;height:auto;border:1px solid #e5ebf1;border-radius:8px;background:#0c1826}
+.beam-charts figcaption{margin-top:5px;font-size:11px;color:#56677a;text-align:center}
+.beam-note{margin-top:10px;padding:9px 12px;border-left:3px solid #1565c0;border-radius:8px;background:#f5f8fa;color:#56677a;font-size:12.5px;line-height:1.55}
+.beam-note b{color:#16202c}
+.beam-src{margin-top:8px;font-size:11px;color:#8fa0b0}

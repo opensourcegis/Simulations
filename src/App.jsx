@@ -13,6 +13,7 @@ import Snell from './simulations/Snell.jsx';
 import MapProjections from './simulations/MapProjections.jsx';
 import SarImaging from './simulations/SarImaging.jsx';
 import IotDigitalTwin from './simulations/IotDigitalTwin.jsx';
+import BeamFootprint from './simulations/BeamFootprint.jsx';
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -34,6 +35,7 @@ const simulators = [
   { title: 'Map Projections', category: 'Cartography', level: 'Beginner', description: 'Spin a 3D globe and watch it unwrap onto a flat map five different ways — Mercator, Equirectangular, Mollweide, Albers Conic and Azimuthal. Draw your own polygon and see how its shape and area stretch as you switch projection, with Tissot indicatrices exposing the distortion.', tags: ['Projections', 'Mercator / Mollweide', 'Conic & azimuthal', 'Tissot distortion', 'Conformal vs equal-area'], path: '?simulation=map-projections', kind: 'mapproj', status: 'Native React' },
   { title: 'Synthetic Aperture Radar', category: 'Radar', level: 'Advanced', description: 'See how a side-looking radar builds a sharp all-weather image: the swath geometry, range resolution from chirp pulse-compression (δR = c/2B), the synthesised aperture that gives azimuth resolution δaz = D/2, the Doppler history, plus imaging modes, polarimetry, geometric distortion, speckle and InSAR.', tags: ['SAR', 'Chirp / pulse compression', 'Synthetic aperture', 'Doppler / azimuth', 'InSAR & polarimetry'], path: '?simulation=sar', kind: 'sar', status: 'Native React' },
   { title: 'IoT Digital Twin', category: 'IoT', level: 'Intermediate', description: 'Run a live smart factory where three machines stream sensor telemetry through an edge gateway and MQTT broker into a cloud digital twin that mirrors them, detects anomalies, predicts remaining life and closes the loop with actuation. Inject faults and watch the twin drift out of sync when you starve it of data.', tags: ['Digital twin', 'IoT telemetry', 'Edge & MQTT', 'Anomaly & RUL', 'Closed-loop control'], path: '?simulation=iot-twin', kind: 'iot', status: 'Native React' },
+  { title: 'Laser Beam Divergence & Footprint', category: 'LiDAR', level: 'Beginner', description: 'See in 3D how a LiDAR beam spreads at its divergence angle γ, so the ground footprint grows with flying height (d = d₀ + R·γ) and stretches into an ellipse off-nadir (a = d/cosθ). Watch the spot size, elongation, area and return energy change as you adjust height, divergence and scan angle.', tags: ['Beam divergence', 'Footprint size', 'Incidence angle', 'Slant range', 'Ground resolution'], path: '?simulation=beam-footprint', kind: 'beam', status: 'Native React' },
 ];
 
 function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
@@ -83,6 +85,32 @@ function Thumbnail({ kind }) {
       {/* ground grid (bottom) */}
       <g transform="translate(150 288)"><rect width="340" height="60" fill="rgba(120,210,150,.25)" stroke="#7ed99a" strokeWidth="2" />{[1, 2, 3, 4, 5].map((i) => <line key={`gv${i}`} x1={i * 56.7} y1="0" x2={i * 56.7} y2="60" stroke="#7ed99a" strokeWidth="1.3" />)}<line x1="0" y1="30" x2="340" y2="30" stroke="#7ed99a" strokeWidth="1.3" /><rect x="113" y="0" width="57" height="30" fill="#ffd85e" opacity=".85" /></g>
       <text x="30" y="200" fill="#cfe0ef" fontSize="16" fontFamily="ui-monospace,monospace" fontWeight="600">GSD = p·H / f</text>
+    </svg>
+  );
+  if (kind === 'beam') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="LiDAR beam diverging to an elliptical ground footprint">
+      <defs>
+        <linearGradient id="bg-beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0c1a12" /><stop offset="1" stopColor="#0a1420" /></linearGradient>
+        <linearGradient id="cone-beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgba(255,90,58,.5)" /><stop offset="1" stopColor="rgba(255,90,58,.12)" /></linearGradient>
+      </defs>
+      <rect width="640" height="360" fill="url(#bg-beam)" /><Grid id="beam" tint="rgba(255,255,255,.05)" />
+      {/* ground */}
+      <rect y="292" width="640" height="68" fill="#0e2018" /><line x1="0" y1="292" x2="640" y2="292" stroke="#2f5a3f" strokeWidth="2" />
+      {/* sensor */}
+      <g transform="translate(250 58)"><rect x="-26" y="-13" width="52" height="26" rx="5" fill="#e8eff5" /><rect x="-10" y="13" width="20" height="8" fill="#3a4a5a" /></g>
+      {/* nadir dashed */}
+      <line x1="250" y1="58" x2="250" y2="292" stroke="#8fb0c8" strokeWidth="1.5" strokedasharray="6 5" opacity=".6" />
+      {/* diverging tilted cone → ellipse */}
+      <polygon points="250,64 452,292 372,292" fill="url(#cone-beam)" stroke="#ff7a4a" strokeWidth="2" />
+      <ellipse cx="412" cy="292" rx="44" ry="12" fill="rgba(255,106,74,.45)" stroke="#ffd85e" strokeWidth="2.5" />
+      {/* nadir spot */}
+      <ellipse cx="250" cy="292" rx="16" ry="5" fill="none" stroke="#5ad1ff" strokeWidth="2" />
+      {/* angle arc */}
+      <path d="M250 120 A62 62 0 0 1 285 172" fill="none" stroke="#ffd8a0" strokeWidth="2" />
+      <text x="270" y="150" fill="#ffd8a0" fontSize="15" fontFamily="system-ui" fontWeight="700">θ</text>
+      <text x="150" y="180" fill="#bfe3c9" fontSize="15" fontFamily="ui-monospace,monospace" fontWeight="600">H</text>
+      <text x="470" y="330" fill="#ffb0a0" fontSize="14" fontFamily="system-ui" fontWeight="600">elliptical footprint</text>
+      <text x="26" y="30" fill="#cfe0d6" fontSize="17" fontFamily="ui-monospace,monospace" fontWeight="600">d = d₀ + R·γ</text>
     </svg>
   );
   if (kind === 'iot') return (
@@ -497,5 +525,6 @@ export default function App() {
   if (simulation === 'map-projections') return <MapProjections />;
   if (simulation === 'sar') return <SarImaging />;
   if (simulation === 'iot-twin') return <IotDigitalTwin />;
+  if (simulation === 'beam-footprint') return <BeamFootprint />;
   return <Landing />;
 }
