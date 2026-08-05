@@ -479,7 +479,6 @@ function Landing() {
 
       <main className="wrap">
         <header className="hero">
-          <p className="eyebrow">&#9650; Learn by doing</p>
           <h1>Understand surveying &amp; remote sensing through <em>interactive simulators</em>.</h1>
           <p className="lead">Hands-on, browser-based lessons in LiDAR, photogrammetry and flight planning. Adjust the inputs, watch the geometry respond, and build real intuition — nothing to install and no sign-up.</p>
           <div className="stats">
