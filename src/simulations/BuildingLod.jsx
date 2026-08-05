@@ -135,7 +135,10 @@ function buildHouse(g, lod, variant, mats) {
   if (chimney) g.add(box(0.7, 2.2, 0.7, -2.6, 6.6, 0.6, mats.chimney));
   if (entrance) { // small front entrance block (porch)
     g.add(box(2.6, 3, 2, -0.5, 1.5, -4.3, mats.wall));
-    const er = gableRoof(2.6, 2.6, 1, mats.roof); er.position.set(-0.5, 3, -3.9); g.add(er);
+    const erSize = 2.6 + 2 * ov;
+    const er = gableRoof(erSize, erSize, 1, mats.roof);
+    er.position.set(-0.5, 3, -3.9);
+    g.add(er);
   }
   if (dormers) addDormers(g, nDorm, mats);
   if (roofEquip) { g.add(box(1.3, 0.25, 1.7, 2.4, ME + 0.5, 1.4, mats.glass)); g.add(box(0.5, 0.9, 0.5, 3.2, ME + MR * 0.55, 0.4, mats.chimney)); }
