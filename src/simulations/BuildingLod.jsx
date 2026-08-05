@@ -89,7 +89,7 @@ function addDormers(g, n, mats, ov = 0) {
     g.add(box(1.0, 0.75, 0.1, x, surfY + 0.45, zc - cheekD / 2 + 0.06, mats.glass));
     if (ov > 0) addRoofOverhangSkirt(g, x, zc, cheekW, cheekD, capY, ov, mats.roof);
     const capRf = roofFootprint(1.7, 1.6, ov);
-    const cap = gableRoof(capRf.w, capRf.d, 0.55, mats.roof, 'z');
+    const cap = gableRoof(capRf.w, capRf.d, 0.55, mats.roof, ov > 0 ? 'z' : 'x');
     cap.position.set(x, capY, zc - ov * 0.12);
     g.add(cap);
   }
@@ -135,19 +135,21 @@ function addBalcony(g, mats, railings) {
 
 // ---- LOD2 & LOD3 : real house --------------------------------------------
 function buildHouse(g, lod, variant, mats) {
-  const ov = (lod === 2 && variant >= 2) || (lod === 3 && variant >= 2) ? 0.65 : 0;
-  // main block — 9 m wide (x) × 7 m deep (z); ridge runs front-to-back so eaves project on the facade
+  const hasOverhang = (lod === 2 && variant === 3) || (lod === 3 && variant >= 2);
+  const ov = hasOverhang ? 0.65 : 0;
+  const ridge = hasOverhang ? 'z' : 'x'; // eave projection only on highly refined shells
+  // main block
   g.add(box(9, ME, 7, 0, ME / 2, 0, mats.wall));
   if (ov > 0) addRoofOverhangSkirt(g, 0, 0, 9, 7, ME, ov, mats.roof);
   const mainRf = roofFootprint(9, 7, ov);
-  const mr = gableRoof(mainRf.w, mainRf.d, MR, mats.roof, 'z');
+  const mr = gableRoof(mainRf.w, mainRf.d, MR, mats.roof, ridge);
   mr.position.set(0, ME, 0);
   g.add(mr);
   // lower right wing
   g.add(box(4, WE, 4, 6.5, WE / 2, 0, mats.wall));
   if (ov > 0) addRoofOverhangSkirt(g, 6.5, 0, 4, 4, WE, ov, mats.roof);
   const wingRf = roofFootprint(4, 4, ov);
-  const wr = gableRoof(wingRf.w, wingRf.d, WR, mats.roof, 'z');
+  const wr = gableRoof(wingRf.w, wingRf.d, WR, mats.roof, ridge);
   wr.position.set(6.5, WE, 0);
   g.add(wr);
 
@@ -168,7 +170,7 @@ function buildHouse(g, lod, variant, mats) {
     g.add(box(2.6, 3, 2, -0.5, 1.5, -4.3, mats.wall));
     if (ov > 0) addRoofOverhangSkirt(g, -0.5, -4.3, 2.6, 2, 3, ov, mats.roof);
     const porchRf = roofFootprint(2.6, 2, ov);
-    const er = gableRoof(porchRf.w, porchRf.d, 1, mats.roof, 'z');
+    const er = gableRoof(porchRf.w, porchRf.d, 1, mats.roof, ridge);
     er.position.set(-0.5, 3, -3.9 - ov * 0.15);
     g.add(er);
   }
