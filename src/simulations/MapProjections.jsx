@@ -161,8 +161,6 @@ function applyTexBand(tex, band) {
 export default function MapProjections() {
   const [projId, setProjId] = useState('mercator');
   const [unfold, setUnfold] = useState(0);
-  const [autoRot, setAutoRot] = useState(true);
-  const [showOptics, setShowOptics] = useState(true);
   const [drawMode, setDrawMode] = useState(false);
   const [poly, setPoly] = useState([[8, -18], [8, 38], [56, 38], [56, -18]]);
 
@@ -170,8 +168,6 @@ export default function MapProjections() {
   const unfoldSliderRef = useRef(null);
   const G = useRef(null);
   const unfoldRef = useRef(unfold); unfoldRef.current = unfold;
-  const autoRef = useRef(autoRot); autoRef.current = autoRot;
-  const opticsRef = useRef(showOptics); opticsRef.current = showOptics;
   const drawRef = useRef(drawMode); drawRef.current = drawMode;
   const dirtyRef = useRef(true);
   const playRef = useRef(null);
@@ -280,10 +276,10 @@ export default function MapProjections() {
         }
       }
       const tRaw = clamp(unfoldRef.current, 0, 1); const t = easeInOut(tRaw);
-      if (autoRef.current && !drawRef.current && tRaw < 0.25) g.angle += dt * 0.26;
+      if (!drawRef.current && tRaw < 0.25) g.angle += dt * 0.26;
       if (tRaw > 0.6) g.angle += (0 - g.angle) * Math.min(1, dt * 3);
       g.group.rotation.y = g.angle;
-      g.optics.visible = opticsRef.current && tRaw < 0.985;
+      g.optics.visible = tRaw < 0.985;
       if (g.ctxSphere.visible) g.ctxSphere.material.opacity = 0.16 * clamp(1 - t * 1.4, 0, 1);
       if (dirtyRef.current || Math.abs(t - g.lastT) > 1e-4) { applyMorph(t); g.lastT = t; dirtyRef.current = false; }
       g.controls.update(); g.renderer.render(g.scene, g.camera);
@@ -427,8 +423,6 @@ export default function MapProjections() {
               <span>flat map</span>
             </div>
             <div className="mp-tools">
-              <label><input type="checkbox" checked={showOptics} onChange={(e) => setShowOptics(e.target.checked)} /> show projection light &amp; surface</label>
-              <label><input type="checkbox" checked={autoRot} onChange={(e) => setAutoRot(e.target.checked)} /> auto-rotate</label>
               <button className={`mp-btn ${drawMode ? 'go' : ''}`} onClick={() => setDrawMode((d) => !d)}>{drawMode ? '✓ drawing — click globe' : '✎ draw polygon'}</button>
               <button className="mp-btn" onClick={() => setPoly([])}>clear</button>
               <button className="mp-btn" onClick={() => setPoly([[8, -18], [8, 38], [56, 38], [56, -18]])}>reset polygon</button>
