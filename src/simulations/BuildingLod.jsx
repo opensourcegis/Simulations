@@ -90,20 +90,23 @@ function addWindows(g, mats, full) {
 }
 
 function addBalcony(g, mats, railings) {
-  // Centred between the upper-floor windows at x = −1.6 and x = 0, slab flush with the wall.
-  const x = -0.8;
-  const y = 2.96;
+  // Main facade only — under the upper window at x = 1.6, left of the entrance porch (x ≤ 0.8).
+  const x = 1.6;
+  const winY = 3.7;
+  const winH = 1.4;
+  const y = winY - winH / 2 - 0.08; // slab at window-sill height
   const wallZ = -3.5;
-  const slabDepth = 1.0;
-  const hw = 1.1;
+  const slabW = 1.25;
+  const slabDepth = 0.9;
+  const hw = slabW / 2;
   const slabZ = wallZ - slabDepth / 2;
   const railFrontZ = wallZ - slabDepth;
-  g.add(box(2.2, 0.16, slabDepth, x, y, slabZ, mats.trim)); // slab
+  g.add(box(slabW, 0.14, slabDepth, x, y, slabZ, mats.trim)); // slab
   if (railings) {
-    g.add(box(2.2, 0.08, 0.08, x, y + 0.85, railFrontZ, mats.trim)); // top rail
+    g.add(box(slabW, 0.08, 0.08, x, y + 0.85, railFrontZ, mats.trim)); // top rail
     g.add(box(0.08, 0.85, slabDepth, x - hw, y + 0.42, slabZ, mats.trim));
     g.add(box(0.08, 0.85, slabDepth, x + hw, y + 0.42, slabZ, mats.trim));
-    for (let bx = -0.9; bx <= 0.9; bx += 0.29) g.add(box(0.05, 0.85, 0.05, x + bx, y + 0.42, railFrontZ, mats.trim)); // balusters
+    for (let bx = -0.45; bx <= 0.45; bx += 0.23) g.add(box(0.05, 0.85, 0.05, x + bx, y + 0.42, railFrontZ, mats.trim)); // balusters
   }
 }
 
