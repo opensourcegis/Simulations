@@ -107,3 +107,11 @@ footer a { color: var(--text-dim); } footer a:hover { color: var(--accent); }
 
 @media (max-width: 560px) { .spacer { display: none; } .filters { width: 100%; } .search { width: 100%; margin-left: 0; } .search input { width: 100%; flex: 1; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.sim-loading {
+  display: grid;
+  place-items: center;
+  min-height: 40vh;
+  color: var(--text-dim);
+  font-size: 1.05rem;
+}

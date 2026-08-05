@@ -178,7 +178,9 @@ export default function BuildingLod() {
   const three = useRef(null);
 
   useEffect(() => {
-    const mount = mountRef.current; const w = mount.clientWidth; const h = mount.clientHeight;
+    const mount = mountRef.current;
+    if (!mount) return undefined;
+    const w = mount.clientWidth; const h = mount.clientHeight;
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio)); renderer.setSize(w, h);
     renderer.toneMapping = THREE.ACESFilmicToneMapping; mount.appendChild(renderer.domElement);
