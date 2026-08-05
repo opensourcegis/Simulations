@@ -24,9 +24,10 @@ const WE = 3; const WR = 1.6;     // wing eave / ridge
 function box(w, h, d, x, y, z, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; }
 
 // Gable roof for a w×d footprint (w = x span, d = z span), base at y=0.
-// Ridge runs along the longer footprint axis (same rule for every roof piece).
-function gableRoof(w, d, rh, mat) {
-  const hw = w / 2; const hd = d / 2; const alongX = w >= d;
+// Ridge runs along the longer axis unless ridgeAlong is 'x' or 'z'.
+function gableRoof(w, d, rh, mat, ridgeAlong = null) {
+  const alongX = (ridgeAlong ?? (w >= d ? 'x' : 'z')) === 'x';
+  const hw = w / 2; const hd = d / 2;
   const g = new THREE.BufferGeometry(); let v; let f;
   if (alongX) {
     v = [[-hw, 0, -hd], [hw, 0, -hd], [hw, 0, hd], [-hw, 0, hd], [-hw, rh, 0], [hw, rh, 0]];
@@ -166,12 +167,13 @@ function buildHouse(g, lod, variant, mats) {
   const wood = lod === 3 && variant >= 3;
 
   if (chimney) g.add(box(0.7, 2.2, 0.7, -2.6, 6.6, 0.6, mats.chimney));
-  if (entrance) { // small front entrance block (porch)
-    g.add(box(2.6, 3, 2, -0.5, 1.5, -4.3, mats.wall));
-    if (ov > 0) addRoofOverhangSkirt(g, -0.5, -4.3, 2.6, 2, 3, ov, mats.roof);
-    const porchRf = roofFootprint(2.6, 2, ov);
-    const er = gableRoof(porchRf.w, porchRf.d, 1, mats.roof);
-    er.position.set(-0.5, 3, -3.9);
+  if (entrance) { // small front entrance block (porch) — ridge runs front-to-back above the door
+    const porchW = 2.6; const porchD = 2; const porchCx = -0.5; const porchCz = -4.3; const porchEave = 3;
+    g.add(box(porchW, porchEave, porchD, porchCx, porchEave / 2, porchCz, mats.wall));
+    if (ov > 0) addRoofOverhangSkirt(g, porchCx, porchCz, porchW, porchD, porchEave, ov, mats.roof);
+    const porchRf = roofFootprint(porchW, porchD, ov);
+    const er = gableRoof(porchRf.w, porchRf.d, 1, mats.roof, 'z');
+    er.position.set(porchCx, porchEave, porchCz);
     g.add(er);
   }
   if (dormers) addDormers(g, nDorm, mats, ov);
