@@ -401,7 +401,7 @@ export default function MapProjections() {
         <a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a>
         <div className="title-block">
           <h1>Map Projections <span className="native-badge">Native React</span></h1>
-          <span className="sub">Unwrap the round Earth onto a flat map — see the projection light, the surface, and the stretch</span>
+          <span className="sub">Unwrap the round Earth onto a flat map — see how shape and area stretch</span>
         </div>
         <span className="score-chip">{proj.name} · <b>{proj.prop}</b></span>
       </header>
@@ -429,7 +429,6 @@ export default function MapProjections() {
               <span><i className="mp-sw" style={{ background: '#cfe6ff' }} /> graticule (lat/lon grid)</span>
               <span><i className="mp-sw" style={{ background: '#ffb703' }} /> Tissot circles (distortion)</span>
               <span><i className="mp-sw" style={{ background: '#35d07f' }} /> your polygon</span>
-              <span><i className="mp-sw" style={{ background: '#9fd0ff' }} /> developable surface + light rays</span>
             </div>
           </section>
         </div>
