@@ -44,7 +44,7 @@ function addRoofOverhangSkirt(g, cx, cz, w, d, eaveY, ov, mat) {
   if (ov <= 0) return;
   const hw = w / 2;
   const hd = d / 2;
-  const lip = 0.24;
+  const lip = 0.16;
   const y = eaveY - lip / 2;
   g.add(box(w + 2 * ov, lip, ov, cx, y, cz - hd - ov / 2, mat)); // front (-z)
   g.add(box(w + 2 * ov, lip, ov, cx, y, cz + hd + ov / 2, mat)); // rear (+z)
@@ -136,7 +136,7 @@ function addBalcony(g, mats, railings) {
 // ---- LOD2 & LOD3 : real house --------------------------------------------
 function buildHouse(g, lod, variant, mats) {
   const hasOverhang = (lod === 2 && variant === 3) || (lod === 3 && variant >= 2);
-  const ov = hasOverhang ? 0.65 : 0;
+  const ov = hasOverhang ? 0.35 : 0;
   const ridge = hasOverhang ? 'z' : 'x'; // eave projection only on highly refined shells
   // main block
   g.add(box(9, ME, 7, 0, ME / 2, 0, mats.wall));
