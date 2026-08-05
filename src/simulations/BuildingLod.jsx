@@ -39,6 +39,19 @@ function gableRoof(w, d, rh, mat) {
   return new THREE.Mesh(g, mat);
 }
 
+// Flat eave boards projecting past each wall face at eave height (visible overhang).
+function addEaveBoards(g, cx, cz, w, d, y, ov, mat) {
+  if (ov <= 0) return;
+  const hw = w / 2;
+  const hd = d / 2;
+  const thick = 0.14;
+  const yEave = y - thick / 2;
+  g.add(box(w + 2 * ov, thick, ov, cx, yEave, cz - hd - ov / 2, mat)); // front
+  g.add(box(w + 2 * ov, thick, ov, cx, yEave, cz + hd + ov / 2, mat)); // rear
+  g.add(box(ov, thick, d, cx - hw - ov / 2, yEave, cz, mat)); // left
+  g.add(box(ov, thick, d, cx + hw + ov / 2, yEave, cz, mat)); // right
+}
+
 // ---- LOD0 : flat footprint / roof-edge surfaces --------------------------
 function buildLod0(g, variant, mats) {
   const ground = variant === 0 ? [[13, 7, 2, 0]] : [[9, 7, 0, 0], [4, 4, 6.5, 0]];
@@ -112,13 +125,15 @@ function addBalcony(g, mats, railings) {
 
 // ---- LOD2 & LOD3 : real house --------------------------------------------
 function buildHouse(g, lod, variant, mats) {
-  const ov = (lod === 2 && variant >= 3) || (lod === 3 && variant >= 2) ? 0.4 : 0; // eaves extend past walls on refined variants
+  const ov = (lod === 2 && variant >= 2) || (lod === 3 && variant >= 2) ? 0.4 : 0; // eaves extend past walls on refined variants
   // main block + gable roof
   g.add(box(9, ME, 7, 0, ME / 2, 0, mats.wall));
   const mr = gableRoof(9 + 2 * ov, 7 + 2 * ov, MR, mats.roof); mr.position.set(0, ME, 0); g.add(mr);
+  if (ov > 0) addEaveBoards(g, 0, 0, 9, 7, ME, ov, mats.roof);
   // lower right wing + roof
   g.add(box(4, WE, 4, 6.5, WE / 2, 0, mats.wall));
   const wr = gableRoof(4 + 2 * ov, 4 + 2 * ov, WR, mats.roof); wr.position.set(6.5, WE, 0); g.add(wr);
+  if (ov > 0) addEaveBoards(g, 6.5, 0, 4, 4, WE, ov, mats.roof);
 
   const chimney = (lod === 2 && variant >= 1) || lod === 3;
   const entrance = (lod === 2 && variant >= 1) || lod === 3;
@@ -139,6 +154,7 @@ function buildHouse(g, lod, variant, mats) {
     const er = gableRoof(erSize, erSize, 1, mats.roof);
     er.position.set(-0.5, 3, -3.9);
     g.add(er);
+    if (ov > 0) addEaveBoards(g, -0.5, -4.3, 2.6, 2, 3, ov, mats.roof);
   }
   if (dormers) addDormers(g, nDorm, mats);
   if (roofEquip) { g.add(box(1.3, 0.25, 1.7, 2.4, ME + 0.5, 1.4, mats.glass)); g.add(box(0.5, 0.9, 0.5, 3.2, ME + MR * 0.55, 0.4, mats.chimney)); }
