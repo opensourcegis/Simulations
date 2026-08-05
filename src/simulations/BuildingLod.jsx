@@ -112,7 +112,7 @@ function addBalcony(g, mats, railings) {
 
 // ---- LOD2 & LOD3 : real house --------------------------------------------
 function buildHouse(g, lod, variant, mats) {
-  const ov = lod === 3 && variant >= 2 ? 0.4 : 0; // roof overhang for detailed variants
+  const ov = (lod === 2 && variant >= 3) || (lod === 3 && variant >= 2) ? 0.4 : 0; // eaves extend past walls on refined variants
   // main block + gable roof
   g.add(box(9, ME, 7, 0, ME / 2, 0, mats.wall));
   const mr = gableRoof(9 + 2 * ov, 7 + 2 * ov, MR, mats.roof); mr.position.set(0, ME, 0); g.add(mr);
