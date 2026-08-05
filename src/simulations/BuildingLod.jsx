@@ -89,13 +89,13 @@ function mainRoofY(z, ov = 0) {
 // Chimney stack seated on the roof slope — LOD3 architectural detail.
 function addChimney(g, x, z, mats, ov = 0, detailed = false) {
   const baseY = mainRoofY(z, ov);
-  const shaftW = 0.52;
-  const shaftH = detailed ? 2.05 : 1.75;
-  g.add(box(shaftW + 0.2, 0.12, shaftW + 0.2, x, baseY + 0.06, z, mats.trim)); // roof flashing
-  g.add(box(shaftW, shaftH, shaftW, x, baseY + shaftH / 2 + 0.12, z, mats.chimney)); // shaft
-  g.add(box(shaftW + 0.14, 0.1, shaftW + 0.14, x, baseY + shaftH + 0.17, z, mats.trim)); // cap course
-  g.add(box(0.36, 0.32, 0.36, x, baseY + shaftH + 0.38, z, mats.chimney)); // pot
-  if (detailed) g.add(box(0.42, 0.06, 0.42, x, baseY + shaftH + 0.58, z, mats.trim)); // cowl lip
+  const shaftW = 0.42;
+  const shaftH = detailed ? 1.65 : 1.45;
+  g.add(box(shaftW + 0.16, 0.1, shaftW + 0.16, x, baseY + 0.05, z, mats.trim)); // roof flashing
+  g.add(box(shaftW, shaftH, shaftW, x, baseY + shaftH / 2 + 0.1, z, mats.chimney)); // shaft
+  g.add(box(shaftW + 0.1, 0.08, shaftW + 0.1, x, baseY + shaftH + 0.14, z, mats.trim)); // cap course
+  g.add(box(0.28, 0.24, 0.28, x, baseY + shaftH + 0.3, z, mats.chimney)); // pot
+  if (detailed) g.add(box(0.32, 0.05, 0.32, x, baseY + shaftH + 0.46, z, mats.trim)); // cowl lip
 }
 
 // ---- shared house pieces --------------------------------------------------
@@ -176,7 +176,7 @@ function buildHouse(g, lod, variant, mats) {
   const entrance = (lod === 2 && variant >= 1) || lod === 3;
   const dormers = (lod === 2 && variant >= 2) || lod === 3;
   const nDorm = 2; // always two dormers
-  const windows = lod === 3;
+  const windows = lod === 3 && variant >= 1;
   const fullWindows = lod === 3 && variant >= 1;
   const skylight = (lod === 2 && variant === 3) || (lod === 3 && variant >= 2);
   const canopy = lod === 3 && variant >= 2;
@@ -186,7 +186,6 @@ function buildHouse(g, lod, variant, mats) {
   const chimneyDetail = lod === 3 && variant >= 3;
 
   if (chimney) addChimney(g, -2.6, 0.6, mats, ov, chimneyDetail);
-  if (chimney && variant >= 2) addChimney(g, 3.2, 0.4, mats, ov, chimneyDetail);
   if (entrance) { // small front entrance block (porch) — ridge runs front-to-back above the door
     const porchW = 2.6; const porchD = 2; const porchCx = -0.5; const porchCz = -4.3; const porchEave = 3;
     g.add(box(porchW, porchEave, porchD, porchCx, porchEave / 2, porchCz, mats.wall));
