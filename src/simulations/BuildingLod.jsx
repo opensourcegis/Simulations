@@ -80,6 +80,24 @@ function buildLod1(g, variant, mats) {
   if (variant === 3) g.add(box(3, 3, 2.4, -2, 1.5, -4.3, m)); // annex / extension
 }
 
+// Height on the main gable roof (ridge along X) at plan position (x, z).
+function mainRoofY(z, ov = 0) {
+  const hd = 3.5 + ov;
+  return ME + MR * (1 - Math.min(1, Math.abs(z) / hd));
+}
+
+// Chimney stack seated on the roof slope — LOD3 architectural detail.
+function addChimney(g, x, z, mats, ov = 0, detailed = false) {
+  const baseY = mainRoofY(z, ov);
+  const shaftW = 0.52;
+  const shaftH = detailed ? 2.05 : 1.75;
+  g.add(box(shaftW + 0.2, 0.12, shaftW + 0.2, x, baseY + 0.06, z, mats.trim)); // roof flashing
+  g.add(box(shaftW, shaftH, shaftW, x, baseY + shaftH / 2 + 0.12, z, mats.chimney)); // shaft
+  g.add(box(shaftW + 0.14, 0.1, shaftW + 0.14, x, baseY + shaftH + 0.17, z, mats.trim)); // cap course
+  g.add(box(0.36, 0.32, 0.36, x, baseY + shaftH + 0.38, z, mats.chimney)); // pot
+  if (detailed) g.add(box(0.42, 0.06, 0.42, x, baseY + shaftH + 0.58, z, mats.trim)); // cowl lip
+}
+
 // ---- shared house pieces --------------------------------------------------
 function addDormers(g, n, mats, ov = 0) {
   const frontZ = -3.5; const inset = 1.6; const zc = frontZ + inset; const cheekW = 1.5; const cheekD = 1.4;
@@ -154,19 +172,21 @@ function buildHouse(g, lod, variant, mats) {
   wr.position.set(6.5, WE, 0);
   g.add(wr);
 
-  const chimney = (lod === 2 && variant >= 1) || lod === 3;
+  const chimney = lod === 3;
   const entrance = (lod === 2 && variant >= 1) || lod === 3;
   const dormers = (lod === 2 && variant >= 2) || lod === 3;
   const nDorm = 2; // always two dormers
   const windows = lod === 3;
   const fullWindows = lod === 3 && variant >= 1;
-  const roofEquip = (lod === 2 && variant >= 3) || (lod === 3 && variant >= 2);
+  const skylight = (lod === 2 && variant === 3) || (lod === 3 && variant >= 2);
   const canopy = lod === 3 && variant >= 2;
   const balcony = lod === 3 && variant >= 2;
   const railings = lod === 3 && variant >= 3;
   const wood = lod === 3 && variant >= 3;
+  const chimneyDetail = lod === 3 && variant >= 3;
 
-  if (chimney) g.add(box(0.7, 2.2, 0.7, -2.6, 6.6, 0.6, mats.chimney));
+  if (chimney) addChimney(g, -2.6, 0.6, mats, ov, chimneyDetail);
+  if (chimney && variant >= 2) addChimney(g, 3.2, 0.4, mats, ov, chimneyDetail);
   if (entrance) { // small front entrance block (porch) — ridge runs front-to-back above the door
     const porchW = 2.6; const porchD = 2; const porchCx = -0.5; const porchCz = -4.3; const porchEave = 3;
     g.add(box(porchW, porchEave, porchD, porchCx, porchEave / 2, porchCz, mats.wall));
@@ -177,7 +197,7 @@ function buildHouse(g, lod, variant, mats) {
     g.add(er);
   }
   if (dormers) addDormers(g, nDorm, mats, ov);
-  if (roofEquip) { g.add(box(1.3, 0.25, 1.7, 2.4, ME + 0.5, 1.4, mats.glass)); g.add(box(0.5, 0.9, 0.5, 3.2, ME + MR * 0.55, 0.4, mats.chimney)); }
+  if (skylight) g.add(box(1.3, 0.25, 1.7, 2.4, ME + 0.5, 1.4, mats.glass));
   if (windows) addWindows(g, mats, fullWindows);
   if (wood) g.add(box(4.02, WE, 0.08, 6.5, WE / 2, -2.02, mats.wood)); // wood-clad wing facade
   // door — a LOD3 feature only (LOD2 has no openings)
