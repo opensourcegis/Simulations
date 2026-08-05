@@ -1,19 +1,26 @@
-import { useState } from 'react';
-import OrthoRectification from './simulations/OrthoRectification.jsx';
-import StructureFromMotion from './simulations/StructureFromMotion.jsx';
-import LidarRanging from './simulations/LidarRanging.jsx';
-import AdaptiveTIN from './simulations/AdaptiveTIN.jsx';
-import BlockAdjustment from './simulations/BlockAdjustment.jsx';
-import Boresight from './simulations/Boresight.jsx';
-import Gnss from './simulations/Gnss.jsx';
-import Gpr from './simulations/Gpr.jsx';
-import BuildingLod from './simulations/BuildingLod.jsx';
-import Gsd from './simulations/Gsd.jsx';
-import Snell from './simulations/Snell.jsx';
-import MapProjections from './simulations/MapProjections.jsx';
-import SarImaging from './simulations/SarImaging.jsx';
-import IotDigitalTwin from './simulations/IotDigitalTwin.jsx';
-import BeamFootprint from './simulations/BeamFootprint.jsx';
+import { lazy, Suspense, useState } from 'react';
+
+const SIMULATION_LOADERS = {
+  ortho: lazy(() => import('./simulations/OrthoRectification.jsx')),
+  sfm: lazy(() => import('./simulations/StructureFromMotion.jsx')),
+  'lidar-ranging': lazy(() => import('./simulations/LidarRanging.jsx')),
+  'adaptive-tin': lazy(() => import('./simulations/AdaptiveTIN.jsx')),
+  'block-adjustment': lazy(() => import('./simulations/BlockAdjustment.jsx')),
+  boresight: lazy(() => import('./simulations/Boresight.jsx')),
+  gnss: lazy(() => import('./simulations/Gnss.jsx')),
+  gpr: lazy(() => import('./simulations/Gpr.jsx')),
+  'building-lod': lazy(() => import('./simulations/BuildingLod.jsx')),
+  gsd: lazy(() => import('./simulations/Gsd.jsx')),
+  snell: lazy(() => import('./simulations/Snell.jsx')),
+  'map-projections': lazy(() => import('./simulations/MapProjections.jsx')),
+  sar: lazy(() => import('./simulations/SarImaging.jsx')),
+  'iot-twin': lazy(() => import('./simulations/IotDigitalTwin.jsx')),
+  'beam-footprint': lazy(() => import('./simulations/BeamFootprint.jsx')),
+};
+
+function simulatorHref(path) {
+  return `${import.meta.env.BASE_URL}${path.startsWith('?') ? path : path}`;
+}
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
@@ -99,7 +106,7 @@ function Thumbnail({ kind }) {
       {/* sensor */}
       <g transform="translate(250 58)"><rect x="-26" y="-13" width="52" height="26" rx="5" fill="#e8eff5" /><rect x="-10" y="13" width="20" height="8" fill="#3a4a5a" /></g>
       {/* nadir dashed */}
-      <line x1="250" y1="58" x2="250" y2="292" stroke="#8fb0c8" strokeWidth="1.5" strokedasharray="6 5" opacity=".6" />
+      <line x1="250" y1="58" x2="250" y2="292" stroke="#8fb0c8" strokeWidth="1.5" strokeDasharray="6 5" opacity=".6" />
       {/* diverging tilted cone → ellipse */}
       <polygon points="250,64 452,292 372,292" fill="url(#cone-beam)" stroke="#ff7a4a" strokeWidth="2" />
       <ellipse cx="412" cy="292" rx="44" ry="12" fill="rgba(255,106,74,.45)" stroke="#ffd85e" strokeWidth="2.5" />
@@ -424,7 +431,7 @@ function Thumbnail({ kind }) {
 
 function SimulatorCard({ simulator }) {
   return (
-    <a className="card" href={simulator.path}>
+    <a className="card" href={simulatorHref(simulator.path)}>
       <div className="thumb"><Thumbnail kind={simulator.kind} /><span className="pill live">{simulator.status || 'Playable'}</span></div>
       <div className="card-body">
         <div className="card-top">
@@ -441,6 +448,7 @@ function SimulatorCard({ simulator }) {
 }
 
 const CATEGORIES = ['All', 'LiDAR', 'Photogrammetry', 'Positioning', 'Flight planning', 'Cartography', 'Radar', 'IoT'];
+const TOPIC_AREAS = new Set(simulators.map((s) => s.category)).size;
 
 function Landing() {
   const [filter, setFilter] = useState('All');
@@ -476,7 +484,7 @@ function Landing() {
           <p className="lead">Hands-on, browser-based lessons in LiDAR, photogrammetry and flight planning. Adjust the inputs, watch the geometry respond, and build real intuition — nothing to install and no sign-up.</p>
           <div className="stats">
             <div className="stat"><b>{simulators.length}</b><span>simulators</span></div>
-            <div className="stat"><b>3</b><span>topic areas</span></div>
+            <div className="stat"><b>{TOPIC_AREAS}</b><span>topic areas</span></div>
             <div className="stat"><b>100%</b><span>in your browser</span></div>
           </div>
         </header>
@@ -509,22 +517,19 @@ function Landing() {
   );
 }
 
+function SimulationLoader({ id }) {
+  const LazySimulator = SIMULATION_LOADERS[id];
+  return (
+    <Suspense fallback={<div className="sim-loading">Loading simulator…</div>}>
+      <LazySimulator />
+    </Suspense>
+  );
+}
+
 export default function App() {
   const simulation = new URLSearchParams(window.location.search).get('simulation');
-  if (simulation === 'ortho') return <OrthoRectification />;
-  if (simulation === 'sfm') return <StructureFromMotion />;
-  if (simulation === 'lidar-ranging') return <LidarRanging />;
-  if (simulation === 'adaptive-tin') return <AdaptiveTIN />;
-  if (simulation === 'block-adjustment') return <BlockAdjustment />;
-  if (simulation === 'boresight') return <Boresight />;
-  if (simulation === 'gnss') return <Gnss />;
-  if (simulation === 'gpr') return <Gpr />;
-  if (simulation === 'building-lod') return <BuildingLod />;
-  if (simulation === 'gsd') return <Gsd />;
-  if (simulation === 'snell') return <Snell />;
-  if (simulation === 'map-projections') return <MapProjections />;
-  if (simulation === 'sar') return <SarImaging />;
-  if (simulation === 'iot-twin') return <IotDigitalTwin />;
-  if (simulation === 'beam-footprint') return <BeamFootprint />;
+  if (simulation && SIMULATION_LOADERS[simulation]) {
+    return <SimulationLoader id={simulation} />;
+  }
   return <Landing />;
 }

@@ -115,10 +115,15 @@ function polygonSegs(poly, band) {
 
 function fitTransform(fn, fitLat = 90, lonLim = 180) {
   let minX = 1e9; let maxX = -1e9; let minY = 1e9; let maxY = -1e9;
+  let hasSample = false;
   for (let lat = -fitLat; lat <= fitLat; lat += 5) for (let lon = -lonLim; lon <= lonLim; lon += Math.max(2, lonLim / 18)) {
     const [x, y] = fn(lat * D2R, lon * D2R);
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    hasSample = true;
     minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  if (!hasSample || minX >= maxX || minY >= maxY) {
+    return { scale: 1, midX: 0, midY: 0 };
   }
   const s = Math.min((2 * HALF_W) / (maxX - minX), (2 * HALF_H) / (maxY - minY));
   return { scale: s, midX: (minX + maxX) / 2, midY: (minY + maxY) / 2 };
@@ -132,6 +137,19 @@ function areaScale(fn, latDeg) {
   return det / Math.max(Math.cos(phi), 1e-4);
 }
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
+
+function disposeObject3D(object) {
+  object.traverse((child) => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach((material) => {
+        if (material.map) material.map.dispose();
+        material.dispose();
+      });
+    }
+  });
+}
 
 // align the equirectangular texture: full globe, or a ±band° longitude strip
 function applyTexBand(tex, band) {
@@ -149,6 +167,7 @@ export default function MapProjections() {
   const [poly, setPoly] = useState([[8, -18], [8, 38], [56, 38], [56, -18]]);
 
   const mountRef = useRef(null);
+  const unfoldSliderRef = useRef(null);
   const G = useRef(null);
   const unfoldRef = useRef(unfold); unfoldRef.current = unfold;
   const autoRef = useRef(autoRot); autoRef.current = autoRot;
@@ -251,8 +270,14 @@ export default function MapProjections() {
       const now = performance.now(); const dt = Math.min((now - last) / 1000, 0.05); last = now;
       if (playRef.current) {
         const pl = playRef.current; const k = clamp((now - pl.start) / pl.dur, 0, 1);
-        const val = pl.from + (pl.to - pl.from) * k; unfoldRef.current = val; setUnfold(val);
-        if (k >= 1) playRef.current = null;
+        const val = pl.from + (pl.to - pl.from) * k;
+        unfoldRef.current = val;
+        if (unfoldSliderRef.current) unfoldSliderRef.current.value = String(val);
+        dirtyRef.current = true;
+        if (k >= 1) {
+          playRef.current = null;
+          setUnfold(val);
+        }
       }
       const tRaw = clamp(unfoldRef.current, 0, 1); const t = easeInOut(tRaw);
       if (autoRef.current && !drawRef.current && tRaw < 0.25) g.angle += dt * 0.26;
@@ -273,10 +298,13 @@ export default function MapProjections() {
     window.addEventListener('resize', onResize);
 
     return () => {
-      const g = G.current; g.disposed = true; cancelAnimationFrame(g.raf);
+      const g = G.current; if (!g) return;
+      g.disposed = true; cancelAnimationFrame(g.raf);
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointerdown', onDown);
-      controls.dispose(); renderer.dispose();
+      controls.dispose();
+      disposeObject3D(g.scene);
+      renderer.dispose();
       if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
       G.current = null;
     };
@@ -395,7 +423,7 @@ export default function MapProjections() {
             <div className="mp-unfold">
               <button className="mp-btn go" onClick={playUnfold}>▶ Unfold / re-wrap</button>
               <span>globe</span>
-              <input type="range" min="0" max="1" step="0.01" value={unfold} onChange={(e) => { playRef.current = null; setUnfold(Number(e.target.value)); }} />
+              <input ref={unfoldSliderRef} type="range" min="0" max="1" step="0.01" value={unfold} onChange={(e) => { playRef.current = null; const val = Number(e.target.value); unfoldRef.current = val; setUnfold(val); dirtyRef.current = true; }} />
               <span>flat map</span>
             </div>
             <div className="mp-tools">

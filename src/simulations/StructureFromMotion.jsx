@@ -305,7 +305,7 @@ export default function StructureFromMotion() {
     setOrbit((o) => ({ ...o, az: o.az + dx * 0.008, el: Math.max(-0.15, Math.min(1.4, o.el + dy * 0.006)) }));
   };
   const onUp = () => { drag.current = null; };
-  const onWheel = (e) => { setOrbit((o) => ({ ...o, dist: Math.max(24, Math.min(70, o.dist + e.deltaY * 0.04)) })); };
+  const onWheel = (e) => { e.preventDefault(); setOrbit((o) => ({ ...o, dist: Math.max(24, Math.min(70, o.dist + e.deltaY * 0.04)) })); };
 
   const m = solution.metrics;
   const totalMatches = Object.values(matches).reduce((n, per) => n + Object.keys(per).length, 0);

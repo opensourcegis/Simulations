@@ -995,6 +995,7 @@ export default function AdaptiveTIN() {
     history.length,
     pointsById,
     sliceY,
+    cachedModelTriangles,
   ]);
 
   // ---------------------------------------------------------------------------
