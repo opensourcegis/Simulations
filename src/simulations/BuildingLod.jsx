@@ -23,11 +23,11 @@ const WE = 3; const WR = 1.6;     // wing eave / ridge
 
 function box(w, h, d, x, y, z, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; }
 
-// Gable roof for a w×d footprint, ridge along the longer axis, base at y=0.
-function gableRoof(w, d, rh, mat) {
-  const hw = w / 2; const hd = d / 2; const along = w >= d;
+// Gable roof for a w×d footprint (w = x span, d = z span), base at y=0.
+function gableRoof(w, d, rh, mat, ridgeAlong = 'x') {
+  const hw = w / 2; const hd = d / 2; const alongX = ridgeAlong === 'x';
   const g = new THREE.BufferGeometry(); let v; let f;
-  if (along) {
+  if (alongX) {
     v = [[-hw, 0, -hd], [hw, 0, -hd], [hw, 0, hd], [-hw, 0, hd], [-hw, rh, 0], [hw, rh, 0]];
     f = [[0, 1, 5], [0, 5, 4], [3, 4, 5], [3, 5, 2], [1, 2, 5], [0, 4, 3]];
   } else {
@@ -39,17 +39,22 @@ function gableRoof(w, d, rh, mat) {
   return new THREE.Mesh(g, mat);
 }
 
-// Flat eave boards projecting past each wall face at eave height (visible overhang).
-function addEaveBoards(g, cx, cz, w, d, y, ov, mat) {
+// Flat eave lips projecting past each wall face at eave height (visible overhang).
+function addRoofOverhangSkirt(g, cx, cz, w, d, eaveY, ov, mat) {
   if (ov <= 0) return;
   const hw = w / 2;
   const hd = d / 2;
-  const thick = 0.14;
-  const yEave = y - thick / 2;
-  g.add(box(w + 2 * ov, thick, ov, cx, yEave, cz - hd - ov / 2, mat)); // front
-  g.add(box(w + 2 * ov, thick, ov, cx, yEave, cz + hd + ov / 2, mat)); // rear
-  g.add(box(ov, thick, d, cx - hw - ov / 2, yEave, cz, mat)); // left
-  g.add(box(ov, thick, d, cx + hw + ov / 2, yEave, cz, mat)); // right
+  const lip = 0.24;
+  const y = eaveY - lip / 2;
+  g.add(box(w + 2 * ov, lip, ov, cx, y, cz - hd - ov / 2, mat)); // front (-z)
+  g.add(box(w + 2 * ov, lip, ov, cx, y, cz + hd + ov / 2, mat)); // rear (+z)
+  g.add(box(ov, lip, d + 2 * ov, cx - hw - ov / 2, y, cz, mat)); // left (-x)
+  g.add(box(ov, lip, d + 2 * ov, cx + hw + ov / 2, y, cz, mat)); // right (+x)
+}
+
+// Ridge along the shorter footprint axis so the front facade shows a sloped eave, not a gable triangle.
+function roofFootprint(w, d, ov) {
+  return { w: w + 2 * ov, d: d + 2 * ov };
 }
 
 // ---- LOD0 : flat footprint / roof-edge surfaces --------------------------
@@ -74,14 +79,19 @@ function buildLod1(g, variant, mats) {
 }
 
 // ---- shared house pieces --------------------------------------------------
-function addDormers(g, n, mats) {
-  const frontZ = -3.5; const inset = 1.6; const zc = frontZ + inset; const cheekD = 1.4;
+function addDormers(g, n, mats, ov = 0) {
+  const frontZ = -3.5; const inset = 1.6; const zc = frontZ + inset; const cheekW = 1.5; const cheekD = 1.4;
   const surfY = ME + MR * (inset / 3.5);
+  const capY = surfY + 1.05;
   for (let i = 0; i < n; i += 1) {
     const x = (i - (n - 1) / 2) * 3;
-    g.add(box(1.5, 1.2, cheekD, x, surfY + 0.45, zc, mats.wall));
+    g.add(box(cheekW, 1.2, cheekD, x, surfY + 0.45, zc, mats.wall));
     g.add(box(1.0, 0.75, 0.1, x, surfY + 0.45, zc - cheekD / 2 + 0.06, mats.glass));
-    const cap = gableRoof(1.7, 1.6, 0.55, mats.roof); cap.position.set(x, surfY + 1.05, zc); g.add(cap);
+    if (ov > 0) addRoofOverhangSkirt(g, x, zc, cheekW, cheekD, capY, ov, mats.roof);
+    const capRf = roofFootprint(1.7, 1.6, ov);
+    const cap = gableRoof(capRf.w, capRf.d, 0.55, mats.roof, 'z');
+    cap.position.set(x, capY, zc - ov * 0.12);
+    g.add(cap);
   }
 }
 
@@ -125,15 +135,21 @@ function addBalcony(g, mats, railings) {
 
 // ---- LOD2 & LOD3 : real house --------------------------------------------
 function buildHouse(g, lod, variant, mats) {
-  const ov = (lod === 2 && variant >= 2) || (lod === 3 && variant >= 2) ? 0.4 : 0; // eaves extend past walls on refined variants
-  // main block + gable roof
+  const ov = (lod === 2 && variant >= 2) || (lod === 3 && variant >= 2) ? 0.65 : 0;
+  // main block — 9 m wide (x) × 7 m deep (z); ridge runs front-to-back so eaves project on the facade
   g.add(box(9, ME, 7, 0, ME / 2, 0, mats.wall));
-  const mr = gableRoof(9 + 2 * ov, 7 + 2 * ov, MR, mats.roof); mr.position.set(0, ME, 0); g.add(mr);
-  if (ov > 0) addEaveBoards(g, 0, 0, 9, 7, ME, ov, mats.roof);
-  // lower right wing + roof
+  if (ov > 0) addRoofOverhangSkirt(g, 0, 0, 9, 7, ME, ov, mats.roof);
+  const mainRf = roofFootprint(9, 7, ov);
+  const mr = gableRoof(mainRf.w, mainRf.d, MR, mats.roof, 'z');
+  mr.position.set(0, ME, 0);
+  g.add(mr);
+  // lower right wing
   g.add(box(4, WE, 4, 6.5, WE / 2, 0, mats.wall));
-  const wr = gableRoof(4 + 2 * ov, 4 + 2 * ov, WR, mats.roof); wr.position.set(6.5, WE, 0); g.add(wr);
-  if (ov > 0) addEaveBoards(g, 6.5, 0, 4, 4, WE, ov, mats.roof);
+  if (ov > 0) addRoofOverhangSkirt(g, 6.5, 0, 4, 4, WE, ov, mats.roof);
+  const wingRf = roofFootprint(4, 4, ov);
+  const wr = gableRoof(wingRf.w, wingRf.d, WR, mats.roof, 'z');
+  wr.position.set(6.5, WE, 0);
+  g.add(wr);
 
   const chimney = (lod === 2 && variant >= 1) || lod === 3;
   const entrance = (lod === 2 && variant >= 1) || lod === 3;
@@ -150,13 +166,13 @@ function buildHouse(g, lod, variant, mats) {
   if (chimney) g.add(box(0.7, 2.2, 0.7, -2.6, 6.6, 0.6, mats.chimney));
   if (entrance) { // small front entrance block (porch)
     g.add(box(2.6, 3, 2, -0.5, 1.5, -4.3, mats.wall));
-    const erSize = 2.6 + 2 * ov;
-    const er = gableRoof(erSize, erSize, 1, mats.roof);
-    er.position.set(-0.5, 3, -3.9);
+    if (ov > 0) addRoofOverhangSkirt(g, -0.5, -4.3, 2.6, 2, 3, ov, mats.roof);
+    const porchRf = roofFootprint(2.6, 2, ov);
+    const er = gableRoof(porchRf.w, porchRf.d, 1, mats.roof, 'z');
+    er.position.set(-0.5, 3, -3.9 - ov * 0.15);
     g.add(er);
-    if (ov > 0) addEaveBoards(g, -0.5, -4.3, 2.6, 2, 3, ov, mats.roof);
   }
-  if (dormers) addDormers(g, nDorm, mats);
+  if (dormers) addDormers(g, nDorm, mats, ov);
   if (roofEquip) { g.add(box(1.3, 0.25, 1.7, 2.4, ME + 0.5, 1.4, mats.glass)); g.add(box(0.5, 0.9, 0.5, 3.2, ME + MR * 0.55, 0.4, mats.chimney)); }
   if (windows) addWindows(g, mats, fullWindows);
   if (wood) g.add(box(4.02, WE, 0.08, 6.5, WE / 2, -2.02, mats.wood)); // wood-clad wing facade
