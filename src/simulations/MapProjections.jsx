@@ -276,10 +276,8 @@ export default function MapProjections() {
         }
       }
       const tRaw = clamp(unfoldRef.current, 0, 1); const t = easeInOut(tRaw);
-      if (!drawRef.current && tRaw < 0.25) g.angle += dt * 0.26;
-      if (tRaw > 0.6) g.angle += (0 - g.angle) * Math.min(1, dt * 3);
       g.group.rotation.y = g.angle;
-      g.optics.visible = tRaw < 0.985;
+      g.optics.visible = false;
       if (g.ctxSphere.visible) g.ctxSphere.material.opacity = 0.16 * clamp(1 - t * 1.4, 0, 1);
       if (dirtyRef.current || Math.abs(t - g.lastT) > 1e-4) { applyMorph(t); g.lastT = t; dirtyRef.current = false; }
       g.controls.update(); g.renderer.render(g.scene, g.camera);
