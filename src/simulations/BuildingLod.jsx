@@ -24,8 +24,9 @@ const WE = 3; const WR = 1.6;     // wing eave / ridge
 function box(w, h, d, x, y, z, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; }
 
 // Gable roof for a w×d footprint (w = x span, d = z span), base at y=0.
-function gableRoof(w, d, rh, mat, ridgeAlong = 'x') {
-  const hw = w / 2; const hd = d / 2; const alongX = ridgeAlong === 'x';
+// Ridge runs along the longer footprint axis (same rule for every roof piece).
+function gableRoof(w, d, rh, mat) {
+  const hw = w / 2; const hd = d / 2; const alongX = w >= d;
   const g = new THREE.BufferGeometry(); let v; let f;
   if (alongX) {
     v = [[-hw, 0, -hd], [hw, 0, -hd], [hw, 0, hd], [-hw, 0, hd], [-hw, rh, 0], [hw, rh, 0]];
@@ -52,7 +53,7 @@ function addRoofOverhangSkirt(g, cx, cz, w, d, eaveY, ov, mat) {
   g.add(box(ov, lip, d + 2 * ov, cx + hw + ov / 2, y, cz, mat)); // right (+x)
 }
 
-// Ridge along the shorter footprint axis so the front facade shows a sloped eave, not a gable triangle.
+// Extend roof footprint equally on all sides when eaves project past walls.
 function roofFootprint(w, d, ov) {
   return { w: w + 2 * ov, d: d + 2 * ov };
 }
@@ -89,8 +90,8 @@ function addDormers(g, n, mats, ov = 0) {
     g.add(box(1.0, 0.75, 0.1, x, surfY + 0.45, zc - cheekD / 2 + 0.06, mats.glass));
     if (ov > 0) addRoofOverhangSkirt(g, x, zc, cheekW, cheekD, capY, ov, mats.roof);
     const capRf = roofFootprint(1.7, 1.6, ov);
-    const cap = gableRoof(capRf.w, capRf.d, 0.55, mats.roof, ov > 0 ? 'z' : 'x');
-    cap.position.set(x, capY, zc - ov * 0.12);
+    const cap = gableRoof(capRf.w, capRf.d, 0.55, mats.roof);
+    cap.position.set(x, capY, zc);
     g.add(cap);
   }
 }
@@ -137,19 +138,18 @@ function addBalcony(g, mats, railings) {
 function buildHouse(g, lod, variant, mats) {
   const hasOverhang = (lod === 2 && variant === 3) || (lod === 3 && variant >= 2);
   const ov = hasOverhang ? 0.35 : 0;
-  const ridge = hasOverhang ? 'z' : 'x'; // eave projection only on highly refined shells
   // main block
   g.add(box(9, ME, 7, 0, ME / 2, 0, mats.wall));
   if (ov > 0) addRoofOverhangSkirt(g, 0, 0, 9, 7, ME, ov, mats.roof);
   const mainRf = roofFootprint(9, 7, ov);
-  const mr = gableRoof(mainRf.w, mainRf.d, MR, mats.roof, ridge);
+  const mr = gableRoof(mainRf.w, mainRf.d, MR, mats.roof);
   mr.position.set(0, ME, 0);
   g.add(mr);
   // lower right wing
   g.add(box(4, WE, 4, 6.5, WE / 2, 0, mats.wall));
   if (ov > 0) addRoofOverhangSkirt(g, 6.5, 0, 4, 4, WE, ov, mats.roof);
   const wingRf = roofFootprint(4, 4, ov);
-  const wr = gableRoof(wingRf.w, wingRf.d, WR, mats.roof, ridge);
+  const wr = gableRoof(wingRf.w, wingRf.d, WR, mats.roof);
   wr.position.set(6.5, WE, 0);
   g.add(wr);
 
@@ -170,8 +170,8 @@ function buildHouse(g, lod, variant, mats) {
     g.add(box(2.6, 3, 2, -0.5, 1.5, -4.3, mats.wall));
     if (ov > 0) addRoofOverhangSkirt(g, -0.5, -4.3, 2.6, 2, 3, ov, mats.roof);
     const porchRf = roofFootprint(2.6, 2, ov);
-    const er = gableRoof(porchRf.w, porchRf.d, 1, mats.roof, ridge);
-    er.position.set(-0.5, 3, -3.9 - ov * 0.15);
+    const er = gableRoof(porchRf.w, porchRf.d, 1, mats.roof);
+    er.position.set(-0.5, 3, -3.9);
     g.add(er);
   }
   if (dormers) addDormers(g, nDorm, mats, ov);
