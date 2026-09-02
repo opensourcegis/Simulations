@@ -96,6 +96,18 @@ function gridPlane() {
   return grp;
 }
 
+function disposeBeamModel(model, sharedMaterials) {
+  model.traverse((object) => {
+    object.geometry?.dispose();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.filter(Boolean).forEach((material) => {
+      if (Object.values(sharedMaterials).includes(material)) return;
+      material.map?.dispose();
+      material.dispose();
+    });
+  });
+}
+
 export default function BeamFootprint() {
   const [H, setH] = useState(1000);
   const [gmrad, setG] = useState(0.5);
@@ -131,14 +143,14 @@ export default function BeamFootprint() {
     loop();
     const onResize = () => { const t = three.current; if (!t) return; const w = mount.clientWidth; const h = mount.clientHeight; t.camera.aspect = w / h; t.camera.updateProjectionMatrix(); t.renderer.setSize(w, h); };
     window.addEventListener('resize', onResize);
-    return () => { const t = three.current; t.disposed = true; cancelAnimationFrame(t.raf); window.removeEventListener('resize', onResize); controls.dispose(); renderer.dispose(); if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); three.current = null; };
+    return () => { const t = three.current; t.disposed = true; cancelAnimationFrame(t.raf); window.removeEventListener('resize', onResize); disposeBeamModel(modelRef.current, mats); Object.values(mats).forEach((material) => material.dispose()); controls.dispose(); renderer.dispose(); if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); three.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const spinRef = useRef(spin); spinRef.current = spin;
   useEffect(() => {
     const t = three.current; if (!t) return;
-    if (modelRef.current) { t.scene.remove(modelRef.current); modelRef.current.traverse((o) => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); if (o.material && o.material.map) o.material.map.dispose(); }); }
+    if (modelRef.current) { t.scene.remove(modelRef.current); disposeBeamModel(modelRef.current, t.mats); }
     const grp = buildBeam(H, gmrad, theta, d0, t.mats); grp.traverse((o) => { if (o.computeLineDistances) o.computeLineDistances(); });
     modelRef.current = grp; t.scene.add(grp);
   }, [H, gmrad, theta, d0]);
