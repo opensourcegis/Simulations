@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { clamp, easeInOutCubic, prefersReducedMotion } from './animUtils.js';
 import './simulation.css';
 import './native.css';
 import './ranging.css';
@@ -9,7 +10,6 @@ const SCENE_W = 700; const SCENE_H = 300;
 const TIME_W = 700; const TIME_H = 200;
 
 const tofNs = (R) => (2 * R / C) * 1e9; // round-trip time in nanoseconds
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const TAU = Math.PI * 2;
 
 // A short oscillating wave packet (sine under a Gaussian envelope) — used so the
@@ -59,12 +59,30 @@ function drawPulseScene(ctx, { distance, prog, active }) {
   ctx.fillText('LiDAR', sensorX - 8, y + 4); ctx.textAlign = 'left';
 
   if (active) {
-    const outbound = prog < 0.5;
-    const frac = outbound ? prog / 0.5 : 1 - (prog - 0.5) / 0.5;
+    const vis = easeInOutCubic(prog);
+    const outbound = vis < 0.5;
+    const frac = outbound ? vis / 0.5 : 1 - (vis - 0.5) / 0.5;
     const px = sensorX + 18 + frac * (targetX - sensorX - 18);
+    // faint comet trail behind the travelling wave packet
+    for (let k = 1; k <= 3; k += 1) {
+      const trailFrac = Math.max(0, frac - k * 0.07);
+      const tx = sensorX + 18 + trailFrac * (targetX - sensorX - 18);
+      ctx.globalAlpha = 0.14 * (1 - k / 4);
+      wavePacket(ctx, tx, y, outbound ? '#5ad1ff' : '#ffae4d', 11, 26, 0.5, (prog - k * 0.05) * 40);
+    }
+    ctx.globalAlpha = 1;
     wavePacket(ctx, px, y, outbound ? '#5ad1ff' : '#ffae4d', 15, 34, 0.5, prog * 40);
+    const glow = ctx.createRadialGradient(px, y, 0, px, y, 18);
+    glow.addColorStop(0, outbound ? 'rgba(90,209,255,.55)' : 'rgba(255,174,77,.55)');
+    glow.addColorStop(1, 'rgba(90,209,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(px, y, 18, 0, TAU); ctx.fill();
     if (!outbound) { ctx.fillStyle = '#ffae4d'; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('return echo', px, y - 44); ctx.textAlign = 'left'; }
-    if (outbound && frac > 0.9) { ctx.strokeStyle = 'rgba(255,174,77,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(targetX, y, 10 + (frac - 0.9) * 200, 0, TAU); ctx.stroke(); }
+    if (outbound && frac > 0.88) {
+      const hit = (frac - 0.88) / 0.12;
+      ctx.strokeStyle = `rgba(255,174,77,${0.35 + hit * 0.55})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(targetX, y, 8 + hit * 22, 0, TAU); ctx.stroke();
+    }
   }
 
   const t = prog * tofNs(distance);
@@ -349,9 +367,22 @@ export default function LidarRanging() {
   const multiAnim = useRef({ playing: false, start: 0 });
   params.current = { mode, distance, speed, continuous, pulseWidth, fMod, nTones };
 
-  const fire = () => { anim.current = { active: true, start: performance.now(), prog: 0 }; };
+  const fire = () => { anim.current = { active: true, start: performance.now(), prog: 0 }; setMeasured(null); };
   const playComb = () => { combAnim.current = { playing: true, start: performance.now() }; };
   const playResolve = () => { multiAnim.current = { playing: true, start: performance.now() }; };
+
+  useEffect(() => {
+    if (mode !== 'pulsed') return undefined;
+    anim.current = { active: true, start: performance.now(), prog: 0 };
+    setMeasured(null);
+    return undefined;
+  }, [mode, distance]);
+
+  useEffect(() => {
+    if (mode !== 'multi' || prefersReducedMotion()) return undefined;
+    multiAnim.current = { playing: true, start: performance.now() };
+    return undefined;
+  }, [mode, nTones]);
 
   useEffect(() => {
     let raf;
@@ -392,7 +423,7 @@ export default function LidarRanging() {
         const f = p.fMod * 1e6; const lambda = C / f; const unamb = lambda / 2;
         const ratio = p.distance / unamb; const Nn = Math.floor(ratio); const fr = ratio - Nn;
         const phi = fr * TAU;
-        const theta = (now * 0.0018 * p.speed) % TAU;
+        const theta = (now * 0.0018 * p.speed * (prefersReducedMotion() ? 0.35 : 1)) % TAU;
         if (sc) drawCwScene(sc.getContext('2d'), { distance: p.distance, lambda, theta });
         if (ch) drawPhaseChart(ch.getContext('2d'), { phi, theta });
         const cb = combRef.current;

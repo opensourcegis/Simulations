@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { clamp, prefersReducedMotion } from './animUtils.js';
 import './simulation.css';
 import './native.css';
 import './boresight.css';
@@ -168,7 +169,8 @@ function drawDrone(ctx, proj, eye, xf) {
 }
 
 function render(canvas, state) {
-  const { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel } = state;
+  if (!canvas) return;
+  const { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel, laserPhase = 0 } = state;
   const ctx = canvas.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
   g.addColorStop(0, '#111d29'); g.addColorStop(1, '#0a1119');
@@ -246,7 +248,29 @@ function render(canvas, state) {
       const resHit = add(sPos, scale(resid, tRes));
       const nomHit = add(sPos, scale(nominal, tNom));
       line(ctx, proj(sPos), proj(nomHit), 'rgba(126,224,196,.5)', 1.5, [5, 5]);
-      if (tHit > 0) { const hit = add(sPos, scale(beam, tHit)); line(ctx, proj(sPos), proj(hit), '#ff6a5a', 2.6); const ph = proj(hit); if (ph) { ctx.fillStyle = '#ff6a5a'; ctx.beginPath(); ctx.arc(ph[0], ph[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, ph, 'raw laser hit', '#ff6a5a', 8, 16, '600 10px system-ui'); } }
+      if (tHit > 0) {
+        const hit = add(sPos, scale(beam, tHit));
+        line(ctx, proj(sPos), proj(hit), '#ff6a5a', 2.6);
+        const ph = proj(hit);
+        if (ph) {
+          ctx.fillStyle = '#ff6a5a';
+          ctx.beginPath(); ctx.arc(ph[0], ph[1], 4, 0, Math.PI * 2); ctx.fill();
+          label(ctx, ph, 'raw laser hit', '#ff6a5a', 8, 16, '600 10px system-ui');
+        }
+        if (laserPhase > 0) {
+          const pulse = add(sPos, scale(beam, tHit * laserPhase));
+          const pp = proj(pulse);
+          if (pp) {
+            const glow = ctx.createRadialGradient(pp[0], pp[1], 0, pp[0], pp[1], 14);
+            glow.addColorStop(0, 'rgba(255,106,90,.85)');
+            glow.addColorStop(1, 'rgba(255,106,90,0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(pp[0], pp[1], 14, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffe8e0';
+            ctx.beginPath(); ctx.arc(pp[0], pp[1], 3.5, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }
       const pr = proj(resHit); const pn = proj(nomHit);
       if (pn) { ctx.strokeStyle = '#7ee0c4'; ctx.beginPath(); ctx.arc(pn[0], pn[1], 5, 0, Math.PI * 2); ctx.stroke(); label(ctx, pn, 'true nadir', '#7ee0c4', 8, -6, '600 10px system-ui'); }
       if (pr) { ctx.fillStyle = '#f6c85f'; ctx.beginPath(); ctx.arc(pr[0], pr[1], 5, 0, Math.PI * 2); ctx.fill(); label(ctx, pr, 'after IMU correction', '#f6c85f', 8, 16, '600 10px system-ui'); }
@@ -257,8 +281,6 @@ function render(canvas, state) {
     }
   }
 }
-
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export default function Boresight() {
   const [orbit, setOrbit] = useState({ az: -0.6, el: 0.28, dist: 20 });
@@ -271,24 +293,46 @@ export default function Boresight() {
   const [showGhost, setShowGhost] = useState(true);
   const [showLaser, setShowLaser] = useState(true);
 
-  const canvasRef = useRef(null); const drag = useRef(null);
+  const canvasRef = useRef(null);
+  const drag = useRef(null);
+  const viewRef = useRef({ orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel });
+  viewRef.current = { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel };
 
   useEffect(() => {
-    render(canvasRef.current, { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel });
-  }, [orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel]);
+    let raf = 0;
+    let last = performance.now();
+    let laserPhase = 0;
+    const loop = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (viewRef.current.showLaser && !prefersReducedMotion()) {
+        laserPhase = (laserPhase + dt * 0.75) % 1;
+      }
+      render(canvasRef.current, { ...viewRef.current, laserPhase });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
-  const setArm = (key, i) => (e) => setArms((p) => { const a = { ...p, [key]: p[key].slice() }; a[key][i] = Number(e.target.value); return a; });
-  const setBore = (key, i) => (e) => setBores((p) => { const b = { ...p, [key]: p[key].slice() }; b[key][i] = Number(e.target.value); return b; });
-  const setAt = (i) => (e) => setAtt((p) => { const a = p.slice(); a[i] = Number(e.target.value); return a; });
-
-  const onDown = (e) => { drag.current = { x: e.clientX, y: e.clientY }; };
-  const onMove = (e) => {
+  const onPointerDown = (e) => {
+    drag.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e) => {
     if (!drag.current) return;
     const dx = e.clientX - drag.current.x; const dy = e.clientY - drag.current.y; drag.current = { x: e.clientX, y: e.clientY };
     setOrbit((o) => ({ ...o, az: o.az - dx * 0.008, el: clamp(o.el + dy * 0.006, -0.2, 1.4) }));
   };
-  const onUp = () => { drag.current = null; };
-  const onWheel = (e) => setOrbit((o) => ({ ...o, dist: clamp(o.dist + e.deltaY * 0.02, 5, 40) }));
+  const onPointerUp = (e) => {
+    drag.current = null;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  };
+  const onWheel = (e) => { e.preventDefault(); setOrbit((o) => ({ ...o, dist: clamp(o.dist + e.deltaY * 0.02, 5, 40) })); };
+
+  const setArm = (key, i) => (e) => setArms((p) => { const a = { ...p, [key]: p[key].slice() }; a[key][i] = Number(e.target.value); return a; });
+  const setBore = (key, i) => (e) => setBores((p) => { const b = { ...p, [key]: p[key].slice() }; b[key][i] = Number(e.target.value); return b; });
+  const setAt = (i) => (e) => setAtt((p) => { const a = p.slice(); a[i] = Number(e.target.value); return a; });
 
   const reset = () => { setArms({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice() }); setBores({ scanner: DEFAULTS.scanner.bore.slice() }); };
   const zeroBore = () => setBores((p) => ({ scanner: sel === 'scanner' ? [0, 0, 0] : p.scanner }));
@@ -323,7 +367,8 @@ export default function Boresight() {
           <section className="sim-panel">
             <h2><span className="stepno">1</span> Sensor assembly <small>&mdash; drag to orbit, scroll to zoom</small></h2>
             <canvas ref={canvasRef} className="bs-view3d" width={VIEW_W} height={VIEW_H}
-              onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onWheel={onWheel} />
+              onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp} onWheel={onWheel} />
             <div className="bs-legend">
               <span><i className="bs-dot" style={{ background: '#e8eff5' }} /> IMU body (rotates) vs faint N/E/Nadir</span>
               <span><i className="bs-dot" style={{ background: '#f59e0b' }} /> GPS antenna — ECEF axes</span>

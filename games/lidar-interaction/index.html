@@ -510,6 +510,14 @@ function drawScene() {
   if (inbound) {
     const t = phase;
     const pxp = sx + (HIT.x-sx)*t, pyp = sy + (HIT.y-sy)*t;
+    for (let k = 1; k <= 4; k += 1) {
+      const lag = Math.max(0, t - k * 0.06);
+      const lx = sx + (HIT.x-sx)*lag, ly = sy + (HIT.y-sy)*lag;
+      const gg = sc.createRadialGradient(lx,ly,0,lx,ly,9);
+      gg.addColorStop(0, `rgba(255,90,60,${0.22*(1-k/5)})`);
+      gg.addColorStop(1, 'rgba(255,90,60,0)');
+      sc.fillStyle=gg; sc.beginPath(); sc.arc(lx,ly,9,0,7); sc.fill();
+    }
     const gg = sc.createRadialGradient(pxp,pyp,0,pxp,pyp,11);
     gg.addColorStop(0,'#fff2e8'); gg.addColorStop(.4,'#ff5a3c'); gg.addColorStop(1,'rgba(255,90,60,0)');
     sc.fillStyle=gg; sc.beginPath(); sc.arc(pxp,pyp,11,0,7); sc.fill();

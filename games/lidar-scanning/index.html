@@ -688,8 +688,12 @@ function drawFx() {
   const onMap = state.droneX>=-2 && state.droneX<=MAP_W+2;
   const k = 1/view.zoom;
   if(state.running && onMap){
-    fxCtx.strokeStyle='rgba(255,60,40,.85)'; fxCtx.lineWidth=1.4*k; fxCtx.lineCap='round';
-    for(const s of state.lastShots){ fxCtx.beginPath(); fxCtx.moveTo(dx,dy); fxCtx.lineTo(px(s[0]),px(s[1])); fxCtx.stroke(); }
+    state.lastShots.forEach((s, i) => {
+      const a = (i + 1) / state.lastShots.length;
+      fxCtx.strokeStyle=`rgba(255,60,40,${0.25 + 0.6*a})`;
+      fxCtx.lineWidth=(0.8 + 1.1*a)*k;
+      fxCtx.beginPath(); fxCtx.moveTo(dx,dy); fxCtx.lineTo(px(s[0]),px(s[1])); fxCtx.stroke();
+    });
     fxCtx.setLineDash([3*k,4*k]); fxCtx.strokeStyle='rgba(21,101,192,.45)'; fxCtx.lineWidth=k;
     const sw=px(swathWidth(state.mech,state.H)/2);
     fxCtx.beginPath(); fxCtx.moveTo(dx,dy-sw); fxCtx.lineTo(dx,dy+sw); fxCtx.stroke(); fxCtx.setLineDash([]);

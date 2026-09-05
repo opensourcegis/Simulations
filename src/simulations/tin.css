@@ -6,6 +6,7 @@
   border-radius: 8px;
   background: #09131e;
   cursor: crosshair;
+  touch-action: none;
 }
 
 .tin-toolbar {

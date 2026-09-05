@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { easeOutCubic } from './animUtils.js';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './simulation.css';
@@ -575,6 +576,7 @@ export default function AdaptiveTIN() {
 
   const [hoveredPointId, setHoveredPointId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [stepAnim, setStepAnim] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, yaw: 45, pitch: 35 });
 
@@ -598,18 +600,40 @@ export default function AdaptiveTIN() {
   }, [history.length, currentStep]);
 
   useEffect(() => {
-    let timer;
-    if (isPlaying) {
-      timer = setInterval(() => {
+    if (!isPlaying) return undefined;
+    let raf = 0;
+    let last = performance.now();
+    let acc = 0;
+    const stepMs = 850;
+    const tick = (now) => {
+      acc += now - last;
+      last = now;
+      if (acc >= stepMs) {
+        acc = 0;
         setCurrentStep((prev) => {
           if (prev < history.length - 1) return prev + 1;
           setIsPlaying(false);
           return prev;
         });
-      }, 1200);
-    }
-    return () => clearInterval(timer);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [isPlaying, history.length]);
+
+  useEffect(() => {
+    setStepAnim(0);
+    let raf = 0;
+    const start = performance.now();
+    const run = (now) => {
+      const t = Math.min(1, (now - start) / 420);
+      setStepAnim(easeOutCubic(t));
+      if (t < 1) raf = requestAnimationFrame(run);
+    };
+    raf = requestAnimationFrame(run);
+    return () => cancelAnimationFrame(raf);
+  }, [currentStep]);
 
   const currentSnapshot = history[currentStep] || history[0];
   const pointsById = useMemo(() => {
@@ -945,11 +969,13 @@ export default function AdaptiveTIN() {
       }
 
       if (isNewlyAdded) {
-        ctx.strokeStyle = '#34d399';
-        ctx.lineWidth = 2;
+        const pulse = 0.35 + 0.65 * stepAnim;
+        ctx.strokeStyle = `rgba(52, 211, 153, ${0.35 + 0.55 * pulse})`;
+        ctx.lineWidth = 1.5 + pulse;
         ctx.beginPath();
-        ctx.arc(proj.px, proj.py, radius + 4, 0, Math.PI * 2);
+        ctx.arc(proj.px, proj.py, radius + 3 + (1 - pulse) * 6, 0, Math.PI * 2);
         ctx.stroke();
+        radius *= 0.85 + 0.15 * pulse;
       }
 
       ctx.fillStyle = fillColor;
@@ -996,6 +1022,7 @@ export default function AdaptiveTIN() {
     pointsById,
     sliceY,
     cachedModelTriangles,
+    stepAnim,
   ]);
 
   // ---------------------------------------------------------------------------
@@ -1199,8 +1226,8 @@ export default function AdaptiveTIN() {
     profilePanX,
   ]);
 
-  // Mouse Drag Orbiting Handlers for 3D View Canvas
-  const handleMouseDown = (e) => {
+  // Pointer drag orbiting + hover for 3D view canvas
+  const handlePointerDown = (e) => {
     if (!view3D) return;
     setIsDragging(true);
     dragStartRef.current = {
@@ -1209,9 +1236,10 @@ export default function AdaptiveTIN() {
       yaw: yawAngle,
       pitch: pitchAngle,
     };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
 
-  const handleMouseMove = (e) => {
+  const handlePointerMove = (e) => {
     if (isDragging && view3D) {
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
@@ -1271,8 +1299,9 @@ export default function AdaptiveTIN() {
     setHoveredPointId(closestId);
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = (e) => {
     setIsDragging(false);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
   };
 
   return (
@@ -1369,12 +1398,13 @@ export default function AdaptiveTIN() {
               className="tin-canvas"
               width={700}
               height={420}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={() => {
-                setIsDragging(false);
-                setHoveredPointId(null);
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              onPointerLeave={(e) => {
+                if (!isDragging) setHoveredPointId(null);
+                else handlePointerUp(e);
               }}
               style={{ cursor: isDragging ? 'grabbing' : view3D ? 'grab' : 'crosshair' }}
             />
