@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { lerp, prefersReducedMotion } from './animUtils.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import './simulation.css';
@@ -96,6 +97,18 @@ function gridPlane() {
   return grp;
 }
 
+function disposeBeamModel(model, sharedMaterials) {
+  model.traverse((object) => {
+    object.geometry?.dispose();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.filter(Boolean).forEach((material) => {
+      if (Object.values(sharedMaterials).includes(material)) return;
+      material.map?.dispose();
+      material.dispose();
+    });
+  });
+}
+
 export default function BeamFootprint() {
   const [H, setH] = useState(1000);
   const [gmrad, setG] = useState(0.5);
@@ -105,6 +118,9 @@ export default function BeamFootprint() {
 
   const mountRef = useRef(null); const three = useRef(null); const modelRef = useRef(null);
   const insetRef = useRef(null); const cH = useRef(null); const cA = useRef(null);
+  const targetRef = useRef({ H, gmrad, theta, d0 });
+  const displayRef = useRef({ H, gmrad, theta, d0 });
+  targetRef.current = { H, gmrad, theta, d0 };
 
   useEffect(() => {
     const mount = mountRef.current; if (!mount) return undefined;
@@ -125,23 +141,39 @@ export default function BeamFootprint() {
       lens: new THREE.MeshPhongMaterial({ color: 0x3a4a5a }),
       nadir: new THREE.LineDashedMaterial({ color: 0x8fb0c8, dashSize: 0.18, gapSize: 0.12, transparent: true, opacity: 0.6 }),
     };
-    three.current = { scene, camera, renderer, controls, mats, raf: 0, disposed: false };
+    three.current = { scene, camera, renderer, controls, mats, raf: 0, disposed: false, clock: 0 };
     modelRef.current = buildBeam(H, gmrad, theta, d0, mats); modelRef.current.traverse((o) => { if (o.computeLineDistances) o.computeLineDistances(); }); scene.add(modelRef.current);
-    const loop = () => { const t = three.current; if (!t || t.disposed) return; t.raf = requestAnimationFrame(loop); if (spinRef.current && modelRef.current) modelRef.current.rotation.y += 0.004; t.controls.update(); t.renderer.render(t.scene, t.camera); };
-    loop();
+    displayRef.current = { H, gmrad, theta, d0 };
+    const loop = (now) => {
+      const t = three.current; if (!t || t.disposed) return;
+      t.raf = requestAnimationFrame(loop);
+      t.clock = now * 0.001;
+      const tgt = targetRef.current;
+      const disp = displayRef.current;
+      const k = prefersReducedMotion() ? 1 : 0.14;
+      disp.H = lerp(disp.H, tgt.H, k);
+      disp.gmrad = lerp(disp.gmrad, tgt.gmrad, k);
+      disp.theta = lerp(disp.theta, tgt.theta, k);
+      disp.d0 = lerp(disp.d0, tgt.d0, k);
+      if (Math.abs(disp.H - tgt.H) > 0.5 || Math.abs(disp.theta - tgt.theta) > 0.05) {
+        if (modelRef.current) { t.scene.remove(modelRef.current); disposeBeamModel(modelRef.current, t.mats); }
+        const grp = buildBeam(disp.H, disp.gmrad, disp.theta, disp.d0, t.mats);
+        grp.traverse((o) => { if (o.computeLineDistances) o.computeLineDistances(); });
+        modelRef.current = grp; t.scene.add(grp);
+      }
+      if (spinRef.current && modelRef.current) modelRef.current.rotation.y += 0.004;
+      const pulse = 0.14 + 0.06 * Math.sin(t.clock * 3.2);
+      t.mats.cone.opacity = pulse;
+      t.controls.update(); t.renderer.render(t.scene, t.camera);
+    };
+    loop(performance.now());
     const onResize = () => { const t = three.current; if (!t) return; const w = mount.clientWidth; const h = mount.clientHeight; t.camera.aspect = w / h; t.camera.updateProjectionMatrix(); t.renderer.setSize(w, h); };
     window.addEventListener('resize', onResize);
-    return () => { const t = three.current; t.disposed = true; cancelAnimationFrame(t.raf); window.removeEventListener('resize', onResize); controls.dispose(); renderer.dispose(); if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); three.current = null; };
+    return () => { const t = three.current; t.disposed = true; cancelAnimationFrame(t.raf); window.removeEventListener('resize', onResize); if (modelRef.current) disposeBeamModel(modelRef.current, mats); Object.values(mats).forEach((material) => material.dispose()); controls.dispose(); renderer.dispose(); if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); three.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const spinRef = useRef(spin); spinRef.current = spin;
-  useEffect(() => {
-    const t = three.current; if (!t) return;
-    if (modelRef.current) { t.scene.remove(modelRef.current); modelRef.current.traverse((o) => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); if (o.material && o.material.map) o.material.map.dispose(); }); }
-    const grp = buildBeam(H, gmrad, theta, d0, t.mats); grp.traverse((o) => { if (o.computeLineDistances) o.computeLineDistances(); });
-    modelRef.current = grp; t.scene.add(grp);
-  }, [H, gmrad, theta, d0]);
 
   const g = geom(H, gmrad, theta, d0);
   const gNadir = geom(H, gmrad, 0, d0);

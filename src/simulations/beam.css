@@ -24,3 +24,4 @@
 .beam-note{margin-top:10px;padding:9px 12px;border-left:3px solid #1565c0;border-radius:8px;background:#f5f8fa;color:#56677a;font-size:12.5px;line-height:1.55}
 .beam-note b{color:#16202c}
 .beam-src{margin-top:8px;font-size:11px;color:#8fa0b0}
+@media (max-width:560px){.beam-stage{height:min(52vh,360px)}.beam-inset canvas{width:100%;max-width:230px;height:auto}}

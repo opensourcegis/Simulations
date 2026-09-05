@@ -214,6 +214,9 @@ export default function Gpr() {
     setAntX(clamp(((px - ML) / (CW - ML - MR)) * L, 0, L));
   };
   const dragging = useRef(false);
+  const onPointerDown = (e) => { dragging.current = true; e.currentTarget.setPointerCapture?.(e.pointerId); onCross(e); };
+  const onPointerMove = (e) => { if (dragging.current) onCross(e); };
+  const onPointerUp = (e) => { dragging.current = false; e.currentTarget.releasePointerCapture?.(e.pointerId); };
 
   return (
     <div className="sim-app">
@@ -236,9 +239,7 @@ export default function Gpr() {
             </div>
             <h2><span className="stepno">A</span> Ground cross-section <small>&mdash; {mode === 'trace' ? 'drag the antenna; watch the wave spread out & come back' : mode === 'bscan' ? 'the antenna sweeps; the wave follows it' : 'the object we will locate'}</small></h2>
             <canvas ref={crossRef} className="gpr-canvas gpr-cross" width={CW} height={CH}
-              onMouseDown={(e) => { dragging.current = true; onCross(e); }}
-              onMouseMove={(e) => { if (dragging.current) onCross(e); }}
-              onMouseUp={() => { dragging.current = false; }} onMouseLeave={() => { dragging.current = false; }} />
+              onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} />
             <div className="gpr-legend">
               <span><i className="gpr-dot" style={{ background: '#f6c85f' }} /> outgoing wavefronts (Tx)</span>
               <span><i className="gpr-dot" style={{ background: '#7ee0c4' }} /> return wavefronts (Rx)</span>
