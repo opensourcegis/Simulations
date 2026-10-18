@@ -111,12 +111,35 @@ export function energyShares(material, incidenceDeg) {
   return { refl, scat: material.rho * k, abs: material.abs * k, trans: material.trans * k };
 }
 
+// Energy-normalised cosine-power directional lobe (sr^-1), not a calibrated
+// reciprocal microfacet BRDF. sig is its 1/e angular width about the mirror ray.
+const lobeCache = new Map();
+export function specularDensity(incidenceDeg, widthDeg, separationDeg = 2 * incidenceDeg) {
+  const theta = incidenceDeg * RAD;
+  const n = -1 / Math.log(Math.cos(clamp(widthDeg, 0.1, 89) * RAD));
+  const key = `${incidenceDeg}:${widthDeg}`;
+  let fraction = lobeCache.get(key);
+  if (fraction === undefined) {
+    fraction = 0;
+    // q = cos(alpha)^(n+1) removes the sharply peaked radial weight.
+    for (let i = 0; i < 256; i++) {
+      const ca = ((i + 0.5) / 256) ** (1 / (n + 1));
+      const denominator = Math.sin(theta) * Math.sqrt(1 - ca * ca);
+      const boundary = denominator > 1e-12 ? -Math.cos(theta) * ca / denominator : -1;
+      fraction += Math.acos(clamp(boundary, -1, 1)) / Math.PI / 256;
+    }
+    lobeCache.set(key, fraction);
+  }
+  return (n + 1) / (2 * Math.PI * fraction) * Math.max(0, Math.cos(separationDeg * RAD)) ** n;
+}
+
 export function relativeBackscatter(material, incidenceDeg, range, apertureMm, reference) {
   const s = energyShares(material, incidenceDeg);
-  const reflTerm = s.refl * (30 / material.sig) ** 2 * Math.exp(-((incidenceDeg / material.sig) ** 2));
+  // In a monostatic sensor RX is 2 theta away from the mirror direction.
+  const reflTerm = Math.PI * s.refl * specularDensity(incidenceDeg, material.sig);
   const scatTerm = s.scat * Math.cos(incidenceDeg * RAD);
   const f = reflTerm + scatTerm;
-  const refF = reference.rho + reference.spec * (30 / reference.sig) ** 2;
+  const refF = reference.rho + Math.PI * reference.spec * specularDensity(0, reference.sig);
   const Ar = Math.PI * (apertureMm / 2000) ** 2;
   // Reference includes the same two-way atmospheric attenuation at 100 m.
   const rel = f / refF * (apertureMm / 100) ** 2 * (100 / range) ** 2 * Math.exp(-2 * 0.00002 * (range - 100));

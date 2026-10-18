@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LIGHT_SPEED, roundTripNs, pulseAmbiguity, phaseMeasurement, beamFootprint, evaluateTinCandidate, tinProfileSegment, boresightComparison, energyShares, relativeBackscatter } from '../games/shared/lidar-physics.js';
+import { LIGHT_SPEED, roundTripNs, pulseAmbiguity, phaseMeasurement, beamFootprint, evaluateTinCandidate, tinProfileSegment, boresightComparison, energyShares, relativeBackscatter, specularDensity } from '../games/shared/lidar-physics.js';
 import { LIDAR_LESSONS } from '../games/shared/lidar-lessons.js';
 import { canopyWaveform, detectCanopyPeaks } from '../games/shared/lidar-waveform.js';
+import { traceCanopy } from '../games/shared/lidar-canopy.js';
 
 test('a ground echo is an interior peak, not lost at the waveform boundary', () => {
   const peaks = detectCanopyPeaks(canopyWaveform([{ h: 0, amp: 0.3 }]));
@@ -29,6 +30,59 @@ test('detected returns are ordered nearest first and ground last', () => {
 });
 
 const close = (actual, expected, tolerance = 1e-9) => assert(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
+
+test('directional reflection integrates to unit energy over the upward hemisphere', () => {
+  for (const theta of [0, 35, 65]) for (const width of [8, 30]) {
+    let sum=0;
+    const dPolar=Math.PI/2/160, dAzimuth=2*Math.PI/320, t=theta*Math.PI/180;
+    for (let i=0;i<160;i++) for (let j=0;j<320;j++) {
+      const p=(i+0.5)*dPolar, a=(j+0.5)*dAzimuth;
+      const separation=Math.acos(Math.max(-1,Math.min(1,Math.cos(t)*Math.cos(p)+Math.sin(t)*Math.sin(p)*Math.cos(a))))*180/Math.PI;
+      sum+=specularDensity(theta,width,separation)*Math.sin(p)*dPolar*dAzimuth;
+    }
+    close(sum,1,0.003);
+  }
+});
+test('monostatic specular response is evaluated at twice the incidence angle', () => {
+  close(specularDensity(5,4),specularDensity(5,4,10));
+  assert(specularDensity(5,4)<specularDensity(5,4,5)/10);
+});
+const emptyTree = { clusters:[], trunkW:0, trunkH:0 };
+test('an unobstructed footprint delivers all energy to ground', () => {
+  const result=traceCanopy(emptyTree,0,1);
+  close(result.energyToGround,1); close(result.returns.at(-1).amp,0.3);
+});
+test('ground backscatter includes attenuation on both legs of the path', () => {
+  const result=traceCanopy({ ...emptyTree, clusters:[{x:0,h:5,r:1}] },0,1,0.05);
+  close(result.energyToGround,Math.exp(-1),1e-12);
+  close(result.returns.at(-1).amp,0.3*Math.exp(-2),1e-12);
+  assert(result.returns.reduce((sum,r)=>sum+r.amp,0)<1);
+});
+test('a wider footprint can partly bypass an opaque trunk', () => {
+  const tree={ ...emptyTree, trunkW:0.24, trunkH:3.4 };
+  close(traceCanopy(tree,0,1,0.05).energyToGround,0);
+  assert(traceCanopy(tree,0,1,1).energyToGround>0.3);
+});
+test('increasing foliage extinction reduces ground energy and received ground echo', () => {
+  const tree={ ...emptyTree, clusters:[{x:0,h:5,r:1}] };
+  const sparse=traceCanopy(tree,0,0.3), dense=traceCanopy(tree,0,1.5);
+  assert(dense.energyToGround<sparse.energyToGround);
+  assert(dense.returns.at(-1).amp<sparse.returns.at(-1).amp);
+});
+test('fixed pulse energy preserves waveform integral as pulse width changes', () => {
+  const echoes=[{h:5,amp:0.3}];
+  const integral=width=>canopyWaveform(echoes,width,{fixedEnergy:true}).w.reduce((sum,x)=>sum+x,0);
+  // The finite height window clips ~1 ppm of the broad Gaussian tails.
+  close(integral(2)/integral(20),1,2e-6);
+});
+test('receiver noise is repeatable for a shot seed and changes for a new shot', () => {
+  const a=canopyWaveform([] ,10,{noiseRms:0.003,seed:4});
+  const b=canopyWaveform([] ,10,{noiseRms:0.003,seed:4});
+  const c=canopyWaveform([] ,10,{noiseRms:0.003,seed:5});
+  assert.deepEqual(a.w,b.w); assert.notDeepEqual(a.w,c.w);
+  assert.equal(detectCanopyPeaks(a).length,0);
+  close(canopyWaveform([],10,{noiseRms:0.01}).threshold,0.05);
+});
 
 test('150 m ranging uses a 300 m round trip and correct ns conversion', () => {
   close(roundTripNs(150), 1000.6922855944562);
