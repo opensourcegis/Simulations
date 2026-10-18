@@ -2,6 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LIGHT_SPEED, roundTripNs, pulseAmbiguity, phaseMeasurement, beamFootprint, evaluateTinCandidate, tinProfileSegment, boresightComparison, energyShares, relativeBackscatter } from '../games/shared/lidar-physics.js';
 import { LIDAR_LESSONS } from '../games/shared/lidar-lessons.js';
+import { canopyWaveform, detectCanopyPeaks } from '../games/shared/lidar-waveform.js';
+
+test('a ground echo is an interior peak, not lost at the waveform boundary', () => {
+  const peaks = detectCanopyPeaks(canopyWaveform([{ h: 0, amp: 0.3 }]));
+  assert.equal(peaks.length, 1);
+  close(peaks[0].h, 0, 0.023);
+});
+test('broader pulses merge close contributions without inventing extra returns', () => {
+  const echoes = [{ h: 5, amp: 0.2 }, { h: 6, amp: 0.2 }];
+  assert.equal(detectCanopyPeaks(canopyWaveform(echoes, 2)).length, 2);
+  assert.equal(detectCanopyPeaks(canopyWaveform(echoes, 20)).length, 1);
+});
+test('weak physical echoes do not automatically become detector points', () => {
+  assert.equal(detectCanopyPeaks(canopyWaveform([{ h: 0, amp: 0.01 }])).length, 0);
+  assert.equal(detectCanopyPeaks(canopyWaveform([])).length, 0);
+});
+test('contributions are summed before thresholding, not individually discarded', () => {
+  const echoes = [{ h: 3, amp: 0.012 }, { h: 3.02, amp: 0.012 }];
+  assert.equal(detectCanopyPeaks(canopyWaveform(echoes)).length, 1);
+});
+test('detected returns are ordered nearest first and ground last', () => {
+  const peaks = detectCanopyPeaks(canopyWaveform([{ h: 0, amp: 0.2 }, { h: 8, amp: 0.3 }, { h: 4, amp: 0.15 }], 2));
+  assert.equal(peaks.length, 3);
+  peaks.forEach((p, i) => close(p.h, [8, 4, 0][i], 0.023));
+});
 
 const close = (actual, expected, tolerance = 1e-9) => assert(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
 

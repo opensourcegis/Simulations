@@ -118,6 +118,14 @@
   .mtable th, .mtable td { text-align:left; padding:5px 7px; border-bottom:1px solid var(--line-soft); }
   .mtable th { color:var(--text-faint); text-transform:uppercase; font-size:10.5px; letter-spacing:.6px; }
   .hide { display:none !important; }
+  .scene-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .scene-toolbar .note { flex:1; min-width:180px; }
+  .energy-values { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px; }
+  .energy-values div { border-left:3px solid var(--channel); padding:5px 9px; background:var(--panel-2); border-radius:4px; font-size:12px; }
+  .energy-values b { display:block; font:600 17px var(--mono); }
+  #sceneCanvas { touch-action:pan-y; }
+  .experiment-buttons { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
 </style>
 <link rel="stylesheet" href="../shared/simulation-theme.css">
 </head>
@@ -144,11 +152,16 @@
     <div class="col">
       <div class="panel">
         <h3>Pulse–target interaction <span class="lt" id="matTitle"></span></h3>
-        <canvas class="scene" id="sceneCanvas" width="740" height="430"></canvas>
+        <canvas class="scene" id="sceneCanvas" width="740" height="430" role="img" aria-label="Incident beam, surface normal, mirror reflection, diffuse scattering and collected echo. Use the angle slider to change geometry."></canvas>
+        <div class="scene-toolbar">
+          <button class="btn" id="btnPause" aria-pressed="false">Pause animation</button>
+          <span class="note" id="pulseStage" aria-live="off">Incident pulse</span>
+        </div>
+        <div class="note">Schematic, not to scale. Motion is slowed down; energy fractions are not ray counts. θ is measured from the surface normal.</div>
       </div>
       <div class="panel">
         <h3>Return waveform at the detector</h3>
-        <canvas class="scene" id="waveCanvas" width="740" height="150" style="background:#0e1620"></canvas>
+        <canvas class="scene" id="waveCanvas" width="740" height="210" role="img" aria-label="Surface echo on a fixed time axis with a fixed detector threshold." style="background:#0e1620"></canvas>
         <div class="callout" id="waveNote">The receiver detects a small backscattered portion of diffuse or specular reflection when its direction reaches the aperture.</div>
       </div>
     </div>
@@ -163,16 +176,16 @@
         <h3>Geometry &amp; sensor</h3>
         <div class="ctrl">
           <div>
-            <label>Angle of incidence θi <b id="angVal">0°</b></label>
+            <label for="angSlider">Angle of incidence θi <b id="angVal">0°</b></label>
             <input type="range" id="angSlider" min="0" max="65" step="1" value="0">
             <div style="font-size:11px;color:var(--text-faint);margin-top:3px">…or drag the beam in the scene above</div>
           </div>
           <div>
-            <label>Range to target <b id="rngVal">100 m</b></label>
+            <label for="rngSlider">Range to target <b id="rngVal">100 m</b></label>
             <input type="range" id="rngSlider" min="40" max="400" step="10" value="100">
           </div>
           <div style="margin-bottom:0">
-            <label>Receiver aperture <b id="apVal">100 mm</b></label>
+            <label for="apSlider">Receiver aperture <b id="apVal">100 mm</b></label>
             <input type="range" id="apSlider" min="25" max="200" step="5" value="100">
           </div>
         </div>
@@ -181,6 +194,7 @@
       <div class="panel">
         <h3>Energy balance of the incident pulse</h3>
         <div class="bal" id="balBar"></div>
+        <div class="energy-values" id="energyValues"></div>
         <div class="bal-key">
           <span><i style="background:#3fa9f5"></i> Diffuse reflection</span>
           <span><i style="background:#c8d64a"></i> Specular reflection</span>
@@ -221,26 +235,36 @@
     <div class="col">
       <div class="panel">
         <h3>Small tree — where the pulse goes <span class="lt" id="canopyTitle"></span></h3>
-        <canvas class="scene" id="treeCanvas" width="740" height="440"></canvas>
+        <canvas class="scene" id="treeCanvas" width="740" height="440" role="img" aria-label="Synthetic tree cross-section. Hollow circles are physical echo contributions; filled markers are detected waveform peaks."></canvas>
+        <div class="note">Hollow circles = modelled contributions; filled markers = resolved detector peaks. An attenuated pulse can still reach ground without producing a ground point.</div>
       </div>
       <div class="panel">
         <h3>Digitised return waveform</h3>
         <canvas class="scene" id="treeWave" width="740" height="185"></canvas>
-        <div class="callout">A detected local maximum is a <b>discrete return</b>, not necessarily a separate physical surface. The simulated Gaussian pulse has 10 ns FWHM, about <b>1.5 m in range coordinates</b>. Nearby contributions may merge; separation also depends on their amplitudes, noise and the detector.</div>
+        <div class="callout" id="resolutionNote"></div>
       </div>
     </div>
 
     <div class="col">
       <div class="panel">
         <h3>Canopy &amp; beam</h3>
+        <div class="experiment-buttons">
+          <button class="btn" data-canopy="dense">Dense crown</button>
+          <button class="btn" data-canopy="winter">Leaf-off</button>
+          <button class="btn" data-canopy="gap">Outside crown</button>
+        </div>
         <div class="ctrl">
           <div>
-            <label>Beam position across tree <b id="offVal">−1.60 m</b></label>
+            <label for="offSlider">Beam position across tree <b id="offVal">−1.60 m</b></label>
             <input type="range" id="offSlider" min="-320" max="320" step="5" value="-160">
           </div>
           <div>
-            <label>Canopy attenuation factor (relative) <b id="denVal">1.00</b></label>
+            <label for="denSlider">Canopy attenuation factor (relative) <b id="denVal">1.00</b></label>
             <input type="range" id="denSlider" min="20" max="180" step="5" value="100">
+          </div>
+          <div>
+            <label for="widthSlider">Pulse width (FWHM) <b id="widthVal">10 ns</b></label>
+            <input type="range" id="widthSlider" min="2" max="20" step="1" value="10">
           </div>
           <div style="margin-bottom:0">
             <label class="chk"><input type="checkbox" id="leafOff"> Leaf-off (winter) canopy</label>
@@ -303,7 +327,8 @@
     <p><b>Changing the angle changes everything.</b> Swing the incident beam away from the normal and two
     things can happen: the specular component grows toward glancing incidence, but its lobe moves away from the receiver;
     and the diffuse backscatter changes with cosine geometry. Real BRDFs depend on roughness, wavelength and material.</p>
-    <p>This lesson uses illustrative <b>1064 nm</b> coefficients. Topographic sensors use several near-infrared wavelengths; bathymetric instruments commonly use green light. Visible colour alone does not specify reflectance at a LiDAR wavelength.</p>
+    <p>This lesson uses illustrative <b>1064 nm</b> coefficients. Topographic sensors use several near-infrared wavelengths; bathymetric instruments commonly use green light. Visible colour alone does not specify reflectance at a LiDAR wavelength. Transmitted rays are schematic: refraction, thickness and internal reflections are not modelled.</p>
+    <p><b>Canopy model:</b> foliage clusters are effective attenuating volumes, not solid leaves. Surviving energy follows E = E₀ exp(−kL), with relative k; the trunk is opaque. Hollow markers show synthetic echo contributions and filled markers show peaks detected after Gaussian summation. Ground labels use known scene geometry, not an operational classification algorithm.</p>
     <div class="modal-actions"><button class="btn primary" id="btnHelpClose">Got it</button></div>
   </div>
 </div>
@@ -324,7 +349,8 @@
 </div>
 
 <script type="module">
-import { LIGHT_SPEED, relativeBackscatter } from '../shared/lidar-physics.js';
+import { LIGHT_SPEED, relativeBackscatter, roundTripNs } from '../shared/lidar-physics.js';
+import { canopyWaveform, detectCanopyPeaks, RETURN_THRESHOLD } from '../shared/lidar-waveform.js';
 import { mountLidarLearning } from '../shared/lidar-learning.js';
 'use strict';
 const DEG = Math.PI/180;
@@ -369,7 +395,7 @@ function verdictOf(rel) {
   if (rel >= 4)   return { k:'sat',   label:'Above illustrative saturation threshold', cls:'v-sat' };
   if (rel >= 0.55) return { k:'strong', label:'Strong return', cls:'v-strong' };
   if (rel >= 0.18) return { k:'mod',   label:'Moderate return', cls:'v-mod' };
-  if (rel >= 0.03) return { k:'weak',  label:'Weak — noisy point', cls:'v-weak' };
+  if (rel >= 0.03) return { k:'weak',  label:'Weak — above detection threshold', cls:'v-weak' };
   return { k:'none', label:'NO RETURN — point dropped', cls:'v-none' };
 }
 
@@ -377,7 +403,7 @@ function verdictOf(rel) {
 //  State
 // ============================================================
 const state = { mat: MATS[0], theta: 0, R: 100, ap: 100, tab: 'surface',
-                off: -1.6, density: 1.0, leafOff: false, scan: null, quiz: null, best: 0 };
+                off: -1.6, density: 1.0, leafOff: false, width: 10, paused: matchMedia('(prefers-reduced-motion: reduce)').matches, scan: null, quiz: null, best: 0 };
 
 // ============================================================
 //  Surface scene
@@ -480,7 +506,7 @@ function drawScene() {
   // incident beam
   sc.strokeStyle='rgba(255,90,60,.75)'; sc.lineWidth=2.4; sc.lineCap='round';
   sc.beginPath(); sc.moveTo(sx,sy); sc.lineTo(HIT.x,HIT.y); sc.stroke();
-  label(sx - 92, sy - 26, 'INCIDENT  Eᵢ', '#ff8a6a');
+  label(Math.max(10, sx - 92), Math.max(20, sy - 26), 'INCIDENT  Eᵢ', '#ff8a6a');
 
   // travelling pulse packet
   if (inbound) {
@@ -556,7 +582,7 @@ function drawScene() {
       sc.fillStyle=gg; sc.beginPath(); sc.arc(pxp,pyp,9,0,7); sc.fill();
       label(HIT.x - 196, HIT.y - 150, 'backscatter collected by RX', '#3fa9f5');
     } else {
-      label(HIT.x - 120, HIT.y - 150, 'nothing returns — dropout', '#e2574c');
+      label(HIT.x - 120, HIT.y - 150, 'echo below detector threshold', '#e2574c');
     }
   }
 
@@ -584,17 +610,20 @@ function drawWave() {
   wc.clearRect(0,0,WW,WH);
   wc.fillStyle='#0e1620'; wc.fillRect(0,0,WW,WH);
   const res = response(state.mat, state.theta, state.R, state.ap);
-  const base = WH-26;
+  const base = WH-34, left = 58, right = WW-24;
+  const timeX = ns => left + ns / 3000 * (right-left);
+  const gain = 30; // pixels per reference unit; threshold uses the SAME gain
   // axes
   wc.strokeStyle='rgba(120,150,175,.35)'; wc.lineWidth=1;
   wc.beginPath(); wc.moveTo(40,base); wc.lineTo(WW-16,base); wc.stroke();
   wc.fillStyle='#7d8fa1'; wc.font='10px system-ui';
-  wc.fillText('time  →   (range = c·Δt / 2)', WW-190, base+16);
+  for (let ns = 0; ns <= 3000; ns += 500) wc.fillText(`${ns}`, timeX(ns)-9, base+15);
+  wc.fillText('round-trip delay (ns) →', WW-168, WH-3);
   wc.save(); wc.translate(14, base-40); wc.rotate(-Math.PI/2);
   wc.fillText('amplitude', 0,0); wc.restore();
   // noise floor
   wc.setLineDash([4,4]); wc.strokeStyle='rgba(226,87,76,.55)';
-  const nf = base - 12;
+  const nf = base - 0.03 * gain;
   wc.beginPath(); wc.moveTo(40,nf); wc.lineTo(WW-16,nf); wc.stroke(); wc.setLineDash([]);
   wc.fillStyle='rgba(226,87,76,.85)'; wc.fillText('detection threshold', 46, nf-4);
   // emitted pulse (reference, left)
@@ -606,20 +635,21 @@ function drawWave() {
     }
     wc.strokeStyle=col; wc.lineWidth=2; wc.stroke();
   };
-  peak(110, base-40, 'rgba(255,90,60,.9)', 12);
-  wc.fillStyle='rgba(255,138,106,.95)'; wc.fillText('emitted pulse  P t', 66, base-52);
+  peak(left, 65, 'rgba(255,90,60,.9)', 3);
+  wc.fillStyle='rgba(255,138,106,.95)'; wc.fillText('TX at t = 0 (separate scale)', left+8, 58);
   // received pulse
-  const amp = clamp(res.rel, 0, 1.6) * (base-40);
+  const amp = Math.min(res.rel, 4) * gain;
+  const echoX = timeX(roundTripNs(state.R));
   const detected = res.rel >= 0.03;
-  peak(470, Math.max(amp, 2), detected ? 'rgba(63,169,245,.95)' : 'rgba(226,87,76,.6)', 13);
+  peak(echoX, amp, detected ? 'rgba(63,169,245,.95)' : 'rgba(226,87,76,.6)', 3);
   wc.fillStyle = detected ? 'rgba(63,169,245,.95)' : 'rgba(226,87,76,.9)';
-  wc.fillText(detected ? 'received echo  P r' : 'echo below threshold — no point', 412, base-Math.max(amp,2)-10);
+  wc.fillText(detected ? (res.rel >= 4 ? 'RX clipped at 400% reference' : 'received echo') : 'below threshold — no point', Math.min(echoX+8, WW-200), base-amp-12);
   // Δt marker
   wc.strokeStyle='rgba(255,255,255,.28)'; wc.setLineDash([3,3]);
-  wc.beginPath(); wc.moveTo(110,base-52); wc.lineTo(110,32); wc.moveTo(470,base-52); wc.lineTo(470,32); wc.stroke();
-  wc.beginPath(); wc.moveTo(110,32); wc.lineTo(470,32); wc.stroke(); wc.setLineDash([]);
+  wc.beginPath(); wc.moveTo(left,base-70); wc.lineTo(left,25); wc.moveTo(echoX,base-amp); wc.lineTo(echoX,25); wc.stroke();
+  wc.beginPath(); wc.moveTo(left,25); wc.lineTo(echoX,25); wc.stroke(); wc.setLineDash([]);
   wc.fillStyle='rgba(255,255,255,.75)'; wc.font='600 11px system-ui';
-  wc.fillText('Δt  (round trip)', 246, 26);
+  wc.fillText(`Δt = ${roundTripNs(state.R).toFixed(1)} ns · R = ${state.R} m`, left+8, 18);
 }
 
 // ============================================================
@@ -636,7 +666,7 @@ MATS.forEach(m => {
 });
 function selectMat(key) {
   state.mat = MATS.find(m=>m.key===key);
-  [...matGrid.children].forEach(c => c.classList.toggle('on', c.dataset.key===key));
+  [...matGrid.children].forEach(c => { c.classList.toggle('on', c.dataset.key===key); c.setAttribute('aria-pressed', c.dataset.key===key); });
   pulseT = 0;
   updateSurface();
 }
@@ -646,10 +676,11 @@ function updateSurface() {
   document.getElementById('matTitle').textContent = '— ' + m.name;
   // energy balance bar — recomputed at the current angle of incidence
   const sh = res.s;
-  const parts = [['#3fa9f5',sh.scat,'SCATTER'],['#c8d64a',sh.refl,'REFLECT'],
+  const parts = [['#3fa9f5',sh.scat,'DIFFUSE'],['#c8d64a',sh.refl,'SPECULAR'],
                  ['#e2574c',sh.abs,'ABSORB'],['#9b7fd4',sh.trans,'TRANSMIT']];
   document.getElementById('balBar').innerHTML = parts.map(([c,v,l]) =>
     `<div style="background:${c};width:${(v*100).toFixed(1)}%">${v>=0.13?l+' '+Math.round(v*100)+'%':''}</div>`).join('');
+  document.getElementById('energyValues').innerHTML = parts.map(([c,v,l]) => `<div style="--channel:${c}">${l}<b>${(v*100).toFixed(1)}%</b></div>`).join('');
   // signal
   const pct = res.rel*100;
   document.getElementById('sigVal').textContent = pct >= 400 ? '≥400' : pct.toFixed(pct<10?1:0);
@@ -669,9 +700,10 @@ function updateSurface() {
     `Multiply by reflectance and atmospheric/system factors for a received-energy fraction. Specular returns require their own directional model.`;
   document.getElementById('matNote').innerHTML = m.note;
   document.getElementById('waveNote').innerHTML = res.rel >= 0.03
-    ? `The echo is <b>${(res.rel*100).toFixed(res.rel<0.1?2:0)}%</b> of the reference target. Its <b>delay</b> gives range; its <b>amplitude</b> is recorded as intensity.`
+    ? `The echo is <b>${(res.rel*100).toFixed(res.rel<0.1?2:0)}%</b> of the reference target, delayed by <b>${roundTripNs(state.R).toFixed(1)} ns</b>. RX uses fixed gain and clips at 400%; the threshold is 3%. The 10 ns echo is widened to 3 pixels for visibility. TX has a separate display scale. Intensity is a processed receiver measurement, not calibrated reflectance.`
     : `The echo never rises above the detection threshold, so <b>no point is recorded here</b> — a dropout.`;
   drawWave();
+  drawScene();
 }
 
 function setTheta(deg) {
@@ -697,6 +729,7 @@ sceneCanvas.addEventListener('pointerdown', e => {
 });
 sceneCanvas.addEventListener('pointermove', e => { if (angDrag) setTheta(thetaFromEvent(e)); });
 window.addEventListener('pointerup', () => { angDrag = false; });
+sceneCanvas.addEventListener('pointercancel', () => { angDrag = false; });
 sceneCanvas.style.cursor = 'ew-resize';
 document.getElementById('rngSlider').addEventListener('input', e => {
   state.R = +e.target.value;
@@ -752,40 +785,24 @@ function tracePulse(offM) {
   let E = 1;
   const returns = [];
   for (const hcl of hits) {
-    const intercept = 1 - Math.exp(-0.50 * dens * hcl.chord);   // Beer–Lambert through foliage
+    const intercept = hcl.trunk ? 1 : 1 - Math.exp(-0.50 * dens * hcl.chord); // opaque trunk; effective Beer–Lambert foliage
     const amp = E * intercept * (hcl.trunk ? rhoTrunk : rhoLeaf);
-    if (amp > 0.004) returns.push({ h: hcl.h, amp, kind:'canopy' });
+    returns.push({ h: hcl.h, amp, kind:'canopy' });
     E *= (1 - intercept);
   }
   const groundAmp = E * rhoGround;
-  const groundHit = groundAmp > 0.012;
-  if (groundHit) returns.push({ h: 0, amp: groundAmp, kind:'ground' });
+  returns.push({ h: 0, amp: groundAmp, kind:'ground' });
+  const groundHit = countPeaks(waveformOf(returns)).some(p => Math.abs(p.h) < 0.25);
   return { returns, energyToGround: E, groundHit };
 }
 
-// discrete-return detection: peaks in the summed waveform closer than the
-// pulse length merge, exactly as in a real digitiser
-const PULSE_SIGMA = (LIGHT_SPEED * 10e-9 / 2) / (2 * Math.sqrt(Math.log(2))); // 10 ns Gaussian FWHM in range coordinates
+// Contributions are summed BEFORE thresholding. This idealised local-maximum
+// detector has no noise, dead time or instrument-specific deconvolution.
 function waveformOf(returns) {
-  // sample a little below ground so a last return at h = 0 is an interior
-  // sample and can be found by the peak detector
-  const N = 320, hMax = 10.0, hMin = -1.2;
-  const w = new Float64Array(N);
-  const hAt = i => hMax - (hMax-hMin)*i/(N-1);
-  for (let i=0;i<N;i++) {
-    const h = hAt(i);
-    let s = 0;
-    for (const r of returns) s += r.amp * Math.exp(-Math.pow((h-r.h)/PULSE_SIGMA,2));
-    w[i] = s;
-  }
-  return { w, hMax, hMin, N, hAt };
+  return canopyWaveform(returns, state.width);
 }
 function countPeaks(wf) {
-  const { w, N, hAt } = wf; const peaks = [];
-  for (let i=2;i<N-2;i++)
-    if (w[i] > 0.02 && w[i] >= w[i-1] && w[i] >= w[i-2] && w[i] > w[i+1] && w[i] >= w[i+2])
-      peaks.push({ h: hAt(i), amp: w[i] });
-  return peaks;
+  return detectCanopyPeaks(wf);
 }
 
 function drawTreeScene() {
@@ -827,14 +844,19 @@ function drawTreeScene() {
   const res = tracePulse(off);
   const x = m2x(off);
   tc.strokeStyle='rgba(255,90,60,.85)'; tc.lineWidth=2.4;
-  tc.beginPath(); tc.moveTo(x, 8); tc.lineTo(x, res.groundHit ? GROUND_Y : m2y(res.returns.length?res.returns[res.returns.length-1].h:0)); tc.stroke();
+  tc.beginPath(); tc.moveTo(x, 8); tc.lineTo(x, GROUND_Y); tc.stroke();
   // beam width hint
   tc.strokeStyle='rgba(255,90,60,.22)'; tc.lineWidth=10;
   tc.beginPath(); tc.moveTo(x,8); tc.lineTo(x, GROUND_Y); tc.stroke();
 
-  // returns
-  res.returns.forEach((r, i) => {
-    const isFirst = i===0, isGround = r.kind==='ground';
+  // Physical contributions are NOT automatically discrete returns.
+  res.returns.forEach(r => {
+    tc.strokeStyle='rgba(255,255,255,.45)'; tc.lineWidth=1;
+    tc.beginPath(); tc.arc(x, m2y(r.h), 7, 0, Math.PI*2); tc.stroke();
+  });
+  let lastLabelY = -Infinity;
+  countPeaks(waveformOf(res.returns)).forEach((r, i) => {
+    const isFirst = i===0, isGround = res.groundHit && Math.abs(r.h) < 0.25;
     const col = isGround ? '#e08a3c' : (isFirst ? '#5fd07a' : '#c8d64a');
     const y = m2y(r.h);
     const gg = tc.createRadialGradient(x,y,0,x,y,16);
@@ -844,17 +866,19 @@ function drawTreeScene() {
     tc.fillStyle=col; tc.beginPath(); tc.arc(x,y,4.2,0,7); tc.fill();
     tc.strokeStyle='rgba(255,255,255,.75)'; tc.lineWidth=1; tc.stroke();
     // label
-    const txt = isGround ? 'LAST — ground' : (isFirst ? 'FIRST — canopy top' : 'intermediate');
+    const txt = isGround ? 'detected near known ground' : (isFirst ? 'first detected peak' : 'detected canopy peak');
     tc.font='600 10.5px system-ui';
     const w = tc.measureText(txt).width + 12;
-    const lx = x + 16, ly = y;
+    const lx = x + 16, ly = Math.max(y, lastLabelY + 22);
+    lastLabelY = ly;
+    tc.strokeStyle=col; tc.beginPath(); tc.moveTo(x+5,y); tc.lineTo(lx,ly); tc.stroke();
     tc.fillStyle='rgba(12,20,28,.85)'; tc.strokeStyle=col; tc.lineWidth=1;
     tc.beginPath(); tc.roundRect(lx, ly-10, w, 18, 5); tc.fill(); tc.stroke();
     tc.fillStyle=col; tc.fillText(txt, lx+6, ly+3);
   });
   if (!res.groundHit) {
     tc.fillStyle='#e2574c'; tc.font='600 11px system-ui';
-    tc.fillText('pulse exhausted in the canopy — no ground return', x+16, GROUND_Y-10);
+    tc.fillText('no resolved ground peak above threshold', x+16, GROUND_Y-10);
   }
   return res;
 }
@@ -872,11 +896,18 @@ function drawTreeWave(res) {
   twc.strokeStyle='rgba(120,150,175,.35)'; twc.lineWidth=1;
   twc.beginPath(); twc.moveTo(left,base); twc.lineTo(right,base); twc.stroke();
   twc.fillStyle='#7d8fa1'; twc.font='10px system-ui';
-  twc.fillText('canopy top', left+2, base+15);
-  twc.fillText('ground', right-38, base+15);
-  twc.fillText('amplitude', 6, top+4);
+  const heightX = h => left + (wf.hMax-h)/(wf.hMax-wf.hMin)*(right-left);
+  for (const h of [10, 8, 6, 4, 2, 0, -2]) {
+    twc.fillText(`${h} m`, heightX(h)-8, base+15);
+  }
+  twc.fillText('height above known ground · time increases →', left+140, TWH-2);
+  twc.fillText('amplitude', 6, top+24);
   // waveform
-  const maxA = Math.max(0.12, ...wf.w);
+  const maxA = 0.5; // fixed vertical scale, not auto-normalised
+  const thresholdY = base - RETURN_THRESHOLD/maxA*(base-top);
+  twc.strokeStyle='#e2574c'; twc.setLineDash([4,4]);
+  twc.beginPath(); twc.moveTo(left,thresholdY); twc.lineTo(right,thresholdY); twc.stroke(); twc.setLineDash([]);
+  twc.fillStyle='#e9988f'; twc.fillText('threshold 0.02 · fixed amplitude scale 0–0.5', left+200, top+2);
   twc.beginPath();
   for (let i=0;i<wf.N;i++) {
     const x = left + (i/(wf.N-1))*(right-left);
@@ -890,14 +921,14 @@ function drawTreeWave(res) {
   peaks.forEach((p,i) => {
     const x = left + ((wf.hMax-p.h)/(wf.hMax-wf.hMin))*(right-left);
     const y = base - (p.amp/maxA)*(base-top);
-    const isGround = p.h < 0.6;
+    const isGround = res.groundHit && Math.abs(p.h) < 0.25;
     const col = isGround ? '#e08a3c' : (i===0 ? '#5fd07a' : '#c8d64a');
     twc.strokeStyle=col; twc.lineWidth=1.4; twc.setLineDash([2,3]);
     twc.beginPath(); twc.moveTo(x,y); twc.lineTo(x,base); twc.stroke(); twc.setLineDash([]);
     twc.fillStyle=col; twc.beginPath(); twc.arc(x,y,3.6,0,7); twc.fill();
     twc.font='600 10px system-ui';
     const ord = n => n+['th','st','nd','rd'][(n%100-n%10!=10)*(n%10<4)*n%10];
-    twc.fillText(isGround?'ground':ord(i+1), x-8, y-8);
+    twc.fillText(isGround?'ground':ord(i+1), x-8, y-8-(i%2)*12);
   });
   twc.fillStyle='rgba(255,255,255,.7)'; twc.font='600 11px system-ui';
   twc.fillText(`${peaks.length} discrete return${peaks.length===1?'':'s'} detected`, left+2, top+2);
@@ -907,6 +938,7 @@ function drawTreeWave(res) {
 function updateCanopy() {
   const res = drawTreeScene();
   const peaks = drawTreeWave(res);
+  document.getElementById('resolutionNote').innerHTML = `Pulse FWHM <b>${state.width} ns</b> corresponds to <b>${(LIGHT_SPEED*state.width*1e-9/2).toFixed(2)} m</b> in range coordinates. Broader pulses can merge contributions into fewer peaks. FWHM is not a universal minimum separation: amplitude ratio and detection also matter. This noise-free comparison holds peak amplitude fixed, not pulse energy, as width changes; it is not a full sensor power model.`;
   document.getElementById('canopyTitle').textContent =
     `— beam at ${state.off.toFixed(2)} m, relative attenuation ${(state.leafOff?state.density*0.28:state.density).toFixed(2)}`;
   document.getElementById('stReturns').textContent = peaks.length;
@@ -930,13 +962,30 @@ document.getElementById('offSlider').addEventListener('input', e => {
 document.getElementById('denSlider').addEventListener('input', e => {
   state.density = +e.target.value/100;
   document.getElementById('denVal').textContent = state.density.toFixed(2);
+  clearScan();
   updateCanopy();
 });
-document.getElementById('leafOff').addEventListener('change', e => { state.leafOff = e.target.checked; updateCanopy(); });
+document.getElementById('leafOff').addEventListener('change', e => { state.leafOff = e.target.checked; clearScan(); updateCanopy(); });
+document.getElementById('widthSlider').addEventListener('input', e => {
+  state.width = +e.target.value;
+  document.getElementById('widthVal').textContent = `${state.width} ns`;
+  clearScan(); updateCanopy();
+});
+document.querySelectorAll('[data-canopy]').forEach(button => button.addEventListener('click', () => {
+  state.off = button.dataset.canopy === 'gap' ? 3 : 0.5;
+  state.density = 1.5; state.leafOff = button.dataset.canopy === 'winter';
+  document.getElementById('offSlider').value = state.off*100;
+  document.getElementById('offVal').textContent = `${state.off.toFixed(2)} m`;
+  document.getElementById('denSlider').value = state.density*100;
+  document.getElementById('denVal').textContent = state.density.toFixed(2);
+  document.getElementById('leafOff').checked = state.leafOff;
+  clearScan(); updateCanopy();
+}));
 
 document.getElementById('btnScan').addEventListener('click', () => {
   const points = []; let ghits = 0, n = 0;
-  for (let x = -3.0; x <= 3.0; x += 0.06) {
+  for (let j = 0; j <= 100; j++) {
+    const x = -3 + j*0.06;
     const r = tracePulse(x); n++;
     const detected = countPeaks(waveformOf(r.returns));
     if (r.groundHit && detected.some(peak => Math.abs(peak.h) < 0.25)) ghits++;
@@ -949,12 +998,13 @@ document.getElementById('btnScan').addEventListener('click', () => {
     `<b>${(ghits/n*100).toFixed(0)}%</b> of pulses have a detected peak near the known ground in this synthetic scene. Green = first detected canopy peak, olive = other canopy peaks, orange = model-identified ground. This percentage alone does not establish DTM quality: spatial coverage, classification errors, terrain and interpolation also matter.`;
   updateCanopy();
 });
-document.getElementById('btnClearScan').addEventListener('click', () => {
+function clearScan() {
   state.scan = null;
   document.getElementById('stPulses').textContent = '0';
   document.getElementById('stGhits').textContent = '—';
-  updateCanopy();
-});
+  document.getElementById('scanNote').textContent = 'Scan the current canopy settings to compare detected ground coverage. Changing attenuation or pulse width clears the previous scan.';
+}
+document.getElementById('btnClearScan').addEventListener('click', () => { clearScan(); updateCanopy(); });
 
 // ============================================================
 //  Trainee challenge
@@ -983,7 +1033,7 @@ function buildQuiz() {
     });
   });
   // 2 "will you get a return" questions
-  const strengthOpts = ['Strong return','Moderate return','Weak, noisy return','No usable return (dropout)'];
+  const strengthOpts = ['Strong return','Moderate return','Weak, above-threshold return','No usable return (dropout)'];
   const idxOf = v => v.k==='sat'||v.k==='strong' ? 0 : v.k==='mod' ? 1 : v.k==='weak' ? 2 : 3;
   [['water',18],['asphalt',0],['wetasphalt',14],['glass',12],['grass',20],['whiteroof',25]]
     .sort(()=>Math.random()-0.5).slice(0,3).forEach(([key,ang]) => {
@@ -1063,10 +1113,21 @@ document.getElementById('tabs').addEventListener('click', e => {
 });
 
 let lastT = performance.now();
+const pauseButton = document.getElementById('btnPause');
+function syncPause() {
+  pauseButton.textContent = state.paused ? 'Play animation' : 'Pause animation';
+  pauseButton.setAttribute('aria-pressed', String(state.paused));
+}
+pauseButton.addEventListener('click', () => { state.paused = !state.paused; syncPause(); });
+syncPause();
 function frame(now) {
   try {
     const dt = Math.min(0.05, (now-lastT)/1000); lastT = now;
-    if (state.tab === 'surface') { pulseT = (pulseT + dt*0.75) % 3; drawScene(); }
+    if (state.tab === 'surface') {
+      if (!state.paused) pulseT = (pulseT + dt*0.75) % 3;
+      document.getElementById('pulseStage').textContent = ['1 · Incident pulse travels to target', '2 · Energy divides at the target', '3 · A small reflected share reaches RX'][Math.floor(pulseT)];
+      drawScene();
+    }
   } catch(e) { if (window.console) console.warn('frame', e); }
   requestAnimationFrame(frame);
 }
@@ -1086,7 +1147,7 @@ mountLidarLearning('interaction', {
   },
   onExperiment: id => {
     document.querySelector(`[data-tab="${id === 'canopy' ? 'canopy' : 'surface'}"]`).click();
-    if (id === 'canopy') { state.off = -1.6; state.density = 1; state.leafOff = false; document.getElementById('offSlider').value = -160; document.getElementById('offVal').textContent = '−1.60 m'; document.getElementById('denSlider').value = 100; document.getElementById('denVal').textContent = '1.00'; document.getElementById('leafOff').checked = false; updateCanopy(); }
+    if (id === 'canopy') { state.off = -1.6; state.density = 1; state.leafOff = false; state.width = 10; document.getElementById('widthSlider').value = 10; document.getElementById('widthVal').textContent = '10 ns'; clearScan(); document.getElementById('offSlider').value = -160; document.getElementById('offVal').textContent = '−1.60 m'; document.getElementById('denSlider').value = 100; document.getElementById('denVal').textContent = '1.00'; document.getElementById('leafOff').checked = false; updateCanopy(); }
     else { state.R = id === 'range' ? 200 : 100; state.ap = 100; document.getElementById('rngSlider').value = state.R; document.getElementById('rngVal').textContent = state.R + ' m'; document.getElementById('apSlider').value = 100; document.getElementById('apVal').textContent = '100 mm'; selectMat(id === 'water' ? 'water' : 'whiteroof'); setTheta(id === 'water' ? 20 : 0); }
   },
 });
