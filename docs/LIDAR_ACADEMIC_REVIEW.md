@@ -62,6 +62,10 @@ The beam–target page has its own visual system in `games/lidar-interaction/int
 
 Browser checks cover 320, 390, 768, 1024, 1440 and 1920 px widths, both environments, material choices, sensor scaling, noisy-shot reproducibility, scan invalidation, guided-experiment application, keyboard tabs and dialog focus. Numerical checks and the production build must pass separately.
 
+The surface scene now fixes the sensor housing in position and orientation. Previously it orbited the impact point and rotated the enclosure with incidence, misleadingly suggesting that scanning requires the whole head to spin. The beam now steers across a horizontal target, with hit position `x = x_sensor + (y_target − y_sensor) tan θ`. This is schematic internal steering, not an optical mechanism model. Range remains an independent input and the drawing is not to scale. Browser canvas checks verify a constant housing transform and no housing rotation at 0°, 30° and 65°.
+
+The ranging lesson uses the same instrument-lab design language with scoped CSS: method tabs; configuration and playback controls; live scene and receiver traces; expected versus detected values; and a collapsible teaching notebook. All three methods retain their equations, ambiguity explanations and assumptions. A new pulse clears the last displayed range; target/method changes also invalidate it. The AMCW wave can be paused, and its initial motion respects reduced-motion preferences. Browser checks cover all three methods at the six widths above, pulse detection/reset, periodic ambiguity, tone selection, guided experiments and keyboard tabs.
+
 Browser validation should exercise all three experiments, self-check feedback and narrow-screen layouts in each of the six lessons. It should additionally fire a pulse and change its target, inspect a final TIN point, compare yaw at nadir/off-axis, and check waveform return readouts after changing canopy attenuation.
 
 ## Further reading

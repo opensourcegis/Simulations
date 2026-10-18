@@ -1,20 +1,95 @@
-.rng-canvas{display:block;width:100%;height:auto;border:1px solid #e5ebf1;border-radius:8px;background:#0b1622}
-.rng-fire{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
-.rng-btn{padding:8px 15px;border:1px solid #0f8a4d;border-radius:8px;background:#0f8a4d;color:#fff;font-size:13px;font-weight:600;cursor:pointer}
-.rng-btn:hover{background:#0d7a44}
-.rng-btn.ghost{background:#fff;color:#0f8a4d}
-.rng-btn.ghost:hover{background:#f0faf4}
-.rng-chk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#56677a}
-.rng-chk input{accent-color:#0f8a4d}
-.rng-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:11.5px;color:#56677a}
-.rng-legend span{display:inline-flex;align-items:center;gap:6px}
-.rng-swatch{width:13px;height:4px;border-radius:2px;flex:none}
-.equation.big{font-size:14px;color:#16202c}
-.equation.big b{color:#0f8a4d}
-.rng-note{margin-top:10px;padding:9px 12px;border-left:3px solid #1565c0;border-radius:8px;background:#f5f8fa;color:#56677a;font-size:12.5px;line-height:1.55}
-.rng-note b{color:#16202c}
-.rng-sub{margin:14px 0 8px;font-size:11.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:#7d8fa1}
-.rng-modes{display:flex;gap:6px;max-width:1520px;margin:14px auto 0;padding:5px;border:1px solid #d6dee7;border-radius:12px;background:#fff}
-.rng-seg{flex:1;padding:10px 14px;border:0;border-radius:8px;background:transparent;color:#56677a;font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s ease}
-.rng-seg:hover{background:#f0faf4;color:#0f8a4d}
-.rng-seg.on{background:#0f8a4d;color:#fff;box-shadow:0 3px 10px rgba(15,138,77,.28)}
+/* Ranging has its own scoped instrument theme; no catalogue-wide overrides. */
+.rng-lab { --rng-ink:#232c30; --rng-muted:#59686c; --rng-border:#d9ddd7; --rng-paper:#fffefa; --rng-orange:#ba4426; min-height:100vh; padding:0 clamp(16px,2.5vw,44px) 24px; background:#f3f2ee; color:var(--rng-ink); font:14px/1.6 Inter,"Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+.rng-lab * { box-sizing:border-box; }
+.rng-lab button,.rng-lab input,.rng-lab a,.rng-lab summary { outline-offset:4px; }
+.rng-lab :focus-visible { outline:2px solid var(--rng-orange); }
+.rng-lab button { font:inherit; cursor:pointer; }
+.rng-lab a { color:inherit; text-underline-offset:3px; }
+.rng-header,.rng-intro,.rng-modebar,.rng-workspace,.rng-notebook,.rng-footer { max-width:1712px; margin-left:auto; margin-right:auto; }
+.rng-header { min-height:72px; display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--rng-border); }
+.rng-header a { display:flex; gap:12px; align-items:center; text-decoration:none; font-size:11px; font-weight:700; letter-spacing:1px; }
+.rng-header a:hover { color:var(--rng-orange); }
+.rng-header a > span:not(.rng-brand) { color:#aab4ae; margin:0 4px; }
+.rng-brand { display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:var(--rng-ink); color:white; font-size:30px; line-height:1; }
+.rng-lab-id { color:var(--rng-muted); font:10px ui-monospace,monospace; letter-spacing:1px; }
+.rng-intro { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:28px 0; }
+.rng-eyebrow { display:block; margin:0 0 7px; color:var(--rng-orange); font:600 10px ui-monospace,monospace; letter-spacing:1.8px; }
+.rng-intro h1 { margin:0; font-size:clamp(27px,3vw,42px); font-weight:600; letter-spacing:-1.7px; line-height:1.17; }
+.rng-intro p:not(.rng-eyebrow) { max-width:680px; margin:10px 0 0; color:var(--rng-muted); font-size:13px; }
+.rng-constant { flex:none; font:12px ui-monospace,monospace; }
+.rng-constant small { display:block; margin-top:9px; color:var(--rng-muted); font-size:8px; letter-spacing:.8px; }
+.rng-modebar { display:flex; align-items:center; justify-content:space-between; gap:16px; border-top:1px solid var(--rng-border); padding:12px 0; margin-bottom:18px; }
+.rng-lab .rng-modes { display:flex; gap:4px; margin:0; padding:4px; border:0; border-radius:8px; background:#e6e8e1; }
+.rng-modes button { display:flex; align-items:center; gap:10px; padding:10px 16px; background:transparent; color:var(--rng-muted); border:0; border-radius:5px; font-size:12px; font-weight:600; }
+.rng-modes button > span { font:10px ui-monospace,monospace; }
+.rng-modes button.on { background:var(--rng-paper); color:var(--rng-ink); box-shadow:0 1px 3px #1c2b2220; }
+.rng-modes button.on > span { color:var(--rng-orange); }
+.rng-model-note { font:9px ui-monospace,monospace; letter-spacing:.8px; color:var(--rng-muted); }
+.rng-workspace { display:grid; grid-template-columns:240px minmax(0,1fr) 290px; gap:16px; align-items:start; }
+.rng-controls,.rng-instruments,.rng-diagnostics { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.rng-panel { min-width:0; padding:18px; border:1px solid var(--rng-border); border-radius:10px; background:var(--rng-paper); }
+.rng-panel h2 { margin:0 0 18px; color:var(--rng-ink); font-size:15px; font-weight:600; line-height:1.4; letter-spacing:-.2px; }
+.rng-panel h2 > span { display:block; margin-bottom:7px; color:#69777b; font:9px ui-monospace,monospace; letter-spacing:1.4px; }
+.rng-panel h2 small { display:block; margin-top:7px; font-size:11px; font-weight:400; color:var(--rng-muted); letter-spacing:0; }
+.rng-control { display:grid; grid-template-columns:1fr auto; align-items:center; gap:9px; margin:22px 0 0; color:var(--rng-muted); font-size:11px; }
+.rng-control b { background:#eeefe8; padding:3px 5px; border-radius:3px; color:var(--rng-ink); font:600 11px ui-monospace,monospace; }
+.rng-control input { grid-column:1/-1; display:block; width:100%; min-height:26px; margin:0; accent-color:var(--rng-orange); cursor:pointer; }
+.rng-lab .rng-action { display:block; width:100%; border:1px solid var(--rng-ink); border-radius:6px; padding:10px 12px; background:var(--rng-ink); color:white; font-size:11px; font-weight:600; }
+.rng-lab .rng-action:hover { background:#3d4b50; }
+.rng-lab .rng-action.secondary { color:var(--rng-ink); background:var(--rng-paper); border-color:var(--rng-border); }
+.rng-lab .rng-action.secondary:hover { background:#eaece5; }
+.rng-check { display:flex; align-items:center; gap:8px; margin:16px 0 0; color:var(--rng-muted); font-size:11px; }
+.rng-check input { width:16px; height:16px; accent-color:var(--rng-orange); }
+.rng-hint { margin:14px 0 0; color:var(--rng-muted); font-size:11px; line-height:1.85; }
+.rng-hint b { font-weight:600; color:var(--rng-ink); }
+.rng-prompt { padding:18px; border-radius:8px; background:#e7eae0; }
+.rng-prompt .rng-eyebrow { color:#55725c; }
+.rng-prompt p { margin:0; font-size:12px; color:#526558; }
+.rng-panel.rng-stage,.rng-panel.rng-trace { padding:0; overflow:hidden; }
+.rng-panel.rng-stage { background:#0e1620; border-color:#24313b; }
+.rng-stage h2,.rng-trace h2 { margin:0; padding:18px 20px; }
+.rng-stage h2 { color:#d8e4eb; }
+.rng-stage h2 > span { color:#83a7b4; }
+.rng-stage h2 small { color:#98afba; }
+.rng-canvas { display:block; width:100%; height:auto; border:0; border-radius:0; background:#0e1620; }
+.rng-legend { display:flex; flex-wrap:wrap; gap:10px 18px; margin:0; padding:14px 18px; border-top:1px solid #27333e; color:#a6bdc9; font-size:10px; }
+.rng-legend span { display:flex; gap:6px; align-items:center; }
+.rng-legend span:last-child { margin-left:auto; font-family:ui-monospace,monospace; }
+.rng-legend i { width:10px; height:3px; border-radius:2px; }
+.rng-caption { margin:0; padding:15px 18px; color:var(--rng-muted); background:#f5f4ef; font-size:11px; line-height:1.8; }
+.rng-result { font:500 42px/1.1 ui-monospace,monospace; letter-spacing:-2px; }
+.rng-result small { margin-left:9px; color:var(--rng-muted); font-size:16px; letter-spacing:0; }
+.rng-result-label { margin:9px 0 18px; color:var(--rng-muted); font-size:10px; }
+.rng-equation { padding:12px 0; border-top:1px solid var(--rng-border); border-bottom:1px solid var(--rng-border); color:var(--rng-orange); font:12px/1.8 ui-monospace,monospace; overflow-wrap:anywhere; }
+.rng-metrics { margin:0; }
+.rng-metrics > div { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 10px; padding-top:16px; }
+.rng-metrics dt { color:var(--rng-muted); font-size:10px; }
+.rng-metrics dd { margin:0; font:500 13px ui-monospace,monospace; }
+.rng-alert { margin-top:16px; padding:12px; background:#e8eee5; border-left:2px solid #749a7b; color:#42654a; font-size:10px; }
+.rng-alert b,.rng-alert span { display:block; margin-bottom:4px; }
+.rng-alert.warning { color:#94432b; border-color:#ba4426; background:#fcebe4; }
+.rng-tone-table { font:9px/1.7 ui-monospace,monospace; }
+.rng-tone-table > div { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; padding:10px 0; border-bottom:1px solid var(--rng-border); }
+.rng-tone-table b { font-size:9px; color:var(--rng-muted); font-weight:500; }
+.rng-comb-action { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:0 18px 16px; }
+.rng-comb-action .rng-action { width:auto; }
+.rng-comb-action > span { font:10px ui-monospace,monospace; color:var(--rng-muted); }
+.rng-notebook { margin-top:24px; border:1px solid var(--rng-border); border-radius:8px; background:var(--rng-paper); }
+.rng-notebook > summary { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:20px 24px; list-style:none; cursor:pointer; font-size:17px; font-weight:600; }
+.rng-notebook > summary::-webkit-details-marker { display:none; }
+.rng-notebook > summary > span:last-child { font-size:11px; font-weight:400; color:var(--rng-muted); }
+.rng-lab .lidar-learning { margin:0; padding:0 24px 24px; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.rng-lab .lidar-learning h2 { color:var(--rng-ink); }
+.rng-lab .lidar-learning p { color:var(--rng-muted); }
+.rng-lab .lidar-experiments button,.rng-lab .lidar-answers button { color:var(--rng-ink); background:#f5f4ef; border-color:var(--rng-border); }
+.rng-lab .lidar-experiments button[aria-pressed=true],.rng-lab .lidar-answers button[aria-pressed=true] { color:var(--rng-orange); background:#fcebe4; border-color:var(--rng-orange); }
+.rng-lab .lidar-guide { border-color:var(--rng-border); }
+.rng-lab .lidar-guide summary,.rng-lab .lidar-learning-number { color:var(--rng-muted); }
+.rng-lab .lidar-experiment-result,.rng-lab .lidar-worked-example,.rng-lab .lidar-answer-feedback { background:#f5f4ef; border-color:var(--rng-orange); }
+.rng-lab .lidar-learning-path a[aria-current] { border-color:var(--rng-orange); color:var(--rng-orange); background:#fcebe4; }
+.rng-footer { display:flex; justify-content:space-between; gap:16px; padding-top:24px; color:var(--rng-muted); font:9px ui-monospace,monospace; }
+@media(min-width:1600px) { .rng-workspace { grid-template-columns:270px minmax(0,1fr) 310px; gap:20px; } }
+@media(max-width:1199px) { .rng-workspace { grid-template-columns:240px minmax(0,1fr); }.rng-diagnostics { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; }.rng-constant { display:none; }.rng-model-note { display:none; } }
+@media(max-width:800px) { .rng-lab { padding:0 16px 20px; }.rng-header { min-height:60px; }.rng-header a { font-size:9px; gap:8px; }.rng-brand { width:26px; height:26px; font-size:24px; }.rng-lab-id { display:none; }.rng-intro { padding:24px 0; }.rng-intro h1 { letter-spacing:-1px; }.rng-intro p:not(.rng-eyebrow) { font-size:12px; }.rng-modebar { margin-bottom:14px; }.rng-lab .rng-modes { width:100%; }.rng-modes button { justify-content:center; flex:1; padding:10px 6px; gap:6px; font-size:10px; }.rng-modes button span { display:none; }.rng-workspace { display:flex; flex-direction:column; gap:14px; }.rng-controls,.rng-instruments,.rng-diagnostics { width:100%; }.rng-instruments { order:0; }.rng-controls { order:1; display:grid; grid-template-columns:1fr 1fr; gap:14px; }.rng-diagnostics { order:2; }.rng-prompt { grid-column:1/-1; }.rng-panel { padding:16px; }.rng-stage h2,.rng-trace h2 { padding:16px; }.rng-stage h2 small { font-size:10px; }.rng-result { font-size:34px; }.rng-notebook > summary { padding:18px; }.rng-notebook > summary > span:last-child { font-size:0; }.rng-lab .lidar-learning { padding:0 18px 18px; }.rng-footer { flex-direction:column; gap:8px; font-size:8px; } }
+@media(max-width:540px) { .rng-controls,.rng-diagnostics { display:flex; flex-direction:column; }.rng-legend { gap:8px 12px; font-size:9px; }.rng-legend span:last-child { width:100%; margin:0; }.rng-modes button { font-size:9px; padding:11px 5px; }.rng-intro h1 { font-size:28px; }.rng-notebook > summary { font-size:15px; } }
+@media(prefers-reduced-motion:reduce) { .rng-lab * { transition:none !important; scroll-behavior:auto !important; } }

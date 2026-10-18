@@ -39,7 +39,7 @@
           <button class="btn" id="btnPause" aria-pressed="false">Pause animation</button>
           <span class="note" id="pulseStage" aria-live="off">Incident pulse</span>
         </div>
-        <div class="note">Schematic, not to scale. Motion is slowed down; energy fractions are not ray counts. θ is measured from the surface normal.</div>
+        <div class="note">The housing stays fixed; internal beam steering changes incidence and the hit position. Schematic, not to scale. Motion is slowed; θ is measured from the target normal.</div>
       </div>
       <div class="panel waveform-panel">
         <h3><span class="panel-index">RECEIVER</span> Return waveform <span class="lt">Delay → range · amplitude → signal</span></h3>
@@ -308,14 +308,13 @@ const state = { mat: MATS[0], theta: 0, R: 100, ap: 100, tab: 'surface',
 const sceneCanvas = document.getElementById('sceneCanvas');
 const sc = sceneCanvas.getContext('2d');
 const SW = sceneCanvas.width, SH = sceneCanvas.height;
-const HIT = { x: 400, y: 300 };        // where the beam meets the surface
-const SENS_L = 250;                    // sensor stand-off in canvas px
+const SENSOR = { x: 180, y: 70 };      // fixed housing, schematic internal steering
+const HIT = { x: SENSOR.x, y: 300 };
 
 let pulseT = 0;                        // 0..1 down, 1..2 interaction, 2..3 back
 
 function sensorPos() {
-  const th = state.theta * DEG;
-  return [HIT.x - Math.sin(th)*SENS_L, HIT.y - Math.cos(th)*SENS_L];
+  return [SENSOR.x, SENSOR.y];
 }
 
 function drawSurface() {
@@ -369,20 +368,21 @@ function drawSurface() {
 
 function drawSensor(sx, sy) {
   sc.save();
-  sc.translate(sx, sy); sc.rotate(state.theta*DEG);
+  sc.translate(sx, sy);
   sc.fillStyle='#1d2a38'; sc.strokeStyle='#5f7387'; sc.lineWidth=1.5;
   sc.fillRect(-34,-20,68,40); sc.strokeRect(-34,-20,68,40);
   sc.fillStyle='#e4553f'; sc.fillRect(-24,14,16,8);     // laser port
   sc.fillStyle='#3fa9f5'; sc.fillRect(8,14,16,8);        // receiver port
   sc.fillStyle='#9db4c9'; sc.font='600 9px system-ui'; sc.textAlign='center';
   sc.fillText('TX', -16, 10); sc.fillText('RX', 16, 10);
-  sc.fillStyle='#7d8fa1'; sc.fillText('scanner', 0, -6);
+  sc.fillStyle='#a6c0cd'; sc.fillText('fixed head', 0, -6);
   sc.textAlign='left'; sc.restore();
 }
 
 function label(x, y, text, col) {
   sc.font='600 11px system-ui';
   const w = sc.measureText(text).width + 12;
+  x=clamp(x,5,SW-w-5); y=clamp(y,18,SH-8);
   sc.fillStyle='rgba(12,20,28,.82)'; sc.strokeStyle=col; sc.lineWidth=1;
   sc.beginPath(); sc.roundRect(x, y-13, w, 19, 5); sc.fill(); sc.stroke();
   sc.fillStyle=col; sc.fillText(text, x+6, y);
@@ -605,6 +605,7 @@ function updateSurface() {
 
 function setTheta(deg) {
   state.theta = clamp(Math.round(deg), 0, 65);
+  HIT.x = SENSOR.x + (HIT.y-SENSOR.y)*Math.tan(state.theta*DEG);
   document.getElementById('angSlider').value = state.theta;
   document.getElementById('angVal').textContent = state.theta+'°';
   updateSurface();
@@ -616,9 +617,7 @@ let angDrag = false;
 function thetaFromEvent(e) {
   const r = sceneCanvas.getBoundingClientRect();
   const cx = (e.clientX - r.left) * SW / r.width;
-  const cy = (e.clientY - r.top)  * SH / r.height;
-  const dy = Math.max(30, HIT.y - cy);              // keep the sensor above the surface
-  return Math.atan2(HIT.x - cx, dy) / DEG;
+  return Math.atan2(cx-SENSOR.x, HIT.y-SENSOR.y) / DEG;
 }
 sceneCanvas.addEventListener('pointerdown', e => {
   angDrag = true; sceneCanvas.setPointerCapture?.(e.pointerId);

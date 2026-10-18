@@ -347,15 +347,16 @@ export default function LidarRanging() {
   const [fMod, setFMod] = useState(13); // MHz (CW modulation frequency)
   const [nTones, setNTones] = useState(3); // multi-frequency ladder size
   const [measured, setMeasured] = useState(null);
+  const [motion, setMotion] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   const sceneRef = useRef(null); const chartRef = useRef(null); const combRef = useRef(null);
   const ladderRef = useRef(null); const narrowRef = useRef(null);
   const params = useRef({}); const anim = useRef({ active: false, start: 0, prog: 0 });
   const combAnim = useRef({ playing: false, start: 0 });
   const multiAnim = useRef({ playing: false, start: 0 });
-  params.current = { mode, distance, speed, continuous, pulseWidth, fMod, nTones };
+  params.current = { mode, distance, speed, continuous, pulseWidth, fMod, nTones, motion };
 
-  const fire = () => { anim.current = { active: true, start: performance.now(), prog: 0 }; };
+  const fire = () => { setMeasured(null); anim.current = { active: true, start: performance.now(), prog: 0 }; };
   const playComb = () => { combAnim.current = { playing: true, start: performance.now() }; };
   const playResolve = () => { multiAnim.current = { playing: true, start: performance.now() }; };
 
@@ -403,7 +404,7 @@ export default function LidarRanging() {
         const f = p.fMod * 1e6; const lambda = C / f; const unamb = lambda / 2;
         const ratio = p.distance / unamb; const Nn = Math.floor(ratio); const fr = ratio - Nn;
         const phi = fr * TAU;
-        const theta = (now * 0.0018 * p.speed) % TAU;
+        const theta = p.motion ? (now * 0.0018 * p.speed) % TAU : 0;
         if (sc) drawCwScene(sc.getContext('2d'), { distance: p.distance, lambda, theta });
         if (ch) drawPhaseChart(ch.getContext('2d'), { phi, theta });
         const cb = combRef.current;
@@ -448,201 +449,85 @@ export default function LidarRanging() {
   const finePrecision = tones[nTones - 1].unamb / 60;
 
   return (
-    <div className="sim-app">
-      <header className="sim-topbar">
-        <a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a>
-        <div className="title-block">
-          <h1>LiDAR Ranging <span className="native-badge">Native React</span></h1>
-          <span className="sub">Turning light into distance: pulse timing, continuous-wave phase, and multi-frequency modulation</span>
+    <div className="rng-lab">
+      <header className="rng-header"><a href={import.meta.env.BASE_URL}><span className="rng-brand" aria-hidden="true">⌁</span> GEOSIM <span>/</span> All laboratories</a><span className="rng-lab-id">REMOTE SENSING · LAB 01 / 06</span></header>
+      <div className="rng-intro"><div><p className="rng-eyebrow">THE RANGING LAB</p><h1>Light travels. Distance follows.</h1><p>Time a pulse, compare a phase, resolve a cycle. Three ways to turn a light signal into range.</p></div><div className="rng-constant">c = 299,792,458 m/s<small>VACUUM SPEED · AIR APPROXIMATION</small></div></div>
+      <div className="rng-modebar">
+        <div className="rng-modes" role="tablist" aria-label="Ranging method" onKeyDown={event => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const buttons = [...event.currentTarget.querySelectorAll('button')];
+          const index = buttons.indexOf(document.activeElement);
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (index + (event.key === 'ArrowRight' ? 1 : -1) + 3) % 3;
+          buttons[next].click(); buttons[next].focus();
+        }}>
+          {[['pulsed','01','Pulse timing'],['phase','02','Phase comparison'],['multi','03','Multi-frequency']].map(([key,number,title]) => <button key={key} id={'rng-tab-'+key} role="tab" aria-selected={mode === key} aria-controls="rng-workspace" tabIndex={mode === key ? 0 : -1} className={mode === key ? 'on' : ''} onClick={() => setMode(key)}><span>{number}</span>{title}</button>)}
         </div>
-        <span className="score-chip">c &#8776; <b>3&times;10&#8312; m/s</b></span>
-      </header>
-
-      <LidarLearningPanel topic="ranging" workedExample={mode === 'multi'
+        <span className="rng-model-note">IDEALISED MONOSTATIC SENSOR</span>
+      </div>
+      <main id="rng-workspace" className="rng-workspace" role="tabpanel" aria-labelledby={'rng-tab-'+mode} key={mode}>
+        <aside className="rng-controls" aria-label="Experiment configuration">
+          <section className="rng-panel">
+            <h2><span>01 / CONFIGURE</span>Set the experiment</h2>
+            <label className="rng-control">Target distance <b>{distance} m</b><input id="rng-distance" type="range" min="10" max={DMAX} step="1" value={distance} onChange={e => setDistance(Number(e.target.value))} /></label>
+            {mode === 'pulsed' ? <>
+              <label className="rng-control">Pulse width <b>{pulseWidth} ns</b><input id="rng-width" type="range" min="1" max="40" step="1" value={pulseWidth} onChange={e => setPulseWidth(Number(e.target.value))} /></label>
+              <label className="rng-control">Periodic PRF <b>{prf} kHz</b><input id="rng-prf" type="range" min="10" max="1000" step="5" value={prf} onChange={e => setPrf(Number(e.target.value))} /></label>
+              <p className="rng-hint">PRF is a separate periodic-pulse ambiguity calculation; the animation traces one pulse.</p>
+            </> : mode === 'phase' ? <label className="rng-control">Modulation frequency <b>{fMod} MHz</b><input id="rng-frequency" type="range" min="1" max="30" step="1" value={fMod} onChange={e => setFMod(Number(e.target.value))} /></label>
+              : <label className="rng-control">Modulation tones <b>{nTones}</b><input id="rng-tones" type="range" min="2" max="4" step="1" value={nTones} onChange={e => setNTones(Number(e.target.value))} /></label>}
+          </section>
+          <section className="rng-panel">
+            <h2><span>02 / OBSERVE</span>{mode === 'pulsed' ? 'Launch the pulse' : mode === 'phase' ? 'Follow the modulation' : 'Resolve the cycles'}</h2>
+            {mode === 'pulsed' ? <>
+              <button className="rng-action" id="rng-fire" onClick={fire}>Fire a pulse →</button>
+              <label className="rng-check"><input type="checkbox" checked={continuous} onChange={e => setContinuous(e.target.checked)} /> Repeat pulses</label>
+            </> : mode === 'phase' ? <button className="rng-action secondary" aria-pressed={!motion} onClick={() => setMotion(!motion)}>{motion ? 'Pause wave motion' : 'Play wave motion'}</button> : <button className="rng-action" onClick={playResolve}>Resolve coarse → fine</button>}
+            {mode !== 'multi' && <label className="rng-control">Playback speed <b>{speed.toFixed(1)}×</b><input id="rng-speed" type="range" min="0.3" max="4" step="0.1" value={speed} onChange={e => setSpeed(Number(e.target.value))} /></label>}
+            <p className="rng-hint">Motion is slowed dramatically. Diagram dimensions and wave heights are schematic, not physical light speed or received power.</p>
+          </section>
+          <section className="rng-prompt"><span className="rng-eyebrow">TRY THIS</span><p>{mode === 'pulsed' ? 'Double the distance. Predict the echo delay before firing again.' : mode === 'phase' ? 'Raise the frequency. How many more possible ranges share the same phase?' : 'Add a tone. What shrinks: the overall range or the finest uncertainty window?'}</p></section>
+        </aside>
+        <div className="rng-instruments">
+          <section className="rng-panel rng-stage">
+            <h2><span>LIVE VIEW</span>{mode === 'pulsed' ? 'The round trip' : mode === 'phase' ? 'Outward wave. Returning wave.' : 'The modulation ladder'}<small>{mode === 'multi' ? 'Coarse tones cover the scene; fine tones repeat.' : 'TX → target → RX · range is the one-way path'}</small></h2>
+            {mode === 'multi' ? <canvas ref={ladderRef} className="rng-canvas" width={660} height={ladderH} role="img" aria-label="Modulation phase ramps for each tone with a marker at the target distance." /> : <canvas ref={sceneRef} className="rng-canvas" width={SCENE_W} height={SCENE_H} role="img" aria-label={mode === 'pulsed' ? 'Fixed LiDAR sensor sends a pulse to the target and receives an echo.' : 'Outgoing and returning modulation waves accumulate phase over the round trip.'} />}
+            <div className="rng-legend"><span><i style={{background:'#5ad1ff'}} />{mode === 'multi' ? 'fine phase' : 'transmitted signal'}</span><span><i style={{background:'#ffae4d'}} />{mode === 'multi' ? 'coarse phase' : 'return signal'}</span><span>R = {distance} m</span></div>
+          </section>
+          <section className="rng-panel rng-trace">
+            <h2><span>{mode === 'multi' ? 'CYCLE RESOLUTION' : 'RECEIVER TRACE'}</span>{mode === 'pulsed' ? 'Measure the delay' : mode === 'phase' ? 'Compare the phase' : 'Narrow the range window'}</h2>
+            {mode === 'multi' ? <canvas ref={narrowRef} className="rng-canvas" width={660} height={110} role="img" aria-label="Illustrative range window narrows with each modulation tone." /> : <canvas ref={chartRef} className="rng-canvas" width={TIME_W} height={TIME_H} role="img" aria-label={mode === 'pulsed' ? 'Transmitted and received pulses on a round-trip time axis.' : 'Reference and received sinusoids with a phase-lag bracket and phasor.'} />}
+            <p className="rng-caption">{mode === 'pulsed' ? 'A faint predicted RX is a guide, not a measurement. The pulse shapes are enlarged for visibility; the detected delay gives range.' : mode === 'phase' ? 'These are metre-scale AMCW modulation waves, not optical carrier waves. Phase repeats every 360°; the missing integer cycle must be resolved separately.' : 'Windows are centred on the known synthetic target. They illustrate cycle selection and an assumed ±3° phase error, not a noisy range estimator.'}</p>
+          </section>
+          {mode === 'phase' && <section className="rng-panel rng-trace"><h2><span>DISAMBIGUATION</span>Which whole cycle?</h2><div className="rng-comb-action"><button className="rng-action secondary" onClick={playComb}>Animate the calculation</button><span>0.45 MHz coarse tone → {unambCoarse.toFixed(0)} m interval</span></div><canvas ref={combRef} className="rng-canvas" width={COMB_W} height={COMB_H} role="img" aria-label="Fine-phase candidate ranges with a coarse estimate selecting the correct cycle." /><p className="rng-caption">N = round(Rcoarse / (λ/2) − Δφ/360°) = {Ncalc}. The coarse estimate must select the correct fine cycle; here it is ideal and unambiguous across the scene.</p></section>}
+        </div>
+        <aside className="rng-diagnostics" aria-label="Measurements and interpretation">
+          <section className="rng-panel">
+            <h2><span>03 / READ THE RESULT</span>{mode === 'pulsed' ? 'Time becomes distance' : mode === 'phase' ? 'Phase gives a remainder' : 'Coarse meets fine'}</h2>
+            <div className="rng-result" id="rng-result">{mode === 'pulsed' ? (measured && Math.abs(measured.range-distance)<1e-6 ? measured.range.toFixed(1) : '—') : mode === 'phase' ? rPhase.toFixed(2) : distance.toFixed(2)}<small>m</small></div>
+            <p className="rng-result-label">{mode === 'pulsed' ? 'Detected range · available after the echo' : mode === 'phase' ? 'Phase-only remainder · not full range' : 'Ideal reconstructed range'}</p>
+            <div className="rng-equation">{mode === 'pulsed' ? 'R = c · Δt / 2' : mode === 'phase' ? 'R = (N + Δφ/360°) · λ/2' : 'Coarse cycle + fine phase'}</div>
+            <dl className="rng-metrics">
+              {mode === 'pulsed' ? <><div><dt>Expected round-trip Δt</dt><dd>{tof.toFixed(1)} ns</dd></div><div><dt>Expected one-way time</dt><dd>{oneWay.toFixed(1)} ns</dd></div><div><dt>Pulse-limited scale cτ/2</dt><dd>{rangeRes.toFixed(2)} m</dd></div></> : mode === 'phase' ? <><div><dt>Phase shift Δφ</dt><dd>{phiDeg.toFixed(1)}°</dd></div><div><dt>Modulation wavelength</dt><dd>{lambda.toFixed(2)} m</dd></div><div><dt>Ambiguity interval λ/2</dt><dd>{unamb.toFixed(2)} m</dd></div><div><dt>Range per degree</dt><dd>{(phasePrecision*100).toFixed(1)} cm</dd></div><div><dt>Resolved whole cycles N</dt><dd>{Ncalc}</dd></div><div><dt>With ideal coarse tone</dt><dd>{((Ncalc+frac)*unamb).toFixed(2)} m</dd></div></> : <><div><dt>Coarsest interval</dt><dd>{tones[0].unamb.toFixed(0)} m</dd></div><div><dt>Fine bound, assuming ±3°</dt><dd>±{(finePrecision/2).toFixed(3)} m</dd></div></>}
+            </dl>
+          </section>
+          <section className="rng-panel">
+            <h2><span>INTERPRETATION</span>{mode === 'pulsed' ? 'Do not confuse the scales' : mode === 'phase' ? 'The missing integer' : 'The tone ladder'}</h2>
+            {mode === 'pulsed' ? <><p className="rng-hint"><b>Why divide by two?</b> The light travels out and back: total path = 2R. A 1 ns timing error corresponds to about 15 cm of range error.</p><p className="rng-hint"><b>Resolution is not accuracy.</b> cτ/2 is a characteristic echo-separation scale. Pulse shape, amplitude, bandwidth, noise and processing determine actual separation and precision.</p><div className={'rng-alert '+(ambiguous ? 'warning' : '')} role="status"><b>{ambiguous ? 'Pulse identity is ambiguous' : 'Within one pulse interval'}</b><span>Rmax = {rMax.toFixed(2)} m</span><span>Untagged periodic apparent R = {apparentRange.toFixed(2)} m</span></div><p className="rng-hint">The single-pulse animation uses true travel time. Real multiple-time-around systems can use pulse identification to resolve periodic ambiguity.</p></>
+              : mode === 'phase' ? <><p className="rng-hint">The same fine phase occurs at {rPhase.toFixed(2)} m, {(rPhase+unamb).toFixed(2)} m, and further intervals. Phase alone does not observe N.</p><p className="rng-hint">A coarse tone with interval {unambCoarse.toFixed(0)} m identifies the fine cycle. Its error must be less than about ±{(unamb/2).toFixed(2)} m to choose the nearest correct candidate.</p><p className="rng-hint">This is AMCW phase ranging, not FMCW beat-frequency ranging. Real precision depends on phase noise and calibration.</p></>
+              : <><div className="rng-tone-table"><div><b>Tone</b><b>λ/2</b><b>Phase</b></div>{tones.map((t,i) => <div key={t.f}><span>{(t.f/1e6).toFixed(i===0 ? 2 : 1)} MHz</span><span>{t.unamb.toFixed(2)} m</span><span>{((distance/t.unamb)%1*360).toFixed(1)}°</span></div>)}</div><p className="rng-hint">The {tones[0].unamb.toFixed(0)} m coarsest interval exceeds the full 0–{DMAX} m scene. Higher frequencies refine the phase fraction only after the correct cycle is chosen.</p><p className="rng-hint">The ±3° assumption is illustrative. More tones alone do not guarantee precision or absolute accuracy.</p></>}
+          </section>
+        </aside>
+      </main>
+      <details className="rng-notebook"><summary><span><span className="rng-eyebrow">THE LAB NOTEBOOK</span>Understand the physics</span><span>Experiments, self-checks &amp; references ＋</span></summary>
+        <LidarLearningPanel topic="ranging" workedExample={mode === 'multi'
         ? `${nTones} illustrative tones: the coarsest interval is ${tones[0].unamb.toFixed(0)} m, exceeding the ${DMAX} m scene; the finest interval is ${tones.at(-1).unamb.toFixed(3)} m. An assumed ±3° phase error maps to ±${(finePrecision / 2).toFixed(3)} m only after the correct cycle is identified.`
         : mode === 'pulsed'
         ? `Δt = 2 × ${distance} / ${C} = ${tof.toFixed(2)} ns; pulse-limited scale cτ/2 = ${rangeRes.toFixed(3)} m. PRF ${prf} kHz gives Rmax = ${rMax.toFixed(2)} m${ambiguous ? ` and an untagged-pulse apparent range of ${apparentRange.toFixed(2)} m` : ', beyond this target'}.`
         : `At ${fMod} MHz: λmod/2 = ${unamb.toFixed(3)} m; Δφ = ${phiDeg.toFixed(2)}°; R = (${N} + ${(frac).toFixed(4)}) × ${unamb.toFixed(3)} = ${distance} m. Phase alone does not observe N.`}
         onExperiment={(id) => { if (id === 'phase') { setMode('phase'); setDistance(120); setFMod(10); } else { setMode('pulsed'); setDistance(id === 'timing' ? 150 : 220); setPrf(id === 'timing' ? 100 : 1000); setPulseWidth(10); } }} />
-
-      <div className="rng-modes">
-        <button className={`rng-seg ${mode === 'pulsed' ? 'on' : ''}`} onClick={() => setMode('pulsed')}>Pulsed &mdash; time of flight</button>
-        <button className={`rng-seg ${mode === 'phase' ? 'on' : ''}`} onClick={() => setMode('phase')}>Continuous wave &mdash; phase</button>
-        <button className={`rng-seg ${mode === 'multi' ? 'on' : ''}`} onClick={() => setMode('multi')}>Multi-frequency &mdash; full range</button>
-      </div>
-
-      {mode === 'pulsed' ? (
-        <div className="sim-layout" key="pulsed">
-          <div className="sim-col">
-            <section className="sim-panel">
-              <h2><span className="stepno">1</span> Fire a pulse <small>&mdash; watch it travel out and the wave return</small></h2>
-              <canvas ref={sceneRef} className="rng-canvas" width={SCENE_W} height={SCENE_H} />
-              <div className="rng-fire">
-                <button className="rng-btn" onClick={fire}>▶ Fire pulse</button>
-                <label className="rng-chk"><input type="checkbox" checked={continuous} onChange={(e) => setContinuous(e.target.checked)} /> continuous</label>
-                <span style={{ flex: 1 }} />
-                <label className="rng-chk">slow-mo<input type="range" min="0.3" max="4" step="0.1" value={speed} onChange={(e) => setSpeed(Number(e.target.value))} style={{ accentColor: '#0f8a4d' }} /></label>
-              </div>
-              <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
-                <label>Target distance R <b>{distance} m</b><input type="range" min="10" max={DMAX} step="1" value={distance} onChange={(e) => setDistance(Number(e.target.value))} /></label>
-              </div>
-              <div className="rng-legend">
-                <span><i className="rng-swatch" style={{ background: '#5ad1ff' }} /> outgoing pulse</span>
-                <span><i className="rng-swatch" style={{ background: '#ffae4d' }} /> returning echo wave</span>
-                <span><i className="rng-swatch" style={{ background: '#7ee0c4' }} /> clock; range available after echo detection</span>
-              </div>
-            </section>
-
-            <section className="sim-panel">
-              <h2><span className="stepno">2</span> Timing measurement <small>&mdash; the transmitted &amp; return waveforms</small></h2>
-              <canvas ref={chartRef} className="rng-canvas" width={TIME_W} height={TIME_H} />
-              <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-                <div><span>round-trip Δt</span><b>{tof.toFixed(0)} ns</b></div>
-                <div><span>one-way time</span><b>{oneWay.toFixed(0)} ns</b></div>
-                <div><span>measured range</span><b className="orange">{measured && Math.abs(measured.range - distance) < 1e-6 ? measured.range.toFixed(1) : '—'} m</b></div>
-              </div>
-            </section>
-          </div>
-
-          <div className="sim-col">
-            <section className="sim-panel">
-              <h2><span className="stepno">3</span> The ranging equation</h2>
-              <div className="equation big">R = c &middot; Δt / 2</div>
-              <div className="equation big">R = {C} &middot; {(tof * 1e-9).toExponential(5)} / 2 ≈ <b>{distance.toFixed(1)} m</b></div>
-              <div className="rng-note"><b>Why divide by two?</b> The clock measures the <b>round trip</b> — out to the target and back — so the light travels <b>2R</b>. Halving the total path gives the one-way distance. Light covers ~0.3 m per nanosecond, so a 1 ns timing error is a 15 cm range error.</div>
-              <div className="rng-sub">Pulse-limited echo-separation scale</div>
-              <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
-                <label>Pulse width τ <b>{pulseWidth} ns</b><input type="range" min="1" max="40" step="1" value={pulseWidth} onChange={(e) => setPulseWidth(Number(e.target.value))} /></label>
-              </div>
-              <div className="readouts" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
-                <div><span>ΔR = c·τ / 2</span><b>{rangeRes.toFixed(2)} m</b></div>
-                <div><span>meaning</span><b style={{ fontSize: 12 }}>characteristic scale</b></div>
-              </div>
-              <div className="rng-note"><b>Resolution is not accuracy.</b> cτ/2 is an approximate pulse-limited separation scale. Overlapping echoes may be recoverable depending on pulse shape, amplitudes, bandwidth, noise and processing. A single target can be timed more precisely than the pulse width.</div>
-              <div className="rng-sub">Maximum unambiguous range</div>
-              <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
-                <label>Periodic pulse rate (PRF) <b>{prf} kHz</b><input type="range" min="10" max="1000" step="5" value={prf} onChange={(e) => setPrf(Number(e.target.value))} /></label>
-              </div>
-              <div className="readouts" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
-                <div><span>R_max = c / (2·PRF)</span><b>{rMax >= 1000 ? `${(rMax / 1000).toFixed(2)} km` : `${rMax.toFixed(0)} m`}</b></div>
-                <div><span>periodic-pulse apparent R</span><b className={ambiguous ? 'orange' : ''}>{apparentRange.toFixed(2)} m</b></div>
-              </div>
-              <div className="rng-note" role="status"><b>{ambiguous ? 'Pulse identity is ambiguous here.' : 'The echo fits in one pulse interval.'}</b> R = {distance} m; Rmax = {rMax.toFixed(2)} m. The single-pulse animation shows true travel time. The separate periodic-pulse calculation assumes no pulse tagging; systems with multiple-time-around processing can resolve longer ranges.</div>
-            </section>
-          </div>
-        </div>
-      ) : mode === 'phase' ? (
-        <div className="sim-layout" key="phase">
-          <div className="sim-col">
-            <section className="sim-panel">
-              <h2><span className="stepno">1</span> Continuous modulated wave <small>&mdash; it runs to the target and back</small></h2>
-              <canvas ref={sceneRef} className="rng-canvas" width={SCENE_W} height={SCENE_H} />
-              <div className="control-grid">
-                <label>Target distance R <b>{distance} m</b><input type="range" min="10" max={DMAX} step="1" value={distance} onChange={(e) => setDistance(Number(e.target.value))} /></label>
-                <label>Modulation frequency f <b>{fMod} MHz</b><input type="range" min="1" max="30" step="1" value={fMod} onChange={(e) => setFMod(Number(e.target.value))} /></label>
-              </div>
-              <div className="rng-legend">
-                <span><i className="rng-swatch" style={{ background: '#5ad1ff' }} /> transmitted wave</span>
-                <span><i className="rng-swatch" style={{ background: '#ffae4d' }} /> reflected return wave</span>
-                <span>λ = c / f = <b style={{ fontFamily: 'monospace', color: '#16202c' }}>{lambda.toFixed(1)} m</b></span>
-              </div>
-            </section>
-
-            <section className="sim-panel">
-              <h2><span className="stepno">2</span> Phase measurement <small>&mdash; the return lags the reference by Δφ</small></h2>
-              <canvas ref={chartRef} className="rng-canvas" width={TIME_W} height={TIME_H} />
-              <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-                <div><span>phase shift Δφ</span><b>{phiDeg.toFixed(0)}°</b></div>
-                <div><span>wavelength λ</span><b>{lambda.toFixed(1)} m</b></div>
-                <div><span>unambiguous λ/2</span><b>{unamb.toFixed(1)} m</b></div>
-              </div>
-            </section>
-          </div>
-
-          <div className="sim-col">
-            <section className="sim-panel">
-              <h2><span className="stepno">3</span> Distance from phase</h2>
-              <div className="equation big">Δφ = [2π · (2R / λ<sub>mod</sub>)] mod 2π</div>
-              <div className="equation big">R = (Δφ / 2π) · (λ / 2) = <b>{rPhase.toFixed(2)} m</b> <span style={{ color: '#7d8fa1' }}>+ N · {unamb.toFixed(1)} m</span></div>
-              <div className="rng-note"><b>Phase gives the fractional interval.</b> The receiver compares the returned modulation with the reference. The lag identifies <b>{(phiDeg / 360).toFixed(3)}</b> of λ/2, here approximately <b>{rPhase.toFixed(2)} m</b>, but not the integer cycle count. Range sensitivity is <b>{(phasePrecision * 100).toFixed(1)} cm per degree</b>; actual uncertainty depends on phase noise and calibration.</div>
-
-              <div className="rng-sub">How is N calculated? — a second, coarse tone</div>
-              <div className="rng-note">
-                Phase alone repeats every <b>λ/2 = {unamb.toFixed(1)} m</b>, so it can&rsquo;t tell {rPhase.toFixed(1)} m from {(rPhase + unamb).toFixed(1)} m from {(rPhase + 2 * unamb).toFixed(1)} m… To find <b>N</b>, the sensor adds a <b>coarse modulation tone</b> whose half-wavelength is longer than the whole measurement range, so its phase is <b>unambiguous</b> — a rough distance that tells you which fine cycle you&rsquo;re in.
-              </div>
-              <div className="rng-fire" style={{ marginTop: 0, marginBottom: 8 }}>
-                <button className="rng-btn ghost" onClick={playComb}>▶ Animate the calculation</button>
-                <span className="rng-chk">coarse estimate sweeps out, counting whole λ/2 cycles up to N</span>
-              </div>
-              <canvas ref={combRef} className="rng-canvas" width={COMB_W} height={COMB_H} />
-              <div className="equation big" style={{ marginTop: 10 }}>coarse f = 0.45 MHz → λ/2 = {unambCoarse.toFixed(0)} m → R<sub>coarse</sub> ≈ {coarseR.toFixed(1)} m</div>
-              <div className="equation big">N = round( R<sub>coarse</sub> / (λ/2) − Δφ/360° ) = round( {(coarseR / unamb).toFixed(2)} − {(frac).toFixed(3)} ) = <b>{Ncalc}</b></div>
-              <div className="equation big">R = (N + Δφ/360°) · λ/2 = ({Ncalc} + {(frac).toFixed(3)}) · {unamb.toFixed(2)} = <b>{((Ncalc + frac) * unamb).toFixed(2)} m</b></div>
-              <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-                <div><span>coarse R (fixes N)</span><b>{coarseR.toFixed(0)} m</b></div>
-                <div><span>whole cycles N</span><b>{Ncalc}</b></div>
-                <div><span>fine R (precise)</span><b className="orange">{((Ncalc + frac) * unamb).toFixed(2)} m</b></div>
-              </div>
-              <div className="rng-note">
-                The coarse reading only has to be accurate to within <b>±λ/4 = {(unamb / 2).toFixed(1)} m</b> — just enough to pick the right cyan tick above. The fine tone then supplies the precise fraction (≈ {(phasePrecision * 100).toFixed(1)} cm per degree). <b>Higher fine f → finer precision but more candidate cycles to disambiguate.</b>
-              </div>
-              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>Pulsed vs phase.</b> These are pulsed time-of-flight and amplitude-modulated continuous-wave (AMCW) ranging, not FMCW beat-frequency ranging. λ is the metre-scale modulation wavelength, not the nanometre-scale optical wavelength. Precision depends on timing/phase uncertainty; neither method guarantees millimetre accuracy.</div>
-            </section>
-          </div>
-        </div>
-      ) : (
-        <div className="sim-layout" key="multi">
-          <div className="sim-col">
-            <section className="sim-panel">
-              <h2><span className="stepno">1</span> Modulation ladder <small>&mdash; each tone&rsquo;s phase across the whole range</small></h2>
-              <canvas ref={ladderRef} className="rng-canvas" width={660} height={ladderH} />
-              <div className="control-grid">
-                <label>Target distance R <b>{distance} m</b><input type="range" min="10" max={DMAX} step="1" value={distance} onChange={(e) => setDistance(Number(e.target.value))} /></label>
-                <label>Modulation tones <b>{nTones}</b><input type="range" min="2" max="4" step="1" value={nTones} onChange={(e) => setNTones(Number(e.target.value))} /></label>
-              </div>
-              <div className="rng-legend">
-                <span><i className="rng-swatch" style={{ background: '#ff9f45' }} /> coarse (covers whole range)</span>
-                <span><i className="rng-swatch" style={{ background: '#5ad1ff' }} /> fine (precise)</span>
-                <span>read the dot on each ramp at R = <b style={{ fontFamily: 'monospace', color: '#16202c' }}>{distance} m</b></span>
-              </div>
-            </section>
-
-            <section className="sim-panel">
-              <h2><span className="stepno">2</span> Coarse-to-fine narrowing <small>&mdash; each tone shrinks the window</small></h2>
-              <div className="rng-fire" style={{ marginTop: 0, marginBottom: 8 }}>
-                <button className="rng-btn ghost" onClick={playResolve}>▶ Resolve coarse → fine</button>
-                <span className="rng-chk">the coarse tone locates R across the whole range; finer tones refine it</span>
-              </div>
-              <canvas ref={narrowRef} className="rng-canvas" width={660} height={110} />
-            </section>
-          </div>
-
-          <div className="sim-col">
-            <section className="sim-panel">
-              <h2><span className="stepno">3</span> Why several modulation frequencies?</h2>
-              <div className="rng-note">
-                A single tone can&rsquo;t do both jobs: a <b>low</b> frequency has a long λ/2 that spans the whole range (so its phase is <b>unambiguous</b>) but reads range coarsely, while a <b>high</b> frequency reads finely but its phase <b>wraps</b> many times. Sending a <b>ladder of frequencies</b> gets both — the coarse tone says roughly where you are, and each finer tone sharpens it while the coarser one tells it which cycle it is in.
-              </div>
-              <div className="rng-sub">The tone ladder</div>
-              {tones.map((t, i) => (
-                <div className="readouts" key={i} style={{ gridTemplateColumns: '1.1fr 1fr 1fr', marginBottom: 6 }}>
-                  <div><span>{i === 0 ? 'coarse' : i === nTones - 1 ? 'finest' : `tone ${i + 1}`}</span><b style={{ color: LADDER_COLORS[i] }}>{(t.f / 1e6).toFixed(t.f < 1e6 ? 2 : 1)} MHz</b></div>
-                  <div><span>unambiguous λ/2</span><b>{t.unamb >= 10 ? t.unamb.toFixed(0) : t.unamb.toFixed(1)} m</b></div>
-                  <div><span>phase at R</span><b>{(((distance / t.unamb) % 1) * 360).toFixed(0)}°</b></div>
-                </div>
-              ))}
-              <div className="readouts" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
-                <div><span>whole range covered</span><b>0 – {DMAX} m</b></div>
-                <div><span>assuming ±3° fine-phase error</span><b className="orange">± {(finePrecision / 2).toFixed(2)} m</b></div>
-              </div>
-              <div className="rng-note">
-                The coarsest interval (<b>{tones[0].unamb.toFixed(0)} m</b>) exceeds the entire <b>0–{DMAX} m</b> scene, including its endpoint. The displayed final window is the finest tone&rsquo;s range sensitivity multiplied by an <b>assumed ±3° phase error</b>. Windows are illustrations centred on the known synthetic target, not outputs of a noisy range estimator. Incorrect coarse-cycle selection can overwhelm this fine-scale bound.
-              </div>
-              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>In practice</b> multiple modulation frequencies can resolve cycle ambiguity. Achievable precision also depends on phase noise and calibration; extra tones alone do not guarantee millimetre precision or absolute accuracy.</div>
-            </section>
-          </div>
-        </div>
-      )}
+      </details>
+      <footer className="rng-footer"><span>GEOSIM / RANGING LAB</span><span>Make a prediction. Change one variable. Measure the return.</span></footer>
     </div>
   );
 }
