@@ -27,3 +27,9 @@ In the repository's GitHub settings, open **Pages** and set **Build and deployme
 `https://opensourcegis.github.io/Simulations/`
 
 The Vite base path is configured as `/Simulations/`, matching this repository's GitHub Pages project URL.
+
+## LiDAR learning modules
+
+The six LiDAR lessons include working principles, guided experiments, live calculations and self-check questions. See [the academic teaching review](docs/LIDAR_ACADEMIC_REVIEW.md) for the scientific corrections, conventions and model limits. Shared teaching content and numerical models live under `games/shared/` and serve both React and standalone pages.
+
+Run the numerical regression checks with `npm run test:lidar`, and verify production integration with `npm run build`.

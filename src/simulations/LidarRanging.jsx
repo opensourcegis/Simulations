@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import './simulation.css';
 import './native.css';
 import './ranging.css';
+import LidarLearningPanel from './LidarLearningPanel.jsx';
+import { LIGHT_SPEED, roundTripNs, phaseMeasurement, pulseAmbiguity } from '../../games/shared/lidar-physics.js';
 
-const C = 299792458; // speed of light, m/s
+const C = LIGHT_SPEED;
 const DMAX = 300; // metres (full-scale of the scene)
 const SCENE_W = 700; const SCENE_H = 300;
 const TIME_W = 700; const TIME_H = 200;
 
-const tofNs = (R) => (2 * R / C) * 1e9; // round-trip time in nanoseconds
+const tofNs = roundTripNs;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const TAU = Math.PI * 2;
 
@@ -36,12 +38,12 @@ function drawPulseScene(ctx, { distance, prog, active }) {
   g.addColorStop(0, '#0e1e2e'); g.addColorStop(1, '#0a1420');
   ctx.fillStyle = g; ctx.fillRect(0, 0, SCENE_W, SCENE_H);
   const y = 150; const sensorX = 70;
-  const targetX = sensorX + (distance / DMAX) * 560;
+  const targetX = sensorX + 18 + (distance / DMAX) * 540;
 
   ctx.strokeStyle = 'rgba(120,150,175,.25)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(40, y + 60); ctx.lineTo(SCENE_W - 20, y + 60); ctx.stroke();
   ctx.fillStyle = '#7d8fa1'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-  for (let d = 0; d <= DMAX; d += 50) { const x = sensorX + (d / DMAX) * 560; ctx.strokeStyle = 'rgba(120,150,175,.25)'; ctx.beginPath(); ctx.moveTo(x, y + 55); ctx.lineTo(x, y + 65); ctx.stroke(); ctx.fillStyle = '#7d8fa1'; ctx.fillText(`${d}`, x, y + 80); }
+  for (let d = 0; d <= DMAX; d += 50) { const x = sensorX + 18 + (d / DMAX) * 540; ctx.strokeStyle = 'rgba(120,150,175,.25)'; ctx.beginPath(); ctx.moveTo(x, y + 55); ctx.lineTo(x, y + 65); ctx.stroke(); ctx.fillStyle = '#7d8fa1'; ctx.fillText(`${d}`, x, y + 80); }
   ctx.textAlign = 'left'; ctx.fillText('m', SCENE_W - 40, y + 80);
 
   ctx.strokeStyle = 'rgba(90,200,232,.22)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 2;
@@ -71,7 +73,7 @@ function drawPulseScene(ctx, { distance, prog, active }) {
   ctx.fillStyle = '#dbe9f2'; ctx.font = '700 20px "Segoe UI", system-ui'; ctx.textAlign = 'left';
   ctx.fillText(`t = ${t.toFixed(0)} ns`, 44, 42);
   ctx.fillStyle = '#7ee0c4'; ctx.font = '600 13px system-ui';
-  ctx.fillText(`range = c · t / 2 = ${(C * (t * 1e-9) / 2).toFixed(1)} m`, 44, 64);
+  ctx.fillText(prog >= 1 ? `echo detected → R = ${(C * (t * 1e-9) / 2).toFixed(1)} m` : 'range unknown until the echo is detected', 44, 64);
 }
 
 // Pulsed timing diagram: transmitted + received wave packets on a time axis.
@@ -89,15 +91,19 @@ function drawPulseTiming(ctx, { distance, prog, active, pulseWidth }) {
   ctx.textAlign = 'left'; ctx.fillText('time (ns)', right - 54, TIME_H - 10);
 
   const half = clamp((pulseWidth / tMax) * (right - left) * 1.6, 10, 60);
-  const packet = (cx, color, label) => { wavePacket(ctx, cx, mid, color, 30, half, 0.36); ctx.fillStyle = color; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(label, cx, top - 8); ctx.textAlign = 'left'; };
+  const packet = (cx, color, label) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+    for (let x = -half; x <= half; x += 0.5) { const yy = mid - 44 * Math.exp(-((x / (half / 3)) ** 2) / 2); x === -half ? ctx.moveTo(cx + x, yy) : ctx.lineTo(cx + x, yy); }
+    ctx.stroke(); ctx.fillStyle = color; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(label, cx, top - 8); ctx.textAlign = 'left';
+  };
 
   const tof = tofNs(distance);
   packet(X(0), '#5ad1ff', 'TX (emitted)');
   const nowNs = prog * tof;
-  if (!active || prog >= 1) packet(X(tof), '#ffae4d', 'RX (return wave)');
-  else if (prog > 0.5) { ctx.globalAlpha = (prog - 0.5) / 0.5; packet(X(nowNs), '#ffae4d', 'RX (return wave)'); ctx.globalAlpha = 1; }
+  if (prog >= 1) packet(X(tof), '#ffae4d', 'RX (detected)');
+  else { ctx.globalAlpha = 0.35; packet(X(tof), '#ffae4d', 'predicted RX'); ctx.globalAlpha = 1; }
 
-  if (!active || prog >= 1) {
+  if (prog >= 1) {
     ctx.strokeStyle = '#f6c85f'; ctx.lineWidth = 1.5; const yb = top - 2;
     ctx.beginPath(); ctx.moveTo(X(0), yb); ctx.lineTo(X(tof), yb); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(X(0), yb - 4); ctx.lineTo(X(0), yb + 4); ctx.moveTo(X(tof), yb - 4); ctx.lineTo(X(tof), yb + 4); ctx.stroke();
@@ -116,30 +122,30 @@ function drawCwScene(ctx, { distance, lambda, theta }) {
   const g = ctx.createLinearGradient(0, 0, 0, SCENE_H);
   g.addColorStop(0, '#0e1e2e'); g.addColorStop(1, '#0a1420');
   ctx.fillStyle = g; ctx.fillRect(0, 0, SCENE_W, SCENE_H);
-  const sensorX = 70; const targetX = sensorX + (distance / DMAX) * 560;
-  const pxPerM = 560 / DMAX; const lambdaPx = lambda * pxPerM;
+  const sensorX = 70; const emitterX = sensorX + 18; const targetX = emitterX + (distance / DMAX) * 540;
+  const pxPerM = 540 / DMAX; const lambdaPx = lambda * pxPerM;
   const outY = 116; const backY = 190;
 
   // ruler
   ctx.fillStyle = '#7d8fa1'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
   ctx.strokeStyle = 'rgba(120,150,175,.25)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(40, 250); ctx.lineTo(SCENE_W - 20, 250); ctx.stroke();
-  for (let d = 0; d <= DMAX; d += 50) { const x = sensorX + (d / DMAX) * 560; ctx.beginPath(); ctx.moveTo(x, 245); ctx.lineTo(x, 255); ctx.stroke(); ctx.fillText(`${d}`, x, 268); }
+  for (let d = 0; d <= DMAX; d += 50) { const x = emitterX + (d / DMAX) * 540; ctx.beginPath(); ctx.moveTo(x, 245); ctx.lineTo(x, 255); ctx.stroke(); ctx.fillText(`${d}`, x, 268); }
   ctx.textAlign = 'left'; ctx.fillText('m', SCENE_W - 40, 268);
 
   const sineAlong = (yBase, x0, x1, color, phase, dir) => {
     ctx.strokeStyle = color; ctx.lineWidth = 2.2; ctx.beginPath();
     const step = x1 > x0 ? 3 : -3;
     for (let x = x0; dir > 0 ? x <= x1 : x >= x1; x += step) {
-      const y = yBase - 13 * Math.sin((TAU / lambdaPx) * (x - sensorX) - dir * phase);
+      const pathLength = dir > 0 ? x - emitterX : 2 * (targetX - emitterX) - (x - emitterX);
+      const y = yBase - 13 * Math.sin(phase - (TAU / lambdaPx) * pathLength);
       if (x === x0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
   };
   // outgoing (cyan) above, returning (orange) below — returning carries the full round-trip phase
   sineAlong(outY, sensorX + 18, targetX, '#5ad1ff', theta, 1);
-  const roundTripPhase = theta + (TAU / lambdaPx) * 2 * (targetX - sensorX - 18);
-  sineAlong(backY, targetX, sensorX + 18, '#ffae4d', roundTripPhase, -1);
+  sineAlong(backY, targetX, emitterX, '#ffae4d', theta, -1);
 
   // wavelength marker
   if (lambdaPx < 520 && targetX - sensorX - 18 > lambdaPx) {
@@ -181,7 +187,7 @@ function drawPhaseChart(ctx, { phi, theta }) {
 
   // Δφ bracket between a TX zero-crossing (rising) and the RX one
   const shiftPx = (phi / TAU) * periodPx;
-  const x0 = left + periodPx * 0.5;
+  const x0 = left + ((TAU - theta % TAU) % TAU) / TAU * periodPx;
   ctx.strokeStyle = '#f6c85f'; ctx.lineWidth = 1.5; const yb = mid + A + 16;
   ctx.beginPath(); ctx.moveTo(x0, yb); ctx.lineTo(x0 + shiftPx, yb); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x0, yb - 4); ctx.lineTo(x0, yb + 4); ctx.moveTo(x0 + shiftPx, yb - 4); ctx.lineTo(x0 + shiftPx, yb + 4); ctx.stroke();
@@ -273,7 +279,7 @@ function drawComb(ctx, o) {
 // adding precision while the coarser tones tell it which cycle it is in.
 // ---------------------------------------------------------------------------
 const LADDER_COLORS = ['#ff9f45', '#f6c85f', '#5ad1ff', '#7ee0c4'];
-function buildTones(n) { const t = []; for (let i = 0; i < n; i += 1) { const unamb = DMAX / (6 ** i); t.push({ f: C / (2 * unamb), unamb }); } return t; }
+function buildTones(n) { const t = []; for (let i = 0; i < n; i += 1) { const unamb = (DMAX * 1.2) / (6 ** i); t.push({ f: C / (2 * unamb), unamb }); } return t; }
 
 function drawLadder(ctx, W, H, tones, R, activeTone, win) {
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, W, H);
@@ -326,7 +332,7 @@ function drawNarrow(ctx, W, H, tones, R, win, activeTone, finalDone) {
   ctx.beginPath(); ctx.moveTo(X(R), y - 48); ctx.lineTo(X(R), y); ctx.stroke();
   ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(R), y - 48, 4, 0, TAU); ctx.fill();
   const width = hi - lo;
-  const lab = finalDone ? `resolved ≈ ${R.toFixed(2)} m  (±${(precision / 2).toFixed(2)} m)` : `tone ${activeTone + 1} · ${(tones[activeTone].f / 1e6).toFixed(activeTone === 0 ? 2 : 1)} MHz → window ${width < 10 ? width.toFixed(2) : width.toFixed(0)} m`;
+  const lab = finalDone ? `ideal R ≈ ${R.toFixed(2)} m; ±3° phase → ±${(precision / 2).toFixed(2)} m` : `tone ${activeTone + 1} · ${(tones[activeTone].f / 1e6).toFixed(activeTone === 0 ? 2 : 1)} MHz → window ${width < 10 ? width.toFixed(2) : width.toFixed(0)} m`;
   ctx.font = '600 12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = col;
   ctx.fillText(lab, clamp(X((lo + hi) / 2), 90, W - 90), y - 52); ctx.textAlign = 'left';
 }
@@ -352,6 +358,11 @@ export default function LidarRanging() {
   const fire = () => { anim.current = { active: true, start: performance.now(), prog: 0 }; };
   const playComb = () => { combAnim.current = { playing: true, start: performance.now() }; };
   const playResolve = () => { multiAnim.current = { playing: true, start: performance.now() }; };
+
+  useEffect(() => {
+    setMeasured(null);
+    anim.current = { active: false, start: 0, prog: 0 };
+  }, [distance, mode]);
 
   useEffect(() => {
     let raf;
@@ -421,11 +432,10 @@ export default function LidarRanging() {
   // Pulsed readouts
   const tof = tofNs(distance); const oneWay = tof / 2;
   const rangeRes = C * (pulseWidth * 1e-9) / 2;
-  const rMax = C / (2 * prf * 1e3);
+  const { limit: rMax, ambiguous, apparentRange } = pulseAmbiguity(distance, prf);
   // Phase readouts (fine tone)
-  const f = fMod * 1e6; const lambda = C / f; const unamb = lambda / 2;
-  const ratio = distance / unamb; const N = Math.floor(ratio); const frac = ratio - N;
-  const phiDeg = frac * 360; const rPhase = frac * unamb; // ambiguous (phase-only) range
+  const { wavelength: lambda, interval: unamb, cycles: N, phaseDegrees: phiDeg, remainder: rPhase } = phaseMeasurement(distance, fMod);
+  const frac = phiDeg / 360;
   const phasePrecision = unamb / 360; // metres per degree of phase
   // Coarse tone used to resolve N: λ/2 spans the whole scene, so it is unambiguous.
   const F_COARSE = 0.45e6; const lambdaCoarse = C / F_COARSE; const unambCoarse = lambdaCoarse / 2;
@@ -447,6 +457,13 @@ export default function LidarRanging() {
         </div>
         <span className="score-chip">c &#8776; <b>3&times;10&#8312; m/s</b></span>
       </header>
+
+      <LidarLearningPanel topic="ranging" workedExample={mode === 'multi'
+        ? `${nTones} illustrative tones: the coarsest interval is ${tones[0].unamb.toFixed(0)} m, exceeding the ${DMAX} m scene; the finest interval is ${tones.at(-1).unamb.toFixed(3)} m. An assumed ±3° phase error maps to ±${(finePrecision / 2).toFixed(3)} m only after the correct cycle is identified.`
+        : mode === 'pulsed'
+        ? `Δt = 2 × ${distance} / ${C} = ${tof.toFixed(2)} ns; pulse-limited scale cτ/2 = ${rangeRes.toFixed(3)} m. PRF ${prf} kHz gives Rmax = ${rMax.toFixed(2)} m${ambiguous ? ` and an untagged-pulse apparent range of ${apparentRange.toFixed(2)} m` : ', beyond this target'}.`
+        : `At ${fMod} MHz: λmod/2 = ${unamb.toFixed(3)} m; Δφ = ${phiDeg.toFixed(2)}°; R = (${N} + ${(frac).toFixed(4)}) × ${unamb.toFixed(3)} = ${distance} m. Phase alone does not observe N.`}
+        onExperiment={(id) => { if (id === 'phase') { setMode('phase'); setDistance(120); setFMod(10); } else { setMode('pulsed'); setDistance(id === 'timing' ? 150 : 220); setPrf(id === 'timing' ? 100 : 1000); setPulseWidth(10); } }} />
 
       <div className="rng-modes">
         <button className={`rng-seg ${mode === 'pulsed' ? 'on' : ''}`} onClick={() => setMode('pulsed')}>Pulsed &mdash; time of flight</button>
@@ -472,7 +489,7 @@ export default function LidarRanging() {
               <div className="rng-legend">
                 <span><i className="rng-swatch" style={{ background: '#5ad1ff' }} /> outgoing pulse</span>
                 <span><i className="rng-swatch" style={{ background: '#ffae4d' }} /> returning echo wave</span>
-                <span><i className="rng-swatch" style={{ background: '#7ee0c4' }} /> live range estimate</span>
+                <span><i className="rng-swatch" style={{ background: '#7ee0c4' }} /> clock; range available after echo detection</span>
               </div>
             </section>
 
@@ -482,7 +499,7 @@ export default function LidarRanging() {
               <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
                 <div><span>round-trip Δt</span><b>{tof.toFixed(0)} ns</b></div>
                 <div><span>one-way time</span><b>{oneWay.toFixed(0)} ns</b></div>
-                <div><span>measured range</span><b className="orange">{measured ? measured.range.toFixed(1) : '—'} m</b></div>
+                <div><span>measured range</span><b className="orange">{measured && Math.abs(measured.range - distance) < 1e-6 ? measured.range.toFixed(1) : '—'} m</b></div>
               </div>
             </section>
           </div>
@@ -491,26 +508,26 @@ export default function LidarRanging() {
             <section className="sim-panel">
               <h2><span className="stepno">3</span> The ranging equation</h2>
               <div className="equation big">R = c &middot; Δt / 2</div>
-              <div className="equation big">R = 3&times;10&#8312; &middot; {(tof * 1e-9).toExponential(2)} / 2 = <b>{distance.toFixed(1)} m</b></div>
+              <div className="equation big">R = {C} &middot; {(tof * 1e-9).toExponential(5)} / 2 ≈ <b>{distance.toFixed(1)} m</b></div>
               <div className="rng-note"><b>Why divide by two?</b> The clock measures the <b>round trip</b> — out to the target and back — so the light travels <b>2R</b>. Halving the total path gives the one-way distance. Light covers ~0.3 m per nanosecond, so a 1 ns timing error is a 15 cm range error.</div>
-              <div className="rng-sub">Range resolution</div>
+              <div className="rng-sub">Pulse-limited echo-separation scale</div>
               <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
                 <label>Pulse width τ <b>{pulseWidth} ns</b><input type="range" min="1" max="40" step="1" value={pulseWidth} onChange={(e) => setPulseWidth(Number(e.target.value))} /></label>
               </div>
               <div className="readouts" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
                 <div><span>ΔR = c·τ / 2</span><b>{rangeRes.toFixed(2)} m</b></div>
-                <div><span>meaning</span><b style={{ fontSize: 12 }}>closest separable</b></div>
+                <div><span>meaning</span><b style={{ fontSize: 12 }}>characteristic scale</b></div>
               </div>
-              <div className="rng-note"><b>Shorter pulses see finer detail.</b> Two surfaces closer than ΔR return overlapping echoes the sensor can&rsquo;t separate.</div>
+              <div className="rng-note"><b>Resolution is not accuracy.</b> cτ/2 is an approximate pulse-limited separation scale. Overlapping echoes may be recoverable depending on pulse shape, amplitudes, bandwidth, noise and processing. A single target can be timed more precisely than the pulse width.</div>
               <div className="rng-sub">Maximum unambiguous range</div>
               <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
-                <label>Pulse rate (PRF) <b>{prf} kHz</b><input type="range" min="10" max="400" step="5" value={prf} onChange={(e) => setPrf(Number(e.target.value))} /></label>
+                <label>Periodic pulse rate (PRF) <b>{prf} kHz</b><input type="range" min="10" max="1000" step="5" value={prf} onChange={(e) => setPrf(Number(e.target.value))} /></label>
               </div>
               <div className="readouts" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
                 <div><span>R_max = c / (2·PRF)</span><b>{rMax >= 1000 ? `${(rMax / 1000).toFixed(2)} km` : `${rMax.toFixed(0)} m`}</b></div>
-                <div><span>target R</span><b className={distance > rMax ? 'orange' : ''}>{distance} m</b></div>
+                <div><span>periodic-pulse apparent R</span><b className={ambiguous ? 'orange' : ''}>{apparentRange.toFixed(2)} m</b></div>
               </div>
-              <div className="rng-note"><b>Fire too fast and range wraps.</b> If the next pulse leaves before the last echo returns, the sensor can&rsquo;t tell which pulse an echo belongs to.</div>
+              <div className="rng-note" role="status"><b>{ambiguous ? 'Pulse identity is ambiguous here.' : 'The echo fits in one pulse interval.'}</b> R = {distance} m; Rmax = {rMax.toFixed(2)} m. The single-pulse animation shows true travel time. The separate periodic-pulse calculation assumes no pulse tagging; systems with multiple-time-around processing can resolve longer ranges.</div>
             </section>
           </div>
         </div>
@@ -545,9 +562,9 @@ export default function LidarRanging() {
           <div className="sim-col">
             <section className="sim-panel">
               <h2><span className="stepno">3</span> Distance from phase</h2>
-              <div className="equation big">Δφ = 2π · (2R / λ)</div>
+              <div className="equation big">Δφ = [2π · (2R / λ<sub>mod</sub>)] mod 2π</div>
               <div className="equation big">R = (Δφ / 2π) · (λ / 2) = <b>{rPhase.toFixed(2)} m</b> <span style={{ color: '#7d8fa1' }}>+ N · {unamb.toFixed(1)} m</span></div>
-              <div className="rng-note"><b>Phase gives the fraction of a wavelength.</b> The receiver compares the returned modulation to the transmitted reference and measures the phase lag Δφ. That lag pins the distance to a fraction of λ/2 — here <b>{(phiDeg / 360).toFixed(3)}</b> of {unamb.toFixed(1)} m = <b>{rPhase.toFixed(2)} m</b> — with very fine precision (≈ {(phasePrecision * 100).toFixed(1)} cm per degree).</div>
+              <div className="rng-note"><b>Phase gives the fractional interval.</b> The receiver compares the returned modulation with the reference. The lag identifies <b>{(phiDeg / 360).toFixed(3)}</b> of λ/2, here approximately <b>{rPhase.toFixed(2)} m</b>, but not the integer cycle count. Range sensitivity is <b>{(phasePrecision * 100).toFixed(1)} cm per degree</b>; actual uncertainty depends on phase noise and calibration.</div>
 
               <div className="rng-sub">How is N calculated? — a second, coarse tone</div>
               <div className="rng-note">
@@ -569,7 +586,7 @@ export default function LidarRanging() {
               <div className="rng-note">
                 The coarse reading only has to be accurate to within <b>±λ/4 = {(unamb / 2).toFixed(1)} m</b> — just enough to pick the right cyan tick above. The fine tone then supplies the precise fraction (≈ {(phasePrecision * 100).toFixed(1)} cm per degree). <b>Higher fine f → finer precision but more candidate cycles to disambiguate.</b>
               </div>
-              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>Pulsed vs phase.</b> Pulsed timing handles long, unambiguous ranges directly; continuous-wave phase gives millimetre-level precision but must resolve N — often with several modulation frequencies, coarse-to-fine.</div>
+              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>Pulsed vs phase.</b> These are pulsed time-of-flight and amplitude-modulated continuous-wave (AMCW) ranging, not FMCW beat-frequency ranging. λ is the metre-scale modulation wavelength, not the nanometre-scale optical wavelength. Precision depends on timing/phase uncertainty; neither method guarantees millimetre accuracy.</div>
             </section>
           </div>
         </div>
@@ -616,12 +633,12 @@ export default function LidarRanging() {
               ))}
               <div className="readouts" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
                 <div><span>whole range covered</span><b>0 – {DMAX} m</b></div>
-                <div><span>final precision</span><b className="orange">± {(finePrecision / 2).toFixed(2)} m</b></div>
+                <div><span>assuming ±3° fine-phase error</span><b className="orange">± {(finePrecision / 2).toFixed(2)} m</b></div>
               </div>
               <div className="rng-note">
-                Here the coarsest tone (<b>{(tones[0].f / 1e6).toFixed(2)} MHz</b>, λ/2 = {tones[0].unamb.toFixed(0)} m) is unambiguous across the entire <b>0–{DMAX} m</b> range, and the {nTones} tones together pin the target to about <b>±{(finePrecision / 2).toFixed(2)} m</b> — a range-to-precision ratio of roughly <b>{Math.round(DMAX / finePrecision).toLocaleString()}:1</b>. Add tones for finer results.
+                The coarsest interval (<b>{tones[0].unamb.toFixed(0)} m</b>) exceeds the entire <b>0–{DMAX} m</b> scene, including its endpoint. The displayed final window is the finest tone&rsquo;s range sensitivity multiplied by an <b>assumed ±3° phase error</b>. Windows are illustrations centred on the known synthetic target, not outputs of a noisy range estimator. Incorrect coarse-cycle selection can overwhelm this fine-scale bound.
               </div>
-              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>In practice</b> this is how phase-based rangefinders and AMCW LiDAR reach millimetre precision over long ranges: two or more modulation frequencies (or a synthetic “beat” wavelength), measured coarse-to-fine.</div>
+              <div className="rng-note" style={{ borderLeftColor: '#0f8a4d' }}><b>In practice</b> multiple modulation frequencies can resolve cycle ambiguity. Achievable precision also depends on phase noise and calibration; extra tones alone do not guarantee millimetre precision or absolute accuracy.</div>
             </section>
           </div>
         </div>

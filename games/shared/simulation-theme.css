@@ -1,0 +1,457 @@
+/* Shared by the React laboratories and the standalone HTML simulators. */
+:root {
+  --lab-ink: #172f38;
+  --lab-muted: #526974;
+  --lab-accent: #087f70;
+  --lab-accent-soft: #e9f5f1;
+  --lab-border: #dce5e5;
+  --lab-surface: #f5f8f7;
+  --lab-shadow: 0 3px 5px #183e3803, 0 12px 32px #183e3806;
+}
+
+:root :is(.sim-app, .app, body:has(> .app)) {
+  --bg: #f1f5f3;
+  --panel: #fff;
+  --panel-2: #f5f8f7;
+  --line: #dce5e5;
+  --line-soft: #e7eded;
+  --text: #172f38;
+  --text-dim: #526974;
+  --text-faint: #60757d;
+  --accent: #087f70;
+  --accent-wash: #e9f5f1;
+  --radius: 16px;
+  --radius-sm: 10px;
+  color: var(--lab-ink);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+:root .sim-app {
+  min-height: 100vh;
+  padding: 28px clamp(12px, 3vw, 40px) 64px;
+  background: radial-gradient(ellipse at 0 0, #dfede6 0, transparent 55%), #f1f5f3;
+}
+
+body:has(> .app) {
+  background: radial-gradient(ellipse at 0 0, #dfede6 0, transparent 55%), #f1f5f3;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+body > .app {
+  max-width: 1600px;
+  padding: 28px clamp(12px, 3vw, 40px) 64px;
+  gap: 22px;
+}
+
+:is(.sim-topbar, .app .topbar) {
+  position: relative;
+  max-width: 1520px;
+  align-items: center;
+  gap: 18px;
+  padding: 26px 28px;
+  border: 1px solid #224a49;
+  border-radius: 18px;
+  background: linear-gradient(115deg, #143c3d, #1b4d46);
+  color: #fff;
+  box-shadow: 0 12px 28px #153e3a12;
+}
+
+:is(.sim-topbar, .app .topbar) .back-link {
+  flex: none;
+  padding: 8px 12px;
+  border: 1px solid #ffffff38;
+  border-radius: 8px;
+  background: #ffffff08;
+  color: #e3f2eb;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 160ms, border-color 160ms;
+}
+
+:is(.sim-topbar, .app .topbar) .back-link:hover {
+  border-color: #ffffff80;
+  background: #ffffff16;
+  color: #fff;
+}
+
+:is(.sim-topbar, .app .topbar) .title-block {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
+:is(.sim-topbar, .app .topbar) .title-block::before {
+  content: "GEOSIM LABS / INTERACTIVE WORKSPACE";
+  display: block;
+  margin-bottom: 6px;
+  color: #a7d2c3;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.7px;
+}
+
+:is(.sim-topbar, .app .topbar) h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(20px, 2vw, 29px);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -.65px;
+  text-wrap: balance;
+}
+
+:is(.sim-topbar, .app .topbar) .sub {
+  display: block;
+  margin-top: 8px;
+  color: #c0d8d0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+:is(.sim-topbar, .app .topbar) .native-badge {
+  margin-left: 6px;
+  padding: 3px 8px;
+  border: 1px solid #a7d2c34d;
+  background: #ffffff08;
+  color: #c0e6d5;
+  font-size: 9px;
+  vertical-align: middle;
+}
+
+:is(.sim-topbar, .app .topbar) .score-chip {
+  display: block;
+  max-width: 100%;
+  padding: 9px 13px;
+  border: 1px solid #ffffff29;
+  border-radius: 9px;
+  background: #0c272c4d;
+  color: #c3ddd2;
+  font-size: 11px;
+  white-space: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+:is(.sim-topbar, .app .topbar) .score-chip b { color: #a3e6c4; }
+
+:is(.sim-layout, .app .layout) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.app .layout { margin-top: 0; }
+.app .layout:has(#map) { grid-template-columns: minmax(0, 1fr) 372px; }
+.app .layout:has(.photos) { grid-template-columns: minmax(0, 1fr) 340px; }
+:is(.sim-col, .app .col) { min-width: 0; gap: 22px; }
+.app .stack { gap: 22px; }
+.app .card {
+  border-color: var(--lab-border);
+  border-radius: 16px;
+  box-shadow: var(--lab-shadow);
+}
+.app .card-head { padding: 15px 18px; background: #f5f8f5; }
+.app .card-body { padding: 18px; }
+.app .mission-tabs { flex-wrap: wrap; }
+.app .photo-card { border-color: var(--lab-border); border-radius: 12px; box-shadow: var(--lab-shadow); }
+.app .photo-head { padding: 12px; background: #f5f8f5; }
+.app .side { min-width: 0; gap: 18px; }
+
+:is(.sim-panel, .app .panel) {
+  min-width: 0;
+  padding: clamp(16px, 1.7vw, 24px);
+  border: 1px solid var(--lab-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--lab-shadow);
+}
+
+:is(.sim-panel > h2, .app .panel > h3) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e9eeeb;
+  color: #294b50;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+  letter-spacing: .1px;
+  text-transform: none;
+}
+
+:is(.sim-panel > h2 small, .app .panel > h3 .lt) {
+  color: #60757d;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+:is(.sim-panel .stepno, .app .panel .stepno) {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 8px;
+  background: #e8f3ed;
+  color: #087568;
+  font: 700 11px/1 ui-monospace, monospace;
+  transform: none;
+}
+
+/* Give diagrams their own clear frame without changing canvas coordinates. */
+:is(.sim-panel, .app .panel) canvas:not(.base):not(.overlay),
+.sim-app :is(.beam-stage, .mp-stage, .gsd-stage, .bs-stage, .lod-stage) {
+  max-width: 100%;
+  border-color: #d9e3e1;
+  border-radius: 11px;
+}
+
+.sim-app :is(.control-grid, .readouts) { gap: 10px 14px; }
+.sim-app .control-grid { margin-top: 18px; }
+.sim-app .control-grid > label {
+  min-width: 0;
+  padding: 10px 12px 6px;
+  border: 1px solid #e4ebe7;
+  border-radius: 10px;
+  background: #f8faf8;
+  color: #526974;
+  font-size: 12px;
+}
+.sim-app .control-grid b {
+  color: #087568;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+:is(.sim-app, .app) input[type="range"] {
+  min-height: 28px;
+  margin: 5px 0 0;
+  accent-color: #087f70;
+  cursor: pointer;
+}
+
+:is(.sim-app, .app) :is(input[type="checkbox"], input[type="radio"]) {
+  width: 15px;
+  height: 15px;
+  accent-color: #087f70;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+:is(.sim-app, .app) select,
+:is(.sim-app, .app) input[type="number"] {
+  max-width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #cbd9d5;
+  border-radius: 7px;
+  background: #fff;
+  color: #294b50;
+  font: inherit;
+}
+
+:is(.sim-app, .app) button {
+  font-family: inherit;
+  transition: background-color 160ms, border-color 160ms, box-shadow 160ms;
+}
+
+:is(.sim-app, .app) button:disabled { cursor: not-allowed; }
+:is(.sim-app, .app) :is(button, a, input, select):focus-visible {
+  outline: 3px solid #51b6a6;
+  outline-offset: 3px;
+}
+
+.sim-app button[class$="-btn"],
+.sim-app :is(.sfm-btn, .tin-btn, .gn-btn, .mp-btn, .gsd-btn, .beam-btn),
+.app .btn {
+  min-height: 36px;
+  padding: 8px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app .btn.primary,
+.sim-app :is(.sfm-btn.primary, .gn-btn.primary, .mp-btn.go, .tin-btn:not(.secondary):not(.accent)) {
+  border-color: #087f70;
+  background: #087f70;
+  color: #fff;
+  box-shadow: 0 2px 4px #087f7014;
+}
+
+:is(.sim-app .readouts > div, .app .stat) {
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid #e0e9e4;
+  border-radius: 10px;
+  background: #f3f8f5;
+  overflow-wrap: anywhere;
+}
+
+.sim-app .readouts { margin-top: 14px; }
+:is(.sim-app .readouts span, .app .stat .k) {
+  display: block;
+  margin-bottom: 4px;
+  color: #60756b;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: .65px;
+}
+
+:is(.sim-app .readouts b, .app .stat .v) {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: clamp(14px, 1.2vw, 18px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-app :is(.equation, .gn-eq, .gsd-eq), .app .eqn {
+  margin-top: 14px;
+  padding: 13px 15px;
+  border-color: #e0e8e6;
+  border-radius: 10px;
+  background: #f3f6f6;
+  color: #36575c;
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.sim-app :is(.rect-summary, .beam-note, .gsd-note, .gn-note, .rng-note, .sar-note, .gpr-note, .iot-note, .bs-note, .lod-note),
+.app .callout {
+  margin-top: 14px;
+  padding: 13px 15px;
+  border-left-color: #439d91;
+  border-radius: 0 10px 10px 0;
+  background: #f1f7f5;
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+
+.sim-app :is(.gn-modes, .rng-modes, .tab-switcher) { margin-top: 22px; }
+.sim-app :is(.gn-modes, .rng-modes) {
+  padding: 6px;
+  border-color: #dce5e0;
+  background: #e8efeb;
+}
+.sim-app :is(.gn-seg, .rng-seg) { min-height: 42px; font-size: 12px; }
+.sim-app :is(.gn-seg.on, .rng-seg.on) { background: #087f70; box-shadow: 0 2px 6px #087f7024; }
+.sim-app :is(.tab-button, .scenario-card) { border-radius: 12px; }
+.sim-app :is(.tab-button.active, .scenario-card.active) { border-color: #087f70; background: #edf7f1; }
+.sim-app :is(.mp-pbtn.on, .sar-bbtn.on, .gsd-pbtn.on, .gsd-tbtn.on, .sfm-chip.on, .bs-segbtn.on, .lod-cell.on, .rect-mode.selected, .elevation.selected) {
+  border-color: #087f70;
+  background: #edf7f1;
+  box-shadow: 0 0 0 1px #087f70 inset;
+}
+.sim-app :is(.sfm-chip, .mp-pbtn, .gsd-pbtn, .sar-bbtn, .lod-cell),
+.app :is(.mech-card, .mode, .payload-card) { padding: 10px 12px; }
+
+.sim-app :is(.beam-legend, .mp-legend, .gsd-legend, .gn-legend, .rng-legend, .sfm-legend, .block-legend) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 14px;
+  padding-top: 10px;
+  color: #526974;
+  font-size: 11px;
+}
+
+.sim-app .rng-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sim-app .rng-swatch { flex: none; width: 13px; height: 4px; border-radius: 2px; }
+
+body:has(> .app) .overlay { background: #102c3666; backdrop-filter: blur(6px); }
+body:has(> .app) .modal { padding: 28px; border: 1px solid var(--lab-border); }
+body:has(> .app) .modal h2 { font-size: 24px; letter-spacing: -.5px; }
+.sim-app .beam-inset { margin: 0; }
+.sim-app .beam-charts { margin-top: 14px; }
+
+/* Keep the 4 × 4 levels-of-detail selector legible on compact screens. */
+.sim-app .lod-cell { padding: 9px 6px; }
+.sim-topbar .solvability-badge { max-width: 100%; border-radius: 9px; font-size: 10px; }
+.sim-topbar .solvability-badge.stable { background: #143c3d; color: #a3e6c4; border-color: #5f9f84; }
+.sim-topbar .solvability-badge.critical { background: #453e28; color: #f8d68a; border-color: #b69c62; }
+.sim-topbar .solvability-badge.unsolvable { background: #503d3b; color: #ffc3b3; border-color: #b78478; }
+
+@media (max-width: 1060px) {
+  :is(.sim-layout, .app .layout), .app .layout:has(#map), .app .layout:has(.photos) { grid-template-columns: minmax(0, 1fr); }
+  .app .side { position: static; }
+  :is(.sim-topbar, .app .topbar) { gap: 14px; padding: 22px; }
+}
+
+@media (max-width: 600px) {
+  :root .sim-app, body > .app { padding: 12px 10px 36px; }
+  :is(.sim-topbar, .app .topbar) { padding: 18px; border-radius: 13px; }
+  :is(.sim-topbar, .app .topbar) .title-block { flex-basis: 100%; }
+  :is(.sim-topbar, .app .topbar) .title-block::before { font-size: 9px; letter-spacing: 1.2px; }
+  :is(.sim-topbar, .app .topbar) .score-chip { display: block; }
+  :is(.sim-topbar, .app .topbar) .native-badge { margin: 6px 0 0; }
+  :is(.sim-panel, .app .panel) { padding: 14px; border-radius: 12px; }
+  :is(.sim-col, .app .col, .sim-layout, .app .layout) { gap: 16px; }
+  .sim-app .readouts { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .sim-app .control-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .sim-app :is(.scenario-select, .tab-switcher) { grid-template-columns: minmax(0, 1fr) !important; }
+  .sim-app :is(.gn-seg, .rng-seg) { padding: 8px 6px; font-size: 11px; }
+  .sim-app :is(.beam-stage, .mp-stage, .gsd-stage, .bs-stage, .lod-stage) { height: 340px; }
+  .sim-app .beam-row { flex-direction: column; align-items: stretch; }
+  .sim-app .beam-row > div { min-width: 0 !important; width: 100%; }
+  .sim-app .beam-inset { margin: 0 auto; }
+  .sim-app :is(.beam-charts figure, .sar-mode) { min-width: 0; flex-basis: 100%; }
+  .sim-app .sfm-palette { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sim-app .gn-tbl { font-size: 10px; }
+  .sim-app .gn-tbl :is(td, th) { padding: 5px 3px; }
+  .app .mech-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.lidar-learning {
+  max-width: 1520px;
+  margin: 20px auto 0;
+  padding: 20px 24px 8px;
+  border: 1px solid #cfdfd7;
+  border-radius: 14px;
+  background: #fafffc;
+  color: #294b50;
+}
+.app > .lidar-learning { width: 100%; margin-top: 0; }
+.lidar-learning-number { color: #087568; font: 700 10px/1.5 ui-monospace, monospace; letter-spacing: 1px; text-transform: uppercase; }
+.lidar-learning h2 { margin: 5px 0 7px; font-size: clamp(17px, 1.6vw, 22px); line-height: 1.4; letter-spacing: -.3px; }
+.lidar-learning p { margin: 8px 0; font-size: 12.5px; line-height: 1.8; }
+.lidar-learning-heading > p { color: #526974; }
+.lidar-guide { border-top: 1px solid #dfebe3; }
+.lidar-guide > summary { padding: 12px 0; color: #295b52; font-size: 12px; font-weight: 650; cursor: pointer; }
+.lidar-guide > summary > span { margin-left: 12px; color: #60756b; font-size: 11px; font-weight: 400; }
+.lidar-working-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding: 5px 0 0 20px; }
+.lidar-working-steps li { padding-left: 4px; font-size: 12px; }
+.lidar-working-steps li::marker { color: #087568; font-weight: 700; }
+.lidar-working-steps h3 { margin: 0; font-size: 13px; }
+.lidar-working-steps p { color: #526974; }
+.lidar-experiments, .lidar-answers { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.lidar-learning :is(.lidar-experiments, .lidar-answers) button { padding: 9px 12px; border: 1px solid #bbd6c8; border-radius: 8px; background: #fff; color: #295b52; font-size: 12px; line-height: 1.5; text-align: left; cursor: pointer; }
+.lidar-learning button[aria-pressed="true"] { border-color: #087f70; background: #e7f4ec; box-shadow: 0 0 0 1px #087f70 inset; }
+.lidar-learning button:hover { border-color: #087f70; }
+.lidar-worked-example { margin: 14px 0; padding: 12px 14px; border: 1px solid #dbe8df; border-radius: 9px; background: #eef6f0; }
+.lidar-worked-example > strong { font-size: 10px; letter-spacing: .6px; text-transform: uppercase; }
+.lidar-worked-example p { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
+.lidar-experiment-result { margin: 14px 0; padding: 12px 14px; border-left: 3px solid #439d91; background: #f1f7f5; font-size: 12.5px; }
+.lidar-experiment-result summary { margin-top: 8px; color: #087568; cursor: pointer; font-size: 12px; }
+.lidar-answers { flex-direction: column; }
+.lidar-answer-feedback { padding: 12px; border-left: 3px solid #439d91; background: #eef6f0; }
+.lidar-references { margin: 10px 0 16px; padding-left: 18px; font-size: 12px; line-height: 1.8; }
+.lidar-references a { color: #087568; text-decoration: underline; text-underline-offset: 3px; }
+.lidar-learning-path { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 0 8px; border-top: 1px solid #dfebe3; }
+.lidar-learning-path a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #dfebe3; border-radius: 6px; background: #fff; color: #526974; font-size: 10px; }
+.lidar-learning-path a span { font-family: ui-monospace, monospace; color: #087568; }
+.lidar-learning-path a[aria-current="page"] { border-color: #a6c6b4; background: #e7f4ec; color: #1c574a; font-weight: 650; }
+@media (max-width: 600px) {
+  .lidar-learning { padding: 16px 14px 6px; }
+  .lidar-working-steps { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .lidar-guide > summary > span { display: block; margin: 3px 0 0 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.sim-app, .app) *, :is(.sim-app, .app) *::before { transition: none !important; }
+}

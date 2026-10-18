@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './simulation.css';
 import './native.css';
 import './boresight.css';
+import LidarLearningPanel from './LidarLearningPanel.jsx';
+import { eulerAxes, boresightComparison } from '../../games/shared/lidar-physics.js';
 
 // ---------------------------------------------------------------------------
 // Small 3D helpers (vec3 + rotation), plus an orbit projector.
@@ -17,16 +19,6 @@ const DEG = Math.PI / 180;
 
 // Rotation matrix (world <- body) from roll(X) pitch(Y) yaw(Z), in degrees.
 // Returned as three world-space column vectors [xAxis, yAxis, zAxis].
-function eulerAxes(roll, pitch, yaw) {
-  const cr = Math.cos(roll * DEG); const sr = Math.sin(roll * DEG);
-  const cp = Math.cos(pitch * DEG); const sp = Math.sin(pitch * DEG);
-  const cy = Math.cos(yaw * DEG); const sy = Math.sin(yaw * DEG);
-  // R = Rz(yaw) Ry(pitch) Rx(roll); columns are the rotated body axes in world.
-  const xAxis = [cy * cp, sy * cp, -sp];
-  const yAxis = [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr];
-  const zAxis = [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
-  return [xAxis, yAxis, zAxis];
-}
 // --- Reference frames ------------------------------------------------------
 // Site of the survey, used only to orient the ECEF triad realistically.
 const LAT = 13 * DEG; const LON = 77.5 * DEG;
@@ -168,7 +160,7 @@ function drawDrone(ctx, proj, eye, xf) {
 }
 
 function render(canvas, state) {
-  const { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel } = state;
+  const { orbit, arms, bores, att, height, scanAngle, showArms, showGhost, showLaser, sel } = state;
   const ctx = canvas.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
   g.addColorStop(0, '#111d29'); g.addColorStop(1, '#0a1119');
@@ -231,29 +223,21 @@ function render(canvas, state) {
     label(ctx, ps, 'LiDAR', '#38bdf8', 9, sel === 'scanner' ? 20 : 14, sel === 'scanner' ? '700 12px system-ui' : '600 10px system-ui');
   }
 
-  // Laser beam. The physical ray swings with the drone (attitude + boresight).
-  // Because the IMU records the attitude, direct georeferencing removes it,
-  // leaving only the boresight residual as ground error.
+  // Compare calibrated and uncalibrated endpoints using the same measured range.
   if (showLaser) {
-    const sPos = scanPos;
-    const beam = normalize(scanAxes[2]); // physical LiDAR down: attitude + boresight
-    const resid = normalize(lidarAxes(...bores.scanner)[2]); // boresight only (attitude removed)
-    const nominal = [0, 0, -1]; // true nadir
-    const tHit = beam[2] < -1e-3 ? (groundZ - sPos[2]) / beam[2] : -1;
-    const tRes = (groundZ - sPos[2]) / resid[2];
-    const tNom = (groundZ - sPos[2]) / nominal[2];
-    if (tRes > 0 && tNom > 0) {
-      const resHit = add(sPos, scale(resid, tRes));
-      const nomHit = add(sPos, scale(nominal, tNom));
-      line(ctx, proj(sPos), proj(nomHit), 'rgba(126,224,196,.5)', 1.5, [5, 5]);
-      if (tHit > 0) { const hit = add(sPos, scale(beam, tHit)); line(ctx, proj(sPos), proj(hit), '#ff6a5a', 2.6); const ph = proj(hit); if (ph) { ctx.fillStyle = '#ff6a5a'; ctx.beginPath(); ctx.arc(ph[0], ph[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, ph, 'raw laser hit', '#ff6a5a', 8, 16, '600 10px system-ui'); } }
-      const pr = proj(resHit); const pn = proj(nomHit);
-      if (pn) { ctx.strokeStyle = '#7ee0c4'; ctx.beginPath(); ctx.arc(pn[0], pn[1], 5, 0, Math.PI * 2); ctx.stroke(); label(ctx, pn, 'true nadir', '#7ee0c4', 8, -6, '600 10px system-ui'); }
-      if (pr) { ctx.fillStyle = '#f6c85f'; ctx.beginPath(); ctx.arc(pr[0], pr[1], 5, 0, Math.PI * 2); ctx.fill(); label(ctx, pr, 'after IMU correction', '#f6c85f', 8, 16, '600 10px system-ui'); }
-      line(ctx, pr, pn, '#f6c85f', 2);
-      const err = norm(sub([resHit[0], resHit[1], 0], [nomHit[0], nomHit[1], 0]));
-      const em = proj(scale(add(resHit, nomHit), 0.5));
-      label(ctx, em, `residual ≈ ${err.toFixed(2)} m`, '#f6c85f', 6, -18, '700 11px system-ui');
+    const comparison = boresightComparison(height, arms.scanner, att, bores.scanner, scanAngle);
+    if (comparison) {
+      const { actualHit, uncalibratedHit, horizontalError, verticalError } = comparison;
+      line(ctx, proj(scanPos), proj(actualHit), '#ff6a5a', 2.6);
+      line(ctx, proj(scanPos), proj(uncalibratedHit), '#f6c85f', 1.5, [5, 5]);
+      for (const [point, color, text, dy] of [[actualHit, '#7ee0c4', 'calibrated ground point', -8], [uncalibratedHit, '#f6c85f', 'boresight omitted', 18]]) {
+        const p = proj(point);
+        if (p) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, Math.PI * 2); ctx.fill(); label(ctx, p, text, color, 7, dy, '600 10px system-ui'); }
+      }
+      line(ctx, proj(actualHit), proj(uncalibratedHit), '#f6c85f', 2);
+      label(ctx, proj(scale(add(actualHit, uncalibratedHit), 0.5)), `Δhorizontal ${horizontalError.toFixed(2)} m; Δz ${verticalError.toFixed(2)} m`, '#f6c85f', 6, -24, '600 10px system-ui');
+    } else {
+      label(ctx, proj(scanPos), 'no forward intersection with ground', '#ffb09a', 7, 32);
     }
   }
 }
@@ -266,6 +250,7 @@ export default function Boresight() {
   const [bores, setBores] = useState({ scanner: DEFAULTS.scanner.bore.slice() });
   const [att, setAtt] = useState([12, -6, 15]); // drone attitude the IMU records
   const [height, setHeight] = useState(6);
+  const [scanAngle, setScanAngle] = useState(0);
   const [sel, setSel] = useState('scanner');
   const [showArms, setShowArms] = useState(true);
   const [showGhost, setShowGhost] = useState(true);
@@ -274,8 +259,8 @@ export default function Boresight() {
   const canvasRef = useRef(null); const drag = useRef(null);
 
   useEffect(() => {
-    render(canvasRef.current, { orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel });
-  }, [orbit, arms, bores, att, height, showArms, showGhost, showLaser, sel]);
+    render(canvasRef.current, { orbit, arms, bores, att, height, scanAngle, showArms, showGhost, showLaser, sel });
+  }, [orbit, arms, bores, att, height, scanAngle, showArms, showGhost, showLaser, sel]);
 
   const setArm = (key, i) => (e) => setArms((p) => { const a = { ...p, [key]: p[key].slice() }; a[key][i] = Number(e.target.value); return a; });
   const setBore = (key, i) => (e) => setBores((p) => { const b = { ...p, [key]: p[key].slice() }; b[key][i] = Number(e.target.value); return b; });
@@ -293,13 +278,9 @@ export default function Boresight() {
   const reset = () => { setArms({ gps: DEFAULTS.gps.arm.slice(), scanner: DEFAULTS.scanner.arm.slice() }); setBores({ scanner: DEFAULTS.scanner.bore.slice() }); };
   const zeroBore = () => setBores((p) => ({ scanner: sel === 'scanner' ? [0, 0, 0] : p.scanner }));
 
-  // Boresight magnitude + ground error for the readouts (scanner).
-  const boreMag = useMemo(() => {
-    const beam = normalize(lidarAxes(...bores.scanner)[2]);
-    return Math.acos(clamp(dot(beam, [0, 0, -1]), -1, 1)) / DEG;
-  }, [bores.scanner]);
-  const scannerH = height + arms.scanner[2]; // scanner's true height above ground (arm z is negative)
-  const groundErr = scannerH * Math.tan(boreMag * DEG);
+  // Readouts and canvas share the same measured-range comparison.
+  const comparison = boresightComparison(height, arms.scanner, att, bores.scanner, scanAngle);
+  const groundErr = comparison?.horizontalError ?? 0;
   const [aRoll, aPitch, aYaw] = att; // drone attitude the IMU records
   const leverArm = norm(sub(arms.scanner, arms.gps)); // antenna → LiDAR
   const s = SENSORS[sel]; const arm = arms[sel];
@@ -317,6 +298,10 @@ export default function Boresight() {
         </div>
         <span className="score-chip">IMU records: <b>{aRoll.toFixed(0)}° / {aPitch.toFixed(0)}° / {aYaw.toFixed(0)}°</b></span>
       </header>
+
+      <LidarLearningPanel topic="boresight"
+        workedExample={comparison ? `Measured slant range ρ = ${comparison.range.toFixed(3)} m; scanner height = ${comparison.sensorHeight.toFixed(3)} m. Omitting boresight shifts the same-range endpoint by Δhorizontal = ${(comparison.horizontalError * 100).toFixed(2)} cm and Δz = ${(comparison.verticalError * 100).toFixed(2)} cm. Attitude is included in both endpoints.` : 'The selected scanner position or ray has no forward ground intersection. Restore a higher platform or a downward-looking ray.'}
+        onExperiment={(id) => { setSel('scanner'); setAtt(id === 'zero' ? [12, -6, 15] : [0, 0, 0]); setBores({ scanner: id === 'zero' ? [0, 0, 0] : [0, 0, 10] }); setScanAngle(id === 'yaw-scan' ? 30 : 0); setHeight(6); }} />
 
       <div className="sim-layout">
         <div className="sim-col">
@@ -357,7 +342,7 @@ export default function Boresight() {
               <button className="bs-btn" onClick={() => setAtt([0, 0, 0])}>level flight (0/0/0)</button>
             </div>
             <div className="bs-note">
-              Rotating the drone turns the whole rigid platform — the <b>LiDAR</b>, its beam and the antenna all swing with it about the IMU. The IMU measures that rotation as <b>roll / pitch / yaw</b>; because those are recorded, direct georeferencing can remove them and only the fixed <b>boresight</b> residual is left over.
+              Rotating the drone turns the rigid platform, beam and antenna about the IMU. Direct georeferencing <b>uses</b> the measured attitude to transform the observed ray into the mapping frame; it does not turn the actual ground hit into a nadir hit. Both plotted endpoints use that attitude, and differ only in whether the boresight calibration is applied.
             </div>
           </section>
 
@@ -371,7 +356,7 @@ export default function Boresight() {
               ))}
             </div>
 
-            <div className="bs-sub">Mounting position — offset from the IMU (metres)</div>
+            <div className="bs-sub">Mounting offset from IMU: X forward, Y left, Z up (metres)</div>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
               {AXES.map((ax, i) => (
                 <label key={ax}>{ax} <b>{arm[i].toFixed(2)}</b><input type="range" min="-4" max="4" step="0.05" value={arm[i]} onChange={setArm(sel, i)} /></label>
@@ -390,32 +375,32 @@ export default function Boresight() {
                 <button className="bs-btn" style={{ marginTop: 8 }} onClick={zeroBore}>zero this boresight</button>
               </>
             ) : (
-              <div className="bs-note">The GPS antenna is a single phase-centre <b>point</b> with its triad locked to the <b>ECEF</b> axes — it has a lever arm but <b>no roll/pitch/yaw</b>, so there is no boresight for it.</div>
+              <div className="bs-note">The antenna is modelled as one phase-centre <b>point</b>. Its drawn ECEF triad is an Earth-coordinate reference, not the antenna&rsquo;s physical orientation. Antenna orientation and phase-centre variations matter in real systems but are omitted here.</div>
             )}
 
             <div className="bs-sub">Flying height &amp; impact</div>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
               <label>height above ground <b>{height} m</b><input type="range" min="2" max="12" step="0.5" value={height} onChange={(e) => setHeight(Number(e.target.value))} /></label>
+              <label>scanner off-axis angle <b>{scanAngle}°</b><input type="range" min="-45" max="45" step="1" value={scanAngle} onChange={(e) => setScanAngle(Number(e.target.value))} /></label>
             </div>
             <div className="readouts" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-              <div><span>boresight β (residual)</span><b>{boreMag.toFixed(2)}&deg;</b></div>
-              <div><span>flying height H</span><b>{height} m</b></div>
-              <div><span>residual ≈ H·tanβ</span><b className={groundErr > 0.3 ? 'orange' : ''}>{(groundErr * 100).toFixed(0)} cm</b></div>
+              <div><span>horizontal endpoint error</span><b className={groundErr > 0.3 ? 'orange' : ''}>{comparison ? `${(groundErr * 100).toFixed(1)} cm` : 'no hit'}</b></div>
+              <div><span>vertical endpoint error Δz</span><b>{comparison ? `${(comparison.verticalError * 100).toFixed(1)} cm` : 'no hit'}</b></div>
+              <div><span>measured slant range ρ</span><b>{comparison ? `${comparison.range.toFixed(2)} m` : 'no hit'}</b></div>
             </div>
 
             <div className="rect-summary">
-              <b>Attitude is recorded; boresight is the leftover</b>
+              <b>Use attitude and boresight; neither can be silently omitted</b>
               <p>
                 Rotate the drone and the whole rigid platform — the <b>IMU body frame</b>, the <b>GPS antenna</b> and the
                 <b> LiDAR</b> — swings together. The <b>IMU records</b> that motion as <b>roll / pitch / yaw</b> against the fixed
-                <b> North / East / Nadir</b> nav frame, so direct georeferencing can rotate the raw laser ray back and cancel it.
-                What it cannot cancel is the fixed <b>boresight</b> — the small mounting misalignment between the IMU and the
-                LiDAR — which leaves a ground error of about <b>H·tan β</b> ({(groundErr * 100).toFixed(0)} cm at {height} m here).
-                The <b>lever arm</b> is the fixed translation from the antenna to the LiDAR.
+                <b> North / East / Down</b> navigation frame. The <b>boresight</b> is a separate scanner-to-body rotation that must also be calibrated and applied.
+                The display compares the <b>same measured range</b> with and without that rotation. A pure yaw misalignment leaves a nadir ray unchanged, but shifts an off-axis ray.
+                The <b>lever arm</b> is a translation expressed in a declared body frame; it must be rotated with the platform before adding it to a world position.
               </p>
             </div>
             <div className={`bs-note ${groundErr > 0.3 ? 'warn' : ''}`}>
-              Georeferencing a laser point: <b>X<sub>ECEF</sub> = X<sub>GPS</sub> + R<sub>ECEF</sub><sup>nav</sup> · R<sub>nav</sub><sup>body</sup>(roll,pitch,yaw) · ( R<sub>bore</sub> · r<sub>scan</sub> + a<sub>gps→ls</sub> )</b> — R<sub>nav</sub><sup>body</sup> is the attitude the IMU records, R<sub>bore</sub> the boresight, and the antenna→LiDAR lever arm shifts the origin.
+              <b>xₑ = x<sub>GNSS,e</sub> + R<sub>e←n</sub> R<sub>n←b</sub> (ℓ<sub>GNSS→scanner,b</sub> + R<sub>b←s</sub> ρ uₛ)</b>. The arrows declare source and destination frames. Apply scanner direction uₛ, boresight R<sub>b←s</sub>, body-frame lever arm, measured attitude and navigation-to-Earth rotation in that order. The small-angle scale ρ·δβ is a sensitivity estimate, not a full error budget.
             </div>
           </section>
         </div>

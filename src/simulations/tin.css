@@ -8,6 +8,46 @@
   cursor: crosshair;
 }
 
+.tin-camera-controls,
+.tin-profile-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+  color: #526974;
+  font-size: 12px;
+}
+
+.tin-camera-controls {
+  padding: 10px;
+  border: 1px solid #e0e8e6;
+  border-radius: 10px;
+  background: #f5f8f7;
+}
+
+.tin-profile-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #e0e8e6;
+  border-radius: 10px;
+  background: #f5f8f7;
+  font-size: 12px;
+}
+
+.tin-profile-controls label { min-width: 0; }
+.tin-profile-controls input { width: 100%; min-width: 0; }
+.tin-point-selector { display: grid; gap: 8px; margin-bottom: 12px; color: #526974; font-size: 12px; }
+.tin-point-selector select { width: 100%; }
+
+@media (max-width: 600px) {
+  .tin-camera-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .tin-profile-controls { grid-template-columns: minmax(0, 1fr); }
+}
+
 .tin-toolbar {
   display: flex;
   flex-wrap: wrap;

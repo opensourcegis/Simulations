@@ -119,6 +119,7 @@
   .mtable th { color:var(--text-faint); text-transform:uppercase; font-size:10.5px; letter-spacing:.6px; }
   .hide { display:none !important; }
 </style>
+<link rel="stylesheet" href="../shared/simulation-theme.css">
 </head>
 <body>
 <div class="app">
@@ -148,7 +149,7 @@
       <div class="panel">
         <h3>Return waveform at the detector</h3>
         <canvas class="scene" id="waveCanvas" width="740" height="150" style="background:#0e1620"></canvas>
-        <div class="callout" id="waveNote">The receiver only ever sees the small part of Scattering that comes back along the beam.</div>
+        <div class="callout" id="waveNote">The receiver detects a small backscattered portion of diffuse or specular reflection when its direction reaches the aperture.</div>
       </div>
     </div>
 
@@ -181,14 +182,14 @@
         <h3>Energy balance of the incident pulse</h3>
         <div class="bal" id="balBar"></div>
         <div class="bal-key">
-          <span><i style="background:#3fa9f5"></i> Scattering</span>
-          <span><i style="background:#c8d64a"></i> Reflection</span>
+          <span><i style="background:#3fa9f5"></i> Diffuse reflection</span>
+          <span><i style="background:#c8d64a"></i> Specular reflection</span>
           <span><i style="background:#e2574c"></i> Absorption</span>
           <span><i style="background:#9b7fd4"></i> Transmission</span>
         </div>
         <div class="eqn">
-          <b>Incident</b> E<sub>i</sub> = E<sub>r</sub> + E<sub>a</sub> + E<sub>t</sub> + E<sub>s</sub><br>
-          <span style="font-size:11px">Reflection · Absorption · Transmission · Scattering — the four shares always sum to the incident energy, and they shift as you change the angle.</span>
+          E<sub>i</sub> = E<sub>r,diffuse</sub> + E<sub>r,specular</sub> + E<sub>a</sub> + E<sub>t</sub><br>
+          <span style="font-size:11px">Diffuse and specular terms are both reflection. These illustrative fractions sum to one; they are not laboratory measurements of the selected materials.</span>
         </div>
       </div>
 
@@ -201,8 +202,8 @@
           <div class="note" style="margin-top:8px" id="sigNote"></div>
         </div>
         <div class="eqn" style="margin-top:9px">
-          P<sub>r</sub> = P<sub>t</sub> · (ρ·cosθ / π) · (A<sub>r</sub> / R²) · η<br>
-          <b>capture fraction</b> A<sub>r</sub>/(πR²) = <span id="captureVal">—</span><br>
+          E<sub>rx,diffuse</sub> ∝ E<sub>tx</sub> · ρ<sub>d</sub>cosθ · A<sub>r</sub>/(πR²) · T²<sub>atm</sub><br>
+          <b>nadir geometric capture factor</b> A<sub>r</sub>/(πR²) = <span id="captureVal">—</span><br>
           <b>range</b> R = c · Δt / 2
         </div>
         <div class="callout" id="captureNote"></div>
@@ -225,7 +226,7 @@
       <div class="panel">
         <h3>Digitised return waveform</h3>
         <canvas class="scene" id="treeWave" width="740" height="185"></canvas>
-        <div class="callout">Each peak is one <b>return</b>. Peaks closer than about <b>1.5 m</b> (the pulse length) merge into one — that is the sensor's minimum return separation.</div>
+        <div class="callout">A detected local maximum is a <b>discrete return</b>, not necessarily a separate physical surface. The simulated Gaussian pulse has 10 ns FWHM, about <b>1.5 m in range coordinates</b>. Nearby contributions may merge; separation also depends on their amplitudes, noise and the detector.</div>
       </div>
     </div>
 
@@ -238,7 +239,7 @@
             <input type="range" id="offSlider" min="-320" max="320" step="5" value="-160">
           </div>
           <div>
-            <label>Canopy density (LAI) <b id="denVal">1.00</b></label>
+            <label>Canopy attenuation factor (relative) <b id="denVal">1.00</b></label>
             <input type="range" id="denSlider" min="20" max="180" step="5" value="100">
           </div>
           <div style="margin-bottom:0">
@@ -275,10 +276,10 @@
       <div class="panel">
         <h3>Why this matters</h3>
         <div class="note">
-          A camera only ever sees the <b>top</b> of the canopy. A LiDAR pulse is wider than the gaps between
-          leaves, so part of it slips through and keeps going. The <b>first return</b> maps the canopy surface
-          (DSM), the <b>last return</b> — if enough energy survives — maps the bare earth (DTM). Subtract them
-          and you get canopy height.
+          Parts of the illuminated footprint can pass through <b>gaps</b> in foliage and reach lower surfaces.
+          The first detected return is the nearest detectable contribution, not necessarily the tree apex.
+          The last return may be ground, lower foliage or an obstruction. Build a <b>DTM from classified ground</b>
+          and a surface model on a common reference before estimating canopy height; subtracting two arbitrary returns is not sufficient.
         </div>
       </div>
     </div>
@@ -289,25 +290,20 @@
 <div class="overlay" id="helpOverlay">
   <div class="modal">
     <h2>What happens when the pulse hits something</h2>
-    <p>Every laser pulse that leaves the scanner carries energy <b>E<sub>i</sub></b>. When it strikes a target that energy splits four ways, and it always balances:</p>
-    <div class="eqn" style="font-size:13px">E<sub>i</sub> = E<sub>r</sub> (reflected) + E<sub>a</sub> (absorbed) + E<sub>t</sub> (transmitted) + E<sub>s</sub> (scattered)</div>
+    <p>The basic balance is incident = reflected + absorbed + transmitted. We split reflection into <b>diffuse</b> and <b>specular</b> components; scattering is not a separate channel in addition to all reflected energy:</p>
+    <div class="eqn" style="font-size:13px">E<sub>i</sub> = E<sub>r,diffuse</sub> + E<sub>r,specular</sub> + E<sub>a</sub> + E<sub>t</sub></div>
     <table class="mtable">
       <tr><th>Interaction</th><th>What it does</th><th>Does the receiver see it?</th></tr>
-      <tr><td><b>Scattering</b></td><td>A rough surface disperses energy in many directions, over the whole hemisphere.</td><td><b>Yes</b> — this is the return we measure.</td></tr>
-      <tr><td><b>Reflection</b></td><td>A smooth surface bounces energy back in a single direction, with θr = θi.</td><td>Only when that direction points back at the sensor — i.e. at normal incidence.</td></tr>
+      <tr><td><b>Diffuse reflection</b></td><td>A rough surface redistributes reflected energy. An ideal Lambertian reflector has angle-independent radiance; power per solid angle has cosine geometry.</td><td>The small backscattered share entering the aperture can be detected.</td></tr>
+      <tr><td><b>Specular reflection</b></td><td>A smooth surface reflects around the mirror direction, with θr = θi.</td><td>Strong when the specular lobe overlaps the receiver, often near normal incidence for a monostatic sensor.</td></tr>
       <tr><td><b>Absorption</b></td><td>Energy is converted to heat within the material.</td><td>No — it is lost.</td></tr>
       <tr><td><b>Transmission</b></td><td>Energy passes through (glass, gaps in a canopy, water column).</td><td>No, but it may meet something deeper and return later.</td></tr>
     </table>
-    <p><b>Only Scattering brings the pulse home.</b> Even then the receiver aperture covers a
-    minuscule slice of that hemisphere — typically well under one part per million. The sensor times that
-    faint echo to get range, <span style="font-family:var(--mono)">R = c·Δt/2</span>, and records its amplitude as <i>intensity</i>.</p>
+    <p><b>Both reflection components can produce a return.</b> The receiver collects only the portion directed into its aperture. Echo delay estimates range; an intensity value depends on received energy, receiver response, gain and processing. It is not automatically calibrated reflectance.</p>
     <p><b>Changing the angle changes everything.</b> Swing the incident beam away from the normal and two
-    things happen at once: Reflection grows (a surface becomes more mirror-like at a glancing angle) but it
-    leaves at θr = θi, further and further from the receiver; and Scattering falls off as cos θi. That is why a
-    lake blazes straight beneath the aircraft and vanishes a few degrees to either side.</p>
-    <p>Reflectance is quoted at the sensor wavelength — most topographic LiDAR uses <b>1064 nm</b> (near infra-red).
-    That is why vegetation looks bright (leaves reflect NIR strongly) while water looks black (water absorbs NIR
-    almost completely).</p>
+    things can happen: the specular component grows toward glancing incidence, but its lobe moves away from the receiver;
+    and the diffuse backscatter changes with cosine geometry. Real BRDFs depend on roughness, wavelength and material.</p>
+    <p>This lesson uses illustrative <b>1064 nm</b> coefficients. Topographic sensors use several near-infrared wavelengths; bathymetric instruments commonly use green light. Visible colour alone does not specify reflectance at a LiDAR wavelength.</p>
     <div class="modal-actions"><button class="btn primary" id="btnHelpClose">Got it</button></div>
   </div>
 </div>
@@ -327,7 +323,9 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { LIGHT_SPEED, relativeBackscatter } from '../shared/lidar-physics.js';
+import { mountLidarLearning } from '../shared/lidar-learning.js';
 'use strict';
 const DEG = Math.PI/180;
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
@@ -341,56 +339,34 @@ const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 // ============================================================
 const MATS = [
   { key:'water', name:'Calm water', rho:0.02, spec:0.06, abs:0.91, trans:0.01, sig:2.5, col:'#2c5f7c',
-    note:'<b>Absorption</b> takes almost the whole pulse — at 1064 nm water is effectively black, so there is almost no Scattering to bring energy home. The one strong return is <b>Reflection</b> at normal incidence, straight back up the beam. Swing the angle of incidence a few degrees and that Reflection leaves at θr = θi, away from the aircraft, and you get <b>nothing at all</b>. This is why lakes and rivers appear as holes in a topographic point cloud. (Bathymetric LiDAR sidesteps this with green 532 nm light, which is transmitted into water instead of absorbed.)' },
+    note:'At 1064 nm, water strongly attenuates light entering the water column. A calm surface can still give a strong <b>specular return</b> near normal incidence. Tilt away and the lobe may miss the receiver, causing a dropout. Waves, turbidity and geometry also matter. Bathymetric LiDAR commonly uses green 532 nm light; penetration still depends on water clarity and two-way attenuation. The fractions shown here are illustrative, not measured water properties.' },
   { key:'grass', name:'Grass / crop', rho:0.45, spec:0.02, abs:0.35, trans:0.18, sig:30, col:'#6f9b4a',
-    note:'Healthy vegetation is <b>bright</b> in the near infrared — leaf mesophyll produces strong <b>Scattering</b> at 1064 nm, which is exactly why NDVI works. Roughly a fifth of the energy is also <b>transmitted</b> through the leaves, so the pulse can carry on to whatever lies below. Grass gives a strong, reliable return at almost any angle of incidence.' },
+    note:'Leaf structure can produce strong near-infrared <b>diffuse reflection</b>; leaf angle, species, moisture and wavelength affect the result. Transmission through individual leaves is different from a footprint passing through canopy gaps. Change incidence and range while holding the other inputs fixed; neither bright vegetation nor a ground return is guaranteed.' },
   { key:'soil', name:'Bare soil / gravel', rho:0.30, spec:0.03, abs:0.67, trans:0.00, sig:30, col:'#8a7050',
-    note:'A rough, opaque, mid-tone surface: no <b>Transmission</b>, very little <b>Reflection</b>, and dependable <b>Scattering</b> spread evenly over the hemisphere. <b>Absorption</b> still claims most of the energy, but what scatters back is textbook Lambertian — the easiest kind of target to work with, and it barely changes as you swing the angle.' },
+    note:'This rough, opaque target is modelled mainly with <b>diffuse reflection</b> and absorption. Lambertian does not mean equal power in every direction: radiance is angle-independent, while power per solid angle has cosine geometry. In this model the backscatter term falls with cos θ, so even this diffuse target darkens toward grazing incidence.' },
   { key:'asphalt', name:'Black asphalt road', rho:0.10, spec:0.02, abs:0.88, trans:0.00, sig:25, col:'#2e3236',
-    note:'Fresh asphalt is one of the <b>hardest</b> targets in topographic mapping. <b>Absorption</b> swallows about 88% of the incident pulse, leaving only weak <b>Scattering</b>, so the echo is faint and noisy — and it gets worse as you fly higher, because return power falls off as 1/R². New roads often appear thin or patchy in a point cloud, with intensity near the floor.' },
+    note:'Dark asphalt has a weak diffuse return in this illustrative library. The 88% absorption coefficient is a model choice; composition, ageing, moisture and wavelength change real reflectance. Increasing range reduces the extended-target signal approximately as 1/R², increasing the chance of a below-threshold return. Low signal does not itself imply a biased range in this noise-free model.' },
   { key:'wetasphalt', name:'Wet asphalt', rho:0.04, spec:0.12, abs:0.84, trans:0.00, sig:4, col:'#24282c',
-    note:'A water film turns the road into a mirror-like surface, so <b>Reflection</b> takes over from <b>Scattering</b>. At normal incidence you get a bright return straight back; move the angle of incidence a few degrees and that Reflection is directed away at θr = θi, leaving almost nothing for the receiver. Surveying wet tarmac gives bright streaks along the flight line and dropouts either side.' },
+    note:'A wet surface can redistribute the reflected part toward a narrow <b>specular lobe</b>, even while absorption dominates the total energy balance. Near normal incidence this lobe can overlap the receiver; away from normal it may miss. Compare wet and dry asphalt at identical angle, range and aperture rather than treating raw intensity as a material identifier.' },
   { key:'whiteroof', name:'White roof membrane', rho:0.72, spec:0.06, abs:0.22, trans:0.00, sig:30, col:'#e8e8e0',
-    note:'A bright, rough, opaque surface — close to an ideal LiDAR target. <b>Scattering</b> dominates and <b>Absorption</b> is modest, so it returns a strong signal at any sensible angle of incidence. That is why white roofs and painted markings stand out in intensity imagery. It is the reference target for the signal scale used here.' },
+    note:'A bright diffuse target is the <b>normalisation reference</b>: at 0°, 100 m range and 100 mm aperture its signal is exactly 100%. Doubling range gives approximately 25% plus atmospheric loss. This relative scale is not an absolute receiver calibration, and a target that looks white to the eye need not have the same reflectance at 1064 nm.' },
   { key:'glass', name:'Glass window', rho:0.01, spec:0.10, abs:0.03, trans:0.86, sig:2, col:'#9fc6dc',
-    note:'Glass is <b>transparent</b> at 1064 nm, so <b>Transmission</b> takes almost everything — the pulse goes straight through and returns from whatever is behind it (a floor, a wall, or nothing at all). Only at normal incidence do you catch a <b>Reflection</b> off the pane. This is why glazed façades and greenhouses produce strange, sparse, or sunken points.' },
+    note:'The illustrative uncoated glass target is mostly <b>transmissive</b> at 1064 nm. A background surface can therefore return a later echo; the pane can also give a specular return if its lobe overlaps the receiver. Coatings, thickness, wavelength and angle change this behaviour. A window is not guaranteed to produce either a pane point or a valid background point.' },
   { key:'sand', name:'Dry sand', rho:0.52, spec:0.03, abs:0.45, trans:0.00, sig:30, col:'#d9c48f',
-    note:'A dry, bright, rough mineral surface — strong <b>Scattering</b> and no <b>Transmission</b>. Beaches and deserts give clean, high-intensity returns; wet sand is noticeably darker because the water film raises <b>Absorption</b> at 1064 nm.' },
+    note:'Dry sand is represented as an opaque diffuse reflector. Grain size, mineral composition, moisture and incidence affect actual signal strength. Wet sand often has lower near-infrared reflectance, but no fixed intensity threshold uniquely distinguishes wet from dry material without controlling acquisition geometry and calibration.' },
 ];
 const REF = MATS.find(m => m.key === 'whiteroof');
-const refF = REF.rho + REF.spec * Math.pow(30/REF.sig, 2);
-const AP_REF = Math.PI * Math.pow(0.05, 2);   // 100 mm aperture
-const R_REF = 100;
 
 // How the incident energy divides at a given angle.
 // Fresnel (Schlick approximation): the further the pulse is from normal
 // incidence, the more energy a surface throws into Reflection — and that
 // energy is taken from Scattering, Absorption and Transmission, so the
 // four shares always still sum to the incident energy.
-function shares(mat, thetaDeg) {
-  const c = Math.cos(thetaDeg*DEG);
-  const R0 = mat.spec;                                  // reflection share at normal incidence
-  const refl = R0 + (1-R0)*Math.pow(1-c, 5);
-  const rest = mat.rho + mat.abs + mat.trans;
-  const k = rest > 0 ? (rest - (refl-R0))/rest : 0;      // scale the other three down
-  return { refl, scat: mat.rho*k, abs: mat.abs*k, trans: mat.trans*k };
-}
 function response(mat, thetaDeg, R, apMm) {
-  const s = shares(mat, thetaDeg);
-  const gain = Math.pow(30/mat.sig, 2);
-  // Reflection leaves along the mirror direction, so it only re-enters a
-  // monostatic receiver near normal incidence. Scattering is spread over the
-  // hemisphere and falls off as cos θ (projected area).
-  const reflTerm = s.refl * gain * Math.exp(-Math.pow(thetaDeg/mat.sig, 2));
-  const scatTerm = s.scat * Math.cos(thetaDeg*DEG);
-  const f = scatTerm + reflTerm;
-  const Ar = Math.PI * Math.pow(apMm/2000, 2);
-  const atm = Math.exp(-2 * 0.00002 * R);
-  const rel = (f/refF) * (Ar/AP_REF) * Math.pow(R_REF/R, 2) * atm;
-  return { f, scatTerm, reflTerm, rel, capture: Ar/(Math.PI*R*R), s };
+  return relativeBackscatter(mat, thetaDeg, R, apMm, REF);
 }
 function verdictOf(rel) {
-  if (rel >= 4)   return { k:'sat',   label:'SATURATED — Reflection straight back', cls:'v-sat' };
+  if (rel >= 4)   return { k:'sat',   label:'Above illustrative saturation threshold', cls:'v-sat' };
   if (rel >= 0.55) return { k:'strong', label:'Strong return', cls:'v-strong' };
   if (rel >= 0.18) return { k:'mod',   label:'Moderate return', cls:'v-mod' };
   if (rel >= 0.03) return { k:'weak',  label:'Weak — noisy point', cls:'v-weak' };
@@ -537,7 +513,7 @@ function drawScene() {
       sc.beginPath(); sc.moveTo(HIT.x,HIT.y);
       sc.lineTo(HIT.x+Math.cos(a)*L, HIT.y+Math.sin(a)*L); sc.stroke();
     }
-    if (sh.scat > .05) label(HIT.x - 208, HIT.y - 96, `SCATTERING ${Math.round(sh.scat*100)}%`, '#3fa9f5');
+    if (sh.scat > .05) label(HIT.x - 208, HIT.y - 96, `DIFFUSE REFLECTION ${Math.round(sh.scat*100)}%`, '#3fa9f5');
 
     // ---- REFLECTION: leaves along the mirror direction, θr = θi ----
     if (sh.refl > .01) {
@@ -551,7 +527,7 @@ function drawScene() {
       sc.arc(HIT.x,HIT.y,L,sA-half,sA+half); sc.closePath(); sc.fill();
       sc.strokeStyle='rgba(200,214,74,.9)'; sc.lineWidth=2;
       sc.beginPath(); sc.moveTo(HIT.x,HIT.y); sc.lineTo(HIT.x+Math.cos(sA)*L, HIT.y+Math.sin(sA)*L); sc.stroke();
-      label(HIT.x+Math.cos(sA)*L*0.74+8, HIT.y+Math.sin(sA)*L*0.74, `REFLECTION ${Math.round(sh.refl*100)}%`, '#c8d64a');
+      label(HIT.x+Math.cos(sA)*L*0.74+8, HIT.y+Math.sin(sA)*L*0.74, `SPECULAR ${Math.round(sh.refl*100)}%`, '#c8d64a');
     }
 
     // ---- TRANSMISSION: continues into / through the material ----
@@ -578,7 +554,7 @@ function drawScene() {
       const gg = sc.createRadialGradient(pxp,pyp,0,pxp,pyp,9);
       gg.addColorStop(0,'#e8f6ff'); gg.addColorStop(.4,'#3fa9f5'); gg.addColorStop(1,'rgba(63,169,245,0)');
       sc.fillStyle=gg; sc.beginPath(); sc.arc(pxp,pyp,9,0,7); sc.fill();
-      label(HIT.x - 196, HIT.y - 150, 'Scattering back into RX — the measurement', '#3fa9f5');
+      label(HIT.x - 196, HIT.y - 150, 'backscatter collected by RX', '#3fa9f5');
     } else {
       label(HIT.x - 120, HIT.y - 150, 'nothing returns — dropout', '#e2574c');
     }
@@ -682,15 +658,15 @@ function updateSurface() {
   const vEl = document.getElementById('sigVerdict');
   vEl.textContent = v.label; vEl.className = 'verdict ' + v.cls;
   document.getElementById('sigNote').innerHTML =
-    `at θi = ${state.theta}°: Scattering term <b>${res.scatTerm.toFixed(3)}</b> · Reflection term <b>${res.reflTerm.toFixed(3)}</b>`;
+    `Illustrative model at θi = ${state.theta}°: diffuse term <b>${res.scatTerm.toFixed(3)}</b> · specular term <b>${res.reflTerm.toFixed(3)}</b>. Detection and saturation thresholds are teaching choices, not an instrument specification.`;
   // capture fraction
   const ppm = res.capture * 1e6;
   document.getElementById('captureVal').textContent =
     ppm >= 1 ? ppm.toFixed(2)+' ppm' : (res.capture*1e9).toFixed(1)+' ppb';
   document.getElementById('captureNote').innerHTML =
-    `Of all the energy sent back into the hemisphere by <b>Scattering</b>, the ${state.ap} mm aperture at ${state.R} m collects only ` +
+    `For a diffuse target near normal incidence, the ${state.ap} mm aperture at ${state.R} m has a geometric collection factor of ` +
     `<b>${ppm >= 1 ? ppm.toFixed(2)+' parts per million' : (res.capture*1e9).toFixed(1)+' parts per billion'}</b>. ` +
-    `Everything else flies past the sensor and is lost — yet that returning fraction is the entire measurement.`;
+    `Multiply by reflectance and atmospheric/system factors for a received-energy fraction. Specular returns require their own directional model.`;
   document.getElementById('matNote').innerHTML = m.note;
   document.getElementById('waveNote').innerHTML = res.rel >= 0.03
     ? `The echo is <b>${(res.rel*100).toFixed(res.rel<0.1?2:0)}%</b> of the reference target. Its <b>delay</b> gives range; its <b>amplitude</b> is recorded as intensity.`
@@ -789,7 +765,7 @@ function tracePulse(offM) {
 
 // discrete-return detection: peaks in the summed waveform closer than the
 // pulse length merge, exactly as in a real digitiser
-const PULSE_SIGMA = 0.62;             // m  (≈1.5 m pulse length)
+const PULSE_SIGMA = (LIGHT_SPEED * 10e-9 / 2) / (2 * Math.sqrt(Math.log(2))); // 10 ns Gaussian FWHM in range coordinates
 function waveformOf(returns) {
   // sample a little below ground so a last return at h = 0 is an interior
   // sample and can be found by the peak detector
@@ -932,18 +908,17 @@ function updateCanopy() {
   const res = drawTreeScene();
   const peaks = drawTreeWave(res);
   document.getElementById('canopyTitle').textContent =
-    `— beam at ${state.off.toFixed(2)} m, LAI ${(state.leafOff?state.density*0.28:state.density).toFixed(2)}`;
+    `— beam at ${state.off.toFixed(2)} m, relative attenuation ${(state.leafOff?state.density*0.28:state.density).toFixed(2)}`;
   document.getElementById('stReturns').textContent = peaks.length;
   document.getElementById('stGround').innerHTML = `${(res.energyToGround*100).toFixed(1)} <small>%</small>`;
-  const first = res.returns[0];
+  const first = peaks[0];
   document.getElementById('stFirst').innerHTML = first ? `${first.h.toFixed(1)} <small>m</small>` : '—';
-  const last = res.returns[res.returns.length-1];
+  const last = peaks[peaks.length-1];
   document.getElementById('stLast').innerHTML = last ? `${last.h.toFixed(1)} <small>m</small>` : '—';
   let note;
-  if (!res.returns.length) note = 'The beam missed the tree entirely — a single ground return, exactly like open ground.';
-  else if (res.groundHit && res.returns.length > 2) note = `The pulse punched through <b>${res.returns.length-1}</b> layers of foliage and still had <b>${(res.energyToGround*100).toFixed(1)}%</b> of its energy left to bounce off the soil. First return gives canopy height, last return gives terrain — the difference is the tree height.`;
-  else if (res.groundHit) note = `Enough energy slipped through the gaps to reach the ground. The <b>last return</b> is your bare-earth point.`;
-  else note = `The canopy is dense enough here that the pulse is exhausted before reaching the soil — <b>no bare-earth point</b>. Fly denser, use leaf-off season, or accept a gap in the DTM.`;
+  if (!peaks.length) note = 'No waveform peak exceeds the model detection threshold. Energy reaching a surface does not guarantee a detected return.';
+  else if (res.groundHit && last && Math.abs(last.h) < 0.25) note = `The synthetic ground contribution is detected near 0 m; <b>${peaks.length}</b> peaks remain after waveform merging. First/last heights above are detected peaks, not every modelled interception. In field data, classify this last return before treating it as ground.`;
+  else note = `The last detected peak is at <b>${last.h.toFixed(1)} m</b> above the known synthetic ground. A physical ground contribution may be absent, below threshold or merged with foliage. <b>Last return does not mean ground.</b>`;
   document.getElementById('pulseNote').innerHTML = note;
 }
 
@@ -963,17 +938,15 @@ document.getElementById('btnScan').addEventListener('click', () => {
   const points = []; let ghits = 0, n = 0;
   for (let x = -3.0; x <= 3.0; x += 0.06) {
     const r = tracePulse(x); n++;
-    if (r.groundHit) ghits++;
-    r.returns.forEach((ret, i) => points.push({ x, h: ret.h, kind: ret.kind, first: i===0 }));
+    const detected = countPeaks(waveformOf(r.returns));
+    if (r.groundHit && detected.some(peak => Math.abs(peak.h) < 0.25)) ghits++;
+    detected.forEach((ret, i) => points.push({ x, h: ret.h, kind: r.groundHit && Math.abs(ret.h) < 0.25 ? 'ground' : 'canopy', first: i===0 }));
   }
   state.scan = { points, n, ghits };
   document.getElementById('stPulses').textContent = n;
   document.getElementById('stGhits').innerHTML = `${(ghits/n*100).toFixed(0)} <small>%</small>`;
   document.getElementById('scanNote').innerHTML =
-    `<b>${(ghits/n*100).toFixed(0)}%</b> of pulses reached bare earth. Green = canopy-top (first) returns, olive = intermediate, orange = ground (last). ` +
-    (ghits/n > 0.35
-      ? 'That is comfortably enough to interpolate a terrain model under this tree.'
-      : 'That is thin — the DTM under this crown will be interpolated across gaps. Try leaf-off or a lower LAI.');
+    `<b>${(ghits/n*100).toFixed(0)}%</b> of pulses have a detected peak near the known ground in this synthetic scene. Green = first detected canopy peak, olive = other canopy peaks, orange = model-identified ground. This percentage alone does not establish DTM quality: spatial coverage, classification errors, terrain and interpolation also matter.`;
   updateCanopy();
 });
 document.getElementById('btnClearScan').addEventListener('click', () => {
@@ -987,8 +960,8 @@ document.getElementById('btnClearScan').addEventListener('click', () => {
 //  Trainee challenge
 // ============================================================
 const INTERACTIONS = [
-  { k:'scat',  label:'Scattering' },
-  { k:'refl',  label:'Reflection' },
+  { k:'scat',  label:'Diffuse reflection' },
+  { k:'refl',  label:'Specular reflection' },
   { k:'abs',   label:'Absorption' },
   { k:'trans', label:'Transmission' },
 ];
@@ -1004,9 +977,9 @@ function buildQuiz() {
     const right = dominantOf(m);
     qs.push({
       type:'dom', mat:m,
-      q:`An <b>incident</b> pulse at 1064 nm strikes <b>${m.name.toLowerCase()}</b> at normal incidence. Which interaction takes the largest share of the energy?`,
+      q:`In this <b>illustrative 1064 nm model</b>, a pulse strikes <b>${m.name.toLowerCase()}</b> at normal incidence. Which interaction takes the largest energy share?`,
       opts: INTERACTIONS.map(i=>i.label), rightIdx: INTERACTIONS.findIndex(i=>i.k===right),
-      why:`For ${m.name.toLowerCase()}: Scattering ${(m.rho*100)|0}%, Reflection ${(m.spec*100)|0}%, Absorption ${(m.abs*100)|0}%, Transmission ${(m.trans*100)|0}%.`
+      why:`Illustrative model for ${m.name.toLowerCase()}: diffuse reflection ${(m.rho*100)|0}%, specular reflection ${(m.spec*100)|0}%, absorption ${(m.abs*100)|0}%, transmission ${(m.trans*100)|0}%.`
     });
   });
   // 2 "will you get a return" questions
@@ -1022,8 +995,8 @@ function buildQuiz() {
         q:`The <b>incident</b> pulse meets <b>${m.name.toLowerCase()}</b> at an angle of incidence of <b>${ang}°</b>, from 100 m. What does the receiver get?`,
         opts: strengthOpts, rightIdx: idxOf(v),
         why:`Signal is ${(res.rel*100).toFixed(res.rel<0.1?2:0)}% of the white-roof reference — ${v.label.toLowerCase()}. ` +
-            (m.sig<8 ? 'Reflection leaves at θr = θi, so away from normal incidence it heads off in a direction the receiver cannot see, and only weak Scattering is left.' :
-                       'The return is carried by Scattering, which spreads over the hemisphere and so changes only slowly with angle.')
+            (m.sig<8 ? 'The narrow specular lobe moves away from the receiver as incidence increases; weak diffuse backscatter remains.' :
+                       'The diffuse backscatter varies with incidence cosine, range, receiver aperture and the illustrative reflectance.')
       });
     });
   return qs.sort(()=>Math.random()-0.5);
@@ -1106,6 +1079,17 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
+mountLidarLearning('interaction', {
+  getWorkedExample: () => {
+    const r = response(state.mat, state.theta, state.R, state.ap);
+    return state.tab === 'canopy' ? `Relative attenuation ${state.density.toFixed(2)}; leaf-off ${state.leafOff ? 'on' : 'off'}. The waveform has ${countPeaks(waveformOf(tracePulse(state.off).returns)).length} detected peaks; return order is not a ground class.` : `${state.mat.name}: diffuse ${(r.s.scat * 100).toFixed(1)}% + specular ${(r.s.refl * 100).toFixed(1)}% + absorption ${(r.s.abs * 100).toFixed(1)}% + transmission ${(r.s.trans * 100).toFixed(1)}% = 100%. At ${state.R} m, the relative received signal is ${(r.rel * 100).toFixed(2)}% of the reference.`;
+  },
+  onExperiment: id => {
+    document.querySelector(`[data-tab="${id === 'canopy' ? 'canopy' : 'surface'}"]`).click();
+    if (id === 'canopy') { state.off = -1.6; state.density = 1; state.leafOff = false; document.getElementById('offSlider').value = -160; document.getElementById('offVal').textContent = '−1.60 m'; document.getElementById('denSlider').value = 100; document.getElementById('denVal').textContent = '1.00'; document.getElementById('leafOff').checked = false; updateCanopy(); }
+    else { state.R = id === 'range' ? 200 : 100; state.ap = 100; document.getElementById('rngSlider').value = state.R; document.getElementById('rngVal').textContent = state.R + ' m'; document.getElementById('apSlider').value = 100; document.getElementById('apVal').textContent = '100 mm'; selectMat(id === 'water' ? 'water' : 'whiteroof'); setTheta(id === 'water' ? 20 : 0); }
+  },
+});
 selectMat('water');
 updateCanopy();
 requestAnimationFrame(frame);

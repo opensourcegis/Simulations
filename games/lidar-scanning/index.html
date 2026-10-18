@@ -119,6 +119,7 @@
   .mtable td b { color: var(--text); }
   .callout { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px; color: var(--text-dim); margin: 10px 0; }
 </style>
+<link rel="stylesheet" href="../shared/simulation-theme.css">
 </head>
 <body>
 <div class="app">
@@ -174,7 +175,7 @@
         <div class="ctrl">
           <div>
             <label>Flying height AGL <b id="altVal">80 m</b></label>
-            <input type="range" id="altSlider" min="40" max="140" step="5" value="80">
+            <input type="range" id="altSlider" min="40" max="160" step="5" value="80">
           </div>
           <div>
             <label>Playback speed (slow-mo) <b id="spdVal">1.0×</b></label>
@@ -197,7 +198,7 @@
           <div class="stat"><div class="k">Swath width</div><div class="v" id="stSwath">—</div></div>
           <div class="stat"><div class="k">Points</div><div class="v" id="stPts">0</div></div>
           <div class="stat"><div class="k">Density</div><div class="v" id="stDens">—</div></div>
-          <div class="stat"><div class="k">Spacing</div><div class="v" id="stGsd">—</div></div>
+          <div class="stat"><div class="k">Equivalent spacing √(1/density)</div><div class="v" id="stGsd">—</div></div>
         </div>
         <div style="margin-top:9px">
           <label style="font-size:12px;color:var(--text-dim);display:flex;justify-content:space-between"><span>Flight-line progress</span><b id="progVal" style="font-family:var(--mono)">0%</b></label>
@@ -225,7 +226,7 @@
       <tr><td><b>Oscillating mirror</b><br>(galvanometer)</td><td>Flat mirror swings; sinusoidal zig-zag, points bunch at the swath edges.</td><td>Leica ALS40–ALS80, Optech ALTM</td></tr>
       <tr><td><b>Rotating polygon mirror</b></td><td>Beam strikes each spinning facet in turn; straight parallel one-way lines.</td><td>RIEGL VQ / VUX, Optech</td></tr>
       <tr><td><b>Palmer / conical</b><br>(nutating mirror)</td><td>Tilted mirror spins about the axis; overlapping ellipses, fore &amp; aft looks.</td><td>TopoSys, conical topo scanners</td></tr>
-      <tr><td><b>Risley prisms</b><br>(dual rotating wedges)</td><td>Light <i>refracts</i> through two counter-rotating wedges; non-repetitive rosette.</td><td>Livox Avia, DJI Zenmuse L1 / L2</td></tr>
+      <tr><td><b>Risley prisms</b><br>(dual rotating wedges)</td><td>Light <i>refracts</i> through two rotating wedges. Repetition depends on frequency ratio; this demo repeats every 0.5 s.</td><td>Risley-prism scanning is used in several compact LiDAR designs; exact mechanisms depend on the model.</td></tr>
       <tr><td><b>MEMS micro-mirror</b></td><td>Gimbaled micro-mirror tilts on two axes; Lissajous tile in a narrow FOV.</td><td>Innoviz, automotive-class UAV units</td></tr>
       <tr><td><b>Rotating multi-beam</b><br>(spinning head)</td><td>Laser modules ride a spinning head; concentric rings, one per channel.</td><td>Velodyne / Ouster / Hesai, YellowScan</td></tr>
     </table>
@@ -234,7 +235,8 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { mountLidarLearning } from '../shared/lidar-learning.js';
 'use strict';
 
 // ============================================================
@@ -539,23 +541,23 @@ const MECHS = [
     ex:'Leica ALS40–ALS80 · Optech ALTM Gemini',
     fn:(t,H,m)=>{const th=m.swathDeg*DEG*Math.sin(2*Math.PI*m.scanHz*t);return [{ax:0,cx:H*Math.tan(th)}];},
     svg:`<svg viewBox="0 0 120 40"><polyline points="6,8 24,32 42,8 60,32 78,8 96,32 114,8" fill="none" stroke="#0f8a4d" stroke-width="2"/></svg>` },
-  { key:'poly', name:'Rotating polygon', pattern:'Parallel lines, uniform', swathDeg:25, scanHz:11, prf:640, dispScale:0.05, optic:opticPoly,
+  { key:'poly', name:'Rotating polygon', pattern:'Lines, edge spacing grows', swathDeg:25, scanHz:11, prf:640, dispScale:0.05, optic:opticPoly,
     how:'A multi-faceted mirror spins continuously; the beam strikes whichever facet is in front of it, and each facet sweeps the beam once across track before the next takes over.',
-    ground:'Straight, parallel, one-directional scan lines with very even point spacing across the whole swath.',
-    pros:['Uniform across-track density','High, steady scan rate'], cons:['Facet change-over is dead time','One-directional only'],
+    ground:'One-directional sweeps. Constant angular speed does not give perfectly uniform ground spacing: y = H tan θ, so spacing grows toward the swath edges. Aircraft motion also gives each scan a forward component.',
+    pros:['Steady angular scan rate','Repeatable one-direction sweeps'], cons:['Ground spacing varies with angle','Real facet transitions may create dead time'],
     ex:'RIEGL VQ / VUX series · Optech',
     fn:(t,H,m)=>{const ph=(m.scanHz*t)%1,th=(-m.swathDeg+2*m.swathDeg*ph)*DEG;return [{ax:0,cx:H*Math.tan(th)}];},
     svg:`<svg viewBox="0 0 120 40"><g stroke="#0f8a4d" stroke-width="2"><line x1="8" y1="9" x2="112" y2="9"/><line x1="8" y1="20" x2="112" y2="20"/><line x1="8" y1="31" x2="112" y2="31"/></g></svg>` },
   { key:'palmer', name:'Palmer conical', pattern:'Overlapping ellipses', swathDeg:20, scanHz:9, prf:760, dispScale:0.061, optic:opticPalmer,
     how:'A mirror tilted off-nadir is rotated about the vertical axis, so its normal sweeps a cone and the beam traces a circle on the ground.',
-    ground:'Densely overlapping ellipses. Every ground point is measured twice — once looking forward, once looking back — which fills shadows and sees vertical faces.',
+    ground:'Fore-and-aft conical looks produce translated, overlapping loops. Some areas can be observed from multiple directions, helping reduce occlusion; neither exactly two hits per point nor complete shadow removal is guaranteed.',
     pros:['Fore & aft looks reduce shadowing','Good on building/tree sides'], cons:['Complex geometry & processing','Variable incidence angle'],
     ex:'TopoSys · conical topographic scanners',
     fn:(t,H,m)=>{const ps=2*Math.PI*m.scanHz*t,r=H*Math.tan(m.swathDeg*DEG);return [{ax:r*Math.cos(ps),cx:r*Math.sin(ps)}];},
     svg:`<svg viewBox="0 0 120 40"><g fill="none" stroke="#0f8a4d" stroke-width="1.6"><ellipse cx="34" cy="20" rx="16" ry="10"/><ellipse cx="60" cy="20" rx="16" ry="10"/><ellipse cx="86" cy="20" rx="16" ry="10"/></g></svg>` },
-  { key:'risley', name:'Risley prisms', pattern:'Non-repetitive rosette', swathDeg:16, prf:1050, d1:8, d2:7, f1:18, f2:-28, dispScale:0.0306, optic:opticRisley,
-    how:'Two wedge prisms rotate at different speeds in opposite directions. The light passes THROUGH both and is refracted twice; the combined deflection traces a flower-like rosette that never exactly repeats.',
-    ground:'A dense rosette / flower. It is sparse at any instant but fills in the longer the sensor dwells over an area — "non-repetitive" scanning.',
+  { key:'risley', name:'Risley prisms', pattern:'Rosette; periodic in this demo', swathDeg:16, prf:1050, d1:8, d2:7, f1:18, f2:-28, dispScale:0.0306, optic:opticRisley,
+    how:'Two rotating wedge prisms refract the beam. Their combined deflections trace a rosette. Whether it repeats depends on the frequency ratio: this model uses +18 and −28 Hz and repeats every 0.5 s on a stationary plane.',
+    ground:'A translated rosette with non-uniform local density. Aircraft motion shifts each 0.5 s pattern repeat. Longer observation can fill gaps, but these fixed commensurate frequencies are not mathematically non-repeating.',
     pros:['Compact, low-cost, no big mirror','Dense with longer integration'], cons:['Non-uniform instantaneous density','Sensitive to platform motion'],
     ex:'Livox Avia / Mid-40 · DJI Zenmuse L1 / L2',
     fn:(t,H,m)=>{const a1=2*Math.PI*m.f1*t,a2=2*Math.PI*m.f2*t;return [{cx:H*(Math.tan(m.d1*DEG)*Math.cos(a1)+Math.tan(m.d2*DEG)*Math.cos(a2)),ax:H*(Math.tan(m.d1*DEG)*Math.sin(a1)+Math.tan(m.d2*DEG)*Math.sin(a2))}];},
@@ -563,7 +565,7 @@ const MECHS = [
   { key:'mems', name:'MEMS micro-mirror', pattern:'Lissajous raster tile', swathDeg:12, ampY:9, fx:30, fy:3.8, prf:900, dispScale:0.107, optic:opticMems,
     how:'A tiny gimbaled micro-electro-mechanical mirror is driven on two resonant axes — fast one way, slow the other — sweeping the beam over a small rectangular field of view.',
     ground:'A Lissajous / raster tile. The field of view is narrow, so adjacent flight lines must be tiled to cover an area.',
-    pros:['Solid-state, no bulky moving parts','Light and cheap'], cons:['Small field of view — needs tiling','Limited range / aperture'],
+    pros:['Microscopic moving mirror','Compact optical steering'], cons:['Field of view depends on design','Range depends on the complete sensor'],
     ex:'Innoviz · automotive-class UAV scanners',
     fn:(t,H,m)=>{const thx=m.swathDeg*DEG*Math.sin(2*Math.PI*m.fx*t),thy=m.ampY*DEG*Math.sin(2*Math.PI*m.fy*t);return [{ax:H*Math.tan(thy),cx:H*Math.tan(thx)}];},
     svg:`<svg viewBox="0 0 120 40"><path d="M20,20 C40,4 44,4 60,20 C76,36 80,36 100,20 C80,4 76,4 60,20 C44,36 40,36 20,20" fill="none" stroke="#0f8a4d" stroke-width="1.5"/></svg>` },
@@ -637,7 +639,7 @@ function renderMechDetail() {
 // ============================================================
 //  Mission
 // ============================================================
-function swathWidth(m,H){ return 2*H*Math.tan(m.swathDeg*DEG); }
+function swathWidth(m,H){ return m.key === 'risley' ? 2*H*(Math.tan(m.d1*DEG)+Math.tan(m.d2*DEG)) : 2*H*Math.tan(m.swathDeg*DEG); }
 function updateSensorStats(){ const m=state.mech; if(!m) return; document.getElementById('stSwath').innerHTML=`${swathWidth(m,state.H).toFixed(0)} <small>m</small>`; }
 function resetMission() {
   state.running=false; state.paused=false; state.t=0; state.points=0; state.shotAcc=0;
@@ -799,7 +801,7 @@ document.getElementById('zbtns').addEventListener('click', (e) => {
 document.getElementById('btnFly').addEventListener('click',()=>{ if(state.mech) startMission(); });
 document.getElementById('btnPause').addEventListener('click',()=>{ if(!state.running) return; state.paused=!state.paused; document.getElementById('btnPause').textContent=state.paused?'Resume':'Pause'; });
 document.getElementById('btnReset').addEventListener('click',()=>resetMission());
-document.getElementById('altSlider').addEventListener('input',(e)=>{ state.H=+e.target.value; document.getElementById('altVal').textContent=state.H+' m'; updateSensorStats(); if(!state.running) resetMission(); });
+document.getElementById('altSlider').addEventListener('input',(e)=>{ state.H=+e.target.value; document.getElementById('altVal').textContent=state.H+' m'; updateSensorStats(); resetMission(); });
 document.getElementById('spdSlider').addEventListener('input',(e)=>{ state.speed=+e.target.value; document.getElementById('spdVal').textContent=state.speed.toFixed(1)+'×'; });
 document.getElementById('cmode').addEventListener('click',(e)=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -814,6 +816,23 @@ document.getElementById('btnHelpClose').addEventListener('click',()=>document.ge
 // ============================================================
 //  Boot
 // ============================================================
+mountLidarLearning('scanning', {
+  getWorkedExample: () => {
+    const m = state.mech;
+    if (!m) return 'Select a mechanism. Compare optical angular motion, the ground pattern and forward aircraft motion before comparing point counts.';
+    const width = swathWidth(m, state.H);
+    const q = m.prf * (m.channels || 1);
+    return `${m.name}: H = ${state.H} m; ground swath ≈ ${width.toFixed(2)} m; illustrative total sampling rate q = ${q} points/s; platform v = ${V_GROUND} m/s. Ideal complete-coverage mean density q/(vW) = ${(q / (V_GROUND * width)).toFixed(3)} points/m²${m.scanHz ? `; forward displacement per cycle v/fscan = ${(V_GROUND / m.scanHz).toFixed(2)} m` : ''}. Map clipping and missed returns reduce captured density.`;
+  },
+  onExperiment: id => {
+    selectMech(id === 'risley' ? 'risley' : 'osc');
+    state.H = id === 'height' ? 160 : 80;
+    document.getElementById('altSlider').value = state.H;
+    document.getElementById('altVal').textContent = state.H + ' m';
+    updateSensorStats();
+    resetMission();
+  },
+});
 resetMission(); drawOptics(0);
 requestAnimationFrame(frame);
 </script>

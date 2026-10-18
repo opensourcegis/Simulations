@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './simulation.css';
 import './native.css';
 import './tin.css';
+import LidarLearningPanel from './LidarLearningPanel.jsx';
+import { evaluateTinCandidate, tinProfileSegment } from '../../games/shared/lidar-physics.js';
 
 // ---------------------------------------------------------------------------
 // 2D Delaunay Triangulation (Bowyer-Watson Algorithm)
@@ -123,7 +125,7 @@ function pointInTriangle2D(px, py, ax, ay, bx, by, cx, cy) {
   const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
   const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
 
-  return u >= -0.01 && v >= -0.01 && u + v <= 1.01;
+  return u >= -1e-8 && v >= -1e-8 && u + v <= 1 + 1e-8;
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +354,8 @@ function computeAdaptiveTINHistory(points, gridSize, maxAngleDeg, maxDist) {
   });
 
   let iterations = 1;
-  const maxIterations = 35;
+  const maxIterations = Math.min(points.length, 100);
+  let converged = false;
 
   while (iterations <= maxIterations) {
     const groundPts = points.filter((p) => currentGroundIds.has(p.id));
@@ -375,48 +378,12 @@ function computeAdaptiveTINHistory(points, gridSize, maxAngleDeg, maxDist) {
         }
       }
 
-      if (!matchedTri && triangles.length > 0) {
-        let minDistSq = Infinity;
-        triangles.forEach((t) => {
-          const v0 = groundPts[t[0]];
-          const v1 = groundPts[t[1]];
-          const v2 = groundPts[t[2]];
-          const cx = (v0.x + v1.x + v2.x) / 3;
-          const cy = (v0.y + v1.y + v2.y) / 3;
-          const d2 = (p.x - cx) ** 2 + (p.y - cy) ** 2;
-          if (d2 < minDistSq) {
-            minDistSq = d2;
-            matchedTri = { v0, v1, v2 };
-          }
-        });
-      }
-
       if (!matchedTri) return;
 
       const { v0, v1, v2 } = matchedTri;
-      const ux = v1.x - v0.x, uy = v1.y - v0.y, uz = v1.z - v0.z;
-      const vx = v2.x - v0.x, vy = v2.y - v0.y, vz = v2.z - v0.z;
-
-      const nx = uy * vz - uz * vy;
-      const ny = uz * vx - ux * vz;
-      let nz = ux * vy - uy * vx;
-
-      if (Math.abs(nz) < 1e-8) nz = 1e-8;
-
-      const zPlane = v0.z - (nx * (p.x - v0.x) + ny * (p.y - v0.y)) / nz;
-      const d = p.z - zPlane;
-
-      const calcAngle = (v) => {
-        const horizDist = Math.hypot(p.x - v.x, p.y - v.y);
-        if (horizDist < 1e-6) return 0;
-        return (Math.atan2(Math.abs(p.z - v.z), horizDist) * 180) / Math.PI;
-      };
-
-      const maxAngle = Math.max(calcAngle(v0), calcAngle(v1), calcAngle(v2));
-
-      const passesDist = d >= -0.1 && d <= maxDist;
-      const passesAngle = maxAngle <= maxAngleDeg;
-      const accepted = passesDist && passesAngle;
+      const evaluation = evaluateTinCandidate(p, [v0, v1, v2], maxDist, maxAngleDeg);
+      if (!evaluation) return;
+      const { d, angle: maxAngle, passesDist, passesAngle, accepted, zPlane } = evaluation;
 
       candidateEvaluations.push({
         id: p.id,
@@ -433,23 +400,28 @@ function computeAdaptiveTINHistory(points, gridSize, maxAngleDeg, maxDist) {
       }
     });
 
-    if (qualifiedCandidates.length === 0) break;
+    if (qualifiedCandidates.length === 0) {
+      converged = true;
+      break;
+    }
 
     // Sort qualified candidates by distance d ascending (closest to TIN surface first)
     qualifiedCandidates.sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
 
-    // Controlled batch insertion spanning 25-35 smooth steps up to 80%+ accuracy
+    // Small display batches; synthetic truth never controls insertion decisions.
     const batchSize = Math.max(1, Math.min(10, Math.ceil(qualifiedCandidates.length / 14)));
     const batchToAdd = qualifiedCandidates.slice(0, batchSize);
 
     batchToAdd.forEach((c) => currentGroundIds.add(c.id));
+    const updatedGroundPts = points.filter(p => currentGroundIds.has(p.id));
+    const updatedTriangles = delaunay2D(updatedGroundPts);
 
     history.push({
       step: iterations,
       groundSet: new Set(currentGroundIds),
       nonGroundSet: new Set(points.filter((p) => !currentGroundIds.has(p.id)).map((p) => p.id)),
       seedSet: new Set(seedPointIds),
-      triangles: triangles.map((t) => [groundPts[t[0]].id, groundPts[t[1]].id, groundPts[t[2]].id]),
+      triangles: updatedTriangles.map((t) => t.map(index => updatedGroundPts[index].id)),
       candidateEvaluations,
       newlyAdded: batchToAdd.map((c) => c.id),
       accuracy: calcAcc(currentGroundIds),
@@ -461,6 +433,7 @@ function computeAdaptiveTINHistory(points, gridSize, maxAngleDeg, maxDist) {
     iterations++;
   }
 
+  history[history.length - 1].stopReason = converged ? 'converged' : 'iteration-limit';
   return history;
 }
 
@@ -620,6 +593,10 @@ export default function AdaptiveTIN() {
 
   const groundCount = currentSnapshot ? currentSnapshot.groundSet.size : 0;
   const nonGroundCount = points.length - groundCount;
+  const trueGroundCount = points.filter(p => p.isTrueGround).length;
+  const correctGroundCount = points.filter(p => p.isTrueGround && currentSnapshot?.groundSet.has(p.id)).length;
+  const groundPrecision = groundCount ? 100 * correctGroundCount / groundCount : 0;
+  const groundRecall = trueGroundCount ? 100 * correctGroundCount / trueGroundCount : 0;
 
   const accuracy = useMemo(() => {
     if (!currentSnapshot) return 0;
@@ -1108,34 +1085,26 @@ export default function AdaptiveTIN() {
       }
     });
 
-    // Draw Ground TIN Profile Surface Line
-    const groundPtsInSlice = slicePoints.filter((p) => currentSnapshot.groundSet.has(p.id));
-    groundPtsInSlice.sort((a, b) => a.x - b.x);
-
-    if (groundPtsInSlice.length >= 2) {
+    // Draw actual facet intersections, not a polyline joining nearby samples.
+    const slicePointMap = new Map(points.map(p => [p.id, p]));
+    const segments = currentSnapshot.triangles.map(ids => tinProfileSegment(ids.map(id => slicePointMap.get(id)), sliceY, maxDist)).filter(Boolean);
+    for (const segment of segments) {
       ctx.strokeStyle = '#c48b49';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      groundPtsInSlice.forEach((p, idx) => {
-        const px = toX(p.x);
-        const py = toY(p.z);
-        if (idx === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
+      ctx.moveTo(toX(segment.start.x), toY(segment.start.z));
+      ctx.lineTo(toX(segment.end.x), toY(segment.end.z));
       ctx.stroke();
 
-      // Distance Tolerance Band Envelope (d_max limit)
       ctx.strokeStyle = 'rgba(217, 119, 6, 0.35)';
       ctx.lineWidth = 1.2;
       ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      groundPtsInSlice.forEach((p, idx) => {
-        const px = toX(p.x);
-        const py = toY(p.z + maxDist);
-        if (idx === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
+      for (const sign of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(toX(segment.start.x), toY(segment.start.z + sign * segment.verticalTolerance));
+        ctx.lineTo(toX(segment.end.x), toY(segment.end.z + sign * segment.verticalTolerance));
+        ctx.stroke();
+      }
       ctx.setLineDash([]);
     }
 
@@ -1158,22 +1127,12 @@ export default function AdaptiveTIN() {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        const groundPt = groundPtsInSlice.find((g) => Math.abs(g.x - p.x) < 8);
-        if (groundPt) {
-          const gPy = toY(groundPt.z);
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([3, 3]);
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(px, gPy);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
+        const evaluation = currentSnapshot.candidateEvaluations.find(entry => entry.id === p.id);
+        if (evaluation) {
           ctx.fillStyle = '#38bdf8';
           ctx.font = '600 11px system-ui';
           ctx.textAlign = 'left';
-          ctx.fillText(`d = ${Math.abs(p.z - groundPt.z).toFixed(2)}m`, px + 8, (py + gPy) / 2);
+          ctx.fillText(`previous-facet test: d⊥ = ${evaluation.d} m`, px + 8, py - 12);
         }
       }
     });
@@ -1294,6 +1253,10 @@ export default function AdaptiveTIN() {
         </span>
       </header>
 
+      <LidarLearningPanel topic="tin"
+        workedExample={`Step ${currentStep}: ${groundCount} points in the ground hypothesis; ${correctGroundCount} are true ground in this synthetic scene. Ground precision = ${groundPrecision.toFixed(1)}%; recall = ${groundRecall.toFixed(1)}%. Acceptance requires perpendicular distance ≤ ${maxDist} m AND facet-relative angle ≤ ${maxAngle}°. Truth labels evaluate the result; they do not decide acceptance.`}
+        onExperiment={(id) => { setCurrentStep(0); setIsPlaying(false); setPreset(id === 'steep' ? 'steep' : 'hills'); setGridSize(25); setMaxAngle(id === 'strict' ? 4 : id === 'relaxed' ? 20 : 12); setMaxDist(id === 'strict' ? 0.3 : id === 'relaxed' ? 2.5 : 1.2); }} />
+
       {/* Preset Terrain Selector */}
       <div style={{ maxWidth: 1520, margin: '14px auto 0' }}>
         <div className="scenario-select" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
@@ -1381,21 +1344,10 @@ export default function AdaptiveTIN() {
 
             {/* 3D Camera Controls Bar */}
             {view3D && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  margin: '8px 0',
-                  padding: '6px 10px',
-                  background: '#f8fafc',
-                  borderRadius: 8,
-                  border: '1px solid #e2e8f0',
-                  fontSize: 12,
-                }}
-              >
-                <span>Rotate (Orbit):</span>
+              <div className="tin-camera-controls">
+                <label htmlFor="tin-orbit">Rotate (Orbit):</label>
                 <input
+                  id="tin-orbit"
                   type="range"
                   min="0"
                   max="360"
@@ -1403,8 +1355,9 @@ export default function AdaptiveTIN() {
                   onChange={(e) => setYawAngle(Number(e.target.value))}
                   style={{ width: 80, accentColor: '#0f8a4d' }}
                 />
-                <span>Tilt (Pitch):</span>
+                <label htmlFor="tin-pitch">Tilt (Pitch):</label>
                 <input
+                  id="tin-pitch"
                   type="range"
                   min="10"
                   max="85"
@@ -1412,8 +1365,9 @@ export default function AdaptiveTIN() {
                   onChange={(e) => setPitchAngle(Number(e.target.value))}
                   style={{ width: 80, accentColor: '#0f8a4d' }}
                 />
-                <span>Zoom:</span>
+                <label htmlFor="tin-zoom">Zoom:</label>
                 <input
+                  id="tin-zoom"
                   type="range"
                   min="0.6"
                   max="2.2"
@@ -1467,6 +1421,7 @@ export default function AdaptiveTIN() {
               >
                 🔄 Reset to Seed
               </button>
+              <button className="tin-btn secondary" onClick={() => { setIsPlaying(false); setCurrentStep(history.length - 1); }}>Inspect final classification</button>
             </div>
 
             {/* Iteration Progress Bar & Accuracy Metric */}
@@ -1483,7 +1438,7 @@ export default function AdaptiveTIN() {
               <span style={{ fontWeight: 600, color: currentSnapshot && currentSnapshot.accuracy >= 80 ? '#10b981' : '#f59e0b' }}>
                 🎯 Accuracy: {currentSnapshot ? currentSnapshot.accuracy : 0}%
               </span>
-              <span>{currentStep === history.length - 1 ? '✅ Converged' : 'In Progress'}</span>
+              <span>{currentStep === history.length - 1 ? currentSnapshot?.stopReason === 'converged' ? 'No further supported candidates' : 'Display iteration limit reached' : 'In Progress'}</span>
             </div>
 
             {/* Legend */}
@@ -1510,21 +1465,10 @@ export default function AdaptiveTIN() {
             </h2>
 
             <canvas ref={profileCanvasRef} className="tin-canvas" width={700} height={200} />
+            <div className="rng-note">Brown segments intersect the <b>actual TIN facets</b> at Y = {sliceY} m. Dashed lines show ±{maxDist} m perpendicular facet distance, projected into this profile. Dots come from a ±{sliceWidth} m-wide strip and are projected onto XZ; each insertion test uses the point&rsquo;s own XY. Horizontal and vertical plot scales differ.</div>
 
             {/* Interactive Slice Controls & Zoom Sliders */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '8px 14px',
-                marginTop: 10,
-                padding: '8px 12px',
-                background: '#f8fafc',
-                borderRadius: 8,
-                border: '1px solid #e2e8f0',
-                fontSize: 12,
-              }}
-            >
+            <div className="tin-profile-controls">
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4, color: '#475569' }}>
                 Slice Y Position: <b>Y = {sliceY}m</b>
                 <input
@@ -1567,7 +1511,7 @@ export default function AdaptiveTIN() {
               </label>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 12, color: '#56677a' }}>
+            <div className="tin-profile-toolbar">
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
@@ -1685,7 +1629,7 @@ export default function AdaptiveTIN() {
                 <b style={{ color: '#10b981' }}>{groundCount}</b>
               </div>
               <div>
-                <span>Non-Ground</span>
+                <span>Not yet ground</span>
                 <b style={{ color: '#94a3b8' }}>{nonGroundCount}</b>
               </div>
               <div>
@@ -1699,6 +1643,11 @@ export default function AdaptiveTIN() {
                 <b>{currentSnapshot ? currentSnapshot.triangles.length : 0}</b>
               </div>
             </div>
+            <div className="readouts" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div><span>Ground precision: TP / (TP + FP)</span><b>{groundPrecision.toFixed(1)}%</b></div>
+              <div><span>Ground recall: TP / (TP + FN)</span><b>{groundRecall.toFixed(1)}%</b></div>
+            </div>
+            <div className="rng-note">These scores use the scene&rsquo;s <b>synthetic reference labels</b>. A point not yet accepted as ground is still a candidate, not a proven object. Overall accuracy alone can hide ground omission when most points are non-ground.</div>
           </section>
 
           {/* Interactive Candidate Point Inspector */}
@@ -1706,6 +1655,12 @@ export default function AdaptiveTIN() {
             <h2>
               <span className="stepno">4</span> Candidate Point Inspector
             </h2>
+            <label className="tin-point-selector">Inspect a point (keyboard or touch)
+              <select value={hoveredPointId ?? ''} onChange={event => setHoveredPointId(event.target.value === '' ? null : Number(event.target.value))}>
+                <option value="">Choose a point…</option>
+                {points.map(point => <option key={point.id} value={point.id}>#{point.id} · X {point.x.toFixed(1)}, Y {point.y.toFixed(1)}, Z {point.z.toFixed(1)} m</option>)}
+              </select>
+            </label>
             {hoveredPoint ? (
               <div className="tin-inspector">
                 <div className="tin-inspector-title">
@@ -1717,7 +1672,7 @@ export default function AdaptiveTIN() {
                       currentSnapshot.groundSet.has(hoveredPoint.id) ? 'ground' : 'nonground'
                     }`}
                   >
-                    {currentSnapshot.groundSet.has(hoveredPoint.id) ? 'GROUND' : 'NON-GROUND'}
+                    {currentSnapshot.groundSet.has(hoveredPoint.id) ? 'GROUND HYPOTHESIS' : 'NOT ACCEPTED'}
                   </span>
                 </div>
                 <div>
@@ -1727,7 +1682,7 @@ export default function AdaptiveTIN() {
                 {hoveredEvaluation ? (
                   <div className="tin-check-list">
                     <div className={`tin-check-item ${hoveredEvaluation.passesDist ? 'pass' : 'fail'}`}>
-                      Dist d: {hoveredEvaluation.d}m (Max: {maxDist}m) {hoveredEvaluation.passesDist ? '✓' : '✗'}
+                      Perpendicular d: {hoveredEvaluation.d}m (Max: {maxDist}m) {hoveredEvaluation.passesDist ? '✓' : '✗'}
                     </div>
                     <div className={`tin-check-item ${hoveredEvaluation.passesAngle ? 'pass' : 'fail'}`}>
                       Angle θ: {hoveredEvaluation.angle}° (Max: {maxAngle}°) {hoveredEvaluation.passesAngle ? '✓' : '✗'}
@@ -1735,11 +1690,11 @@ export default function AdaptiveTIN() {
                   </div>
                 ) : currentSnapshot.seedSet.has(hoveredPoint.id) ? (
                   <div className="rng-note" style={{ marginTop: 6, padding: '4px 8px' }}>
-                    <b>Initial Seed Point:</b> Selected as local minimum elevation in grid cell.
+                    <b>Initial Seed Point:</b> A local cell minimum or a boundary anchor; selection is a ground hypothesis, not a guarantee.
                   </div>
                 ) : (
                   <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
-                    Already added to TIN ground set in earlier iteration.
+                    No candidate test is stored in this snapshot. The point may be an earlier insertion or outside the supported TIN hull.
                   </div>
                 )}
               </div>
@@ -1756,7 +1711,7 @@ export default function AdaptiveTIN() {
               <span className="stepno">5</span> How Adaptive TIN Ground Filtering Works
             </h2>
             <div className="rng-note">
-              <b>Axelsson (2000) Algorithm Steps:</b>
+              <b>Progressive TIN densification, inspired by Axelsson (2000):</b>
               <ol style={{ margin: '6px 0 0', paddingLeft: 18 }}>
                 <li>
                   <b>Grid Partitioning &amp; Seeds:</b> Divide the point cloud into grid cells larger than the largest building. The lowest point in each cell forms the initial ground seed set <i>G<sub>0</sub></i>.
@@ -1768,8 +1723,8 @@ export default function AdaptiveTIN() {
                   <b>Iterative Densification:</b> For each unclassified point <i>P</i>:
                   <ul style={{ margin: '3px 0', paddingLeft: 16 }}>
                     <li>Find the enclosing triangle <i>T</i>.</li>
-                    <li>Calculate vertical distance <i>d</i> to plane of <i>T</i>.</li>
-                    <li>Calculate max angle <i>θ</i> from vertices of <i>T</i> to <i>P</i>.</li>
+                    <li>Calculate perpendicular distance <i>d</i> to the plane of <i>T</i>.</li>
+                    <li>Calculate the largest angle between a vertex-to-point segment and that facet plane, not the horizontal datum.</li>
                   </ul>
                 </li>
                 <li>
@@ -1782,10 +1737,10 @@ export default function AdaptiveTIN() {
             </div>
 
             <div className="equation big" style={{ marginTop: 10 }}>
-              d = z<sub>point</sub> − z<sub>TIN_facet</sub> &le; {maxDist} m
+              d = |n̂ · (P − A)| &le; {maxDist} m; n̂ is the unit normal of facet ABC.
             </div>
             <div className="equation big">
-              θ = max( atan( |z - z<sub>i</sub>| / dist<sub>2D</sub> ) ) &le; {maxAngle}°
+              θ = max<sub>V ∈ {'{A,B,C}'}</sub> asin(d / ‖P − V‖) &le; {maxAngle}°. A point on the facet has d = 0 and θ = 0, even on a steep slope.
             </div>
           </section>
         </div>

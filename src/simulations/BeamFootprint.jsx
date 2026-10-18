@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import './simulation.css';
 import './native.css';
 import './beam.css';
+import LidarLearningPanel from './LidarLearningPanel.jsx';
+import { beamFootprint as geom } from '../../games/shared/lidar-physics.js';
 
 // ---------------------------------------------------------------------------
 // Laser Beam Divergence & Footprint  (NIGST — Principles of LiDAR).
@@ -16,10 +18,10 @@ import './beam.css';
 // The round beam meets the tilted ground as an ELLIPSE — the same beam spreads
 // over a larger, oblique footprint as θ grows:
 //     minor (cross-track) b = d ,  major (along-range) a = d / cosθ
-//     area = π·a·b/4 = π H²γ² / (4 cos³θ)   ,  elongation a/b = 1/cosθ
-// Bigger footprint → coarser detail, energy spread thinner (weaker return) and
-// the echo is stretched in time (poorer range precision); at grazing angles the
-// return can be lost entirely.
+//     area = π·a·b/4; π H²γ²/(4 cos³θ) only when d0 is negligible.
+//     elongation a/b = 1/cosθ.
+// Larger illuminated area spreads fixed pulse energy and can mix ranges or
+// surfaces; received signal and echo broadening also depend on target geometry.
 // ---------------------------------------------------------------------------
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -27,14 +29,6 @@ const D2R = Math.PI / 180;
 const WORLD_H = 4.6; // sensor height in world units (schematic)
 
 // true geometry (metres)
-function geom(H, gmrad, thetaDeg, d0mm) {
-  const th = thetaDeg * D2R; const R = H / Math.cos(th);
-  const d = d0mm / 1000 + R * (gmrad / 1000); // beam diameter at target (m)
-  const minor = d; const major = d / Math.cos(th);
-  const area = (Math.PI * major * minor) / 4;
-  return { R, d, minor, major, area, elong: 1 / Math.cos(th), th };
-}
-
 function labelSprite(text, color = '#eaf3ec') {
   const pad = 14; const font = 'bold 30px system-ui';
   const mc = document.createElement('canvas').getContext('2d'); mc.font = font;
@@ -67,11 +61,11 @@ function buildBeam(H, gmrad, thetaDeg, d0mm, mats) {
 
   // ground footprint ellipse (filled disc + ring), elongated along x (range dir)
   const disc = new THREE.Mesh(new THREE.CircleGeometry(0.5, 64), mats.foot);
-  disc.rotation.x = -Math.PI / 2; disc.scale.set(wMajor * 2, wMinor * 2, 1); disc.position.copy(hit); disc.position.y = 0.012; grp.add(disc);
-  const ringPts = []; for (let k = 0; k <= 64; k += 1) { const a = (k / 64) * Math.PI * 2; ringPts.push(new THREE.Vector3(Math.cos(a) * wMajor, 0.02, Math.sin(a) * wMinor)); }
+  disc.rotation.x = -Math.PI / 2; disc.scale.set(wMajor, wMinor, 1); disc.position.copy(hit); disc.position.y = 0.012; grp.add(disc);
+  const ringPts = []; for (let k = 0; k <= 64; k += 1) { const a = (k / 64) * Math.PI * 2; ringPts.push(new THREE.Vector3(Math.cos(a) * wMajor / 2, 0.02, Math.sin(a) * wMinor / 2)); }
   const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts.map((p) => p.clone().add(hit).setY(0.02))), mats.ring); grp.add(ring);
   // nadir circle (what the footprint would be at θ=0) for contrast
-  const nPts = []; const rN = clamp(g.d * 0.62, 0.14, 3.0); for (let k = 0; k <= 48; k += 1) { const a = (k / 48) * Math.PI * 2; nPts.push(new THREE.Vector3(Math.cos(a) * rN, 0.02, Math.sin(a) * rN)); }
+  const nPts = []; const rN = wMinor * geom(H, gmrad, 0, d0mm).d / g.d / 2; for (let k = 0; k <= 48; k += 1) { const a = (k / 48) * Math.PI * 2; nPts.push(new THREE.Vector3(Math.cos(a) * rN, 0.02, Math.sin(a) * rN)); }
   const ncircle = new THREE.Line(new THREE.BufferGeometry().setFromPoints(nPts), mats.nadirC); grp.add(ncircle);
 
   // sensor (scanner) box
@@ -179,8 +173,8 @@ export default function BeamFootprint() {
       ctx.strokeStyle = 'rgba(255,216,94,.4)'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(cX, cY); ctx.lineTo(cX, y1); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = '#8fa9c0'; ctx.font = '9px system-ui'; ctx.textAlign = 'left'; ctx.fillText(ylab, x0 - 30, y0 + 6); ctx.textAlign = 'right'; ctx.fillText(xlab, x1, y1 + 14);
     };
-    draw(cH.current, (h) => (h * (gmrad / 1000)) / Math.cos(theta * D2R), 3000, H, g.minor, 'd (m)', '#5ad1ff', 'height H (m)');
-    draw(cA.current, (t) => (Math.PI * (H * gmrad / 1000) ** 2) / (4 * Math.cos(t * D2R) ** 3), 65, theta, g.area, 'area (m²)', '#ff8f6b', 'scan angle θ (°)');
+    draw(cH.current, (h) => geom(h, gmrad, theta, d0).d, 3000, H, g.minor, 'd (m)', '#5ad1ff', 'height H (m)');
+    draw(cA.current, (t) => geom(H, gmrad, t, d0).area, 65, theta, g.area, 'area (m²)', '#ff8f6b', 'scan angle θ (°)');
   }, [H, gmrad, theta, d0]);
 
   const fmt = (m) => (m < 1 ? `${(m * 100).toFixed(1)} cm` : `${m.toFixed(2)} m`);
@@ -196,6 +190,10 @@ export default function BeamFootprint() {
         </div>
         <span className="score-chip">footprint <b>{fmt(g.major)} × {fmt(g.minor)}</b></span>
       </header>
+
+      <LidarLearningPanel topic="footprint"
+        workedExample={`R = ${H}/cos(${theta}°) = ${g.R.toFixed(2)} m; d = ${(d0 / 1000).toFixed(3)} + ${g.R.toFixed(2)} × ${(gmrad / 1000).toFixed(5)} = ${g.d.toFixed(3)} m; a = ${g.major.toFixed(3)} m; b = ${g.minor.toFixed(3)} m; A = ${g.area.toFixed(4)} m².`}
+        onExperiment={(id) => { setSpin(false); if (id === 'aperture') { setH(30); setG(0.1); setD0(100); setTheta(0); } else { setH(1000); setG(0.5); setD0(0); setTheta(id === 'oblique' ? 60 : 0); } }} />
 
       <div className="sim-layout">
         <div className="sim-col">
@@ -229,7 +227,7 @@ export default function BeamFootprint() {
                   <div><span>minor (cross-track)</span><b>{fmt(g.minor)}</b></div>
                   <div><span>major (along-range)</span><b className={g.elong > 1.6 ? 'orange' : ''}>{fmt(g.major)}</b></div>
                   <div><span>footprint area</span><b>{g.area < 1 ? `${(g.area * 1e4).toFixed(0)} cm²` : `${g.area.toFixed(2)} m²`}</b></div>
-                  <div><span>rel. energy density</span><b className={relE < 0.5 ? 'orange' : ''}>{(relE * 100).toFixed(0)}%</b></div>
+                  <div><span>ideal energy / area vs nadir</span><b className={relE < 0.5 ? 'orange' : ''}>{(relE * 100).toFixed(0)}%</b></div>
                 </div>
                 <div className="beam-note" style={{ marginTop: 8 }}>The circular beam meets tilted ground as an <b>ellipse</b>: it keeps width <b>b = d</b> across-track but stretches to <b>a = d/cosθ</b> along the range direction. Off-nadir the spot also sits farther away (R = H/cosθ), so it grows twice over.</div>
               </div>
@@ -241,16 +239,16 @@ export default function BeamFootprint() {
           <section className="sim-panel">
             <h2><span className="stepno">3</span> Controls &amp; response</h2>
             <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <label>flying height / range H <b>{H} m</b><input type="range" min="30" max="3000" step="10" value={H} onChange={(e) => setH(Number(e.target.value))} /></label>
-              <label>beam divergence γ <b>{gmrad.toFixed(2)} mrad</b><input type="range" min="0.1" max="3" step="0.05" value={gmrad} onChange={(e) => setG(Number(e.target.value))} /></label>
+              <label>vertical height H <b>{H} m</b><input type="range" min="30" max="3000" step="10" value={H} onChange={(e) => setH(Number(e.target.value))} /></label>
+              <label>full-angle divergence γ <b>{gmrad.toFixed(2)} mrad</b><input type="range" min="0.1" max="3" step="0.05" value={gmrad} onChange={(e) => setG(Number(e.target.value))} /></label>
               <label>scan / incidence angle θ <b>{theta}°</b><input type="range" min="0" max="60" step="1" value={theta} onChange={(e) => setTheta(Number(e.target.value))} /></label>
-              <label>exit aperture d₀ <b>{d0} mm</b><input type="range" min="0" max="120" step="1" value={d0} onChange={(e) => setD0(Number(e.target.value))} /></label>
+              <label>exit beam diameter d₀ <b>{d0} mm</b><input type="range" min="0" max="120" step="1" value={d0} onChange={(e) => setD0(Number(e.target.value))} /></label>
             </div>
             <div className="beam-charts">
-              <figure><canvas ref={cH} width={280} height={150} /><figcaption>spot d grows <b>linearly</b> with height (d = Hγ/cosθ)</figcaption></figure>
-              <figure><canvas ref={cA} width={280} height={150} /><figcaption>footprint area ∝ <b>1/cos³θ</b> — blows up off-nadir</figcaption></figure>
+              <figure><canvas ref={cH} width={280} height={150} /><figcaption>diameter d = d₀ + Hγ/cosθ, including the exit beam</figcaption></figure>
+              <figure><canvas ref={cA} width={280} height={150} /><figcaption>A = πd²/(4cosθ); cos⁻³θ scaling requires negligible d₀</figcaption></figure>
             </div>
-            <div className="equation">d = d₀ + R·γ &nbsp;·&nbsp; R = H/cosθ &nbsp;·&nbsp; ellipse a = d/cosθ, b = d &nbsp;·&nbsp; area = π·H²γ² / (4 cos³θ)</div>
+            <div className="equation">d ≈ d₀ + R·γ; R = H/cosθ; a ≈ d/cosθ; b = d; A ≈ π(d₀ + Hγ/cosθ)²/(4cosθ). γ is the full divergence angle in radians.</div>
           </section>
 
           <section className="sim-panel">
@@ -263,7 +261,7 @@ export default function BeamFootprint() {
                 coarsening the effective ground resolution. Steer the beam <b>off-nadir</b> (or hit a slope) and two things happen:
                 the spot is farther away (R = H/cosθ), and the round beam projects onto the tilted surface as an <b>ellipse</b>
                 stretched by <b>1/cosθ</b> along the range direction. The same pulse energy is now spread over a larger, oblique
-                patch, so the return is <b>weaker</b> and the echo is <b>stretched in time</b>, degrading range precision — and at
+                patch, reducing incident energy per unit area. A sloped or mixed footprint <b>can broaden or split the echo</b>; received strength also depends on reflectance, orientation and the receiver — and at
                 <b> grazing angles the return can be lost entirely</b>. This is why façades, steep cuttings and the far edges of a
                 wide scan swath are under-sampled, and why surveys use narrow divergence, sensible flying heights and overlapping
                 flight lines to keep footprints small and returns strong.
