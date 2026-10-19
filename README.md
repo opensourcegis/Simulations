@@ -32,4 +32,8 @@ The Vite base path is configured as `/Simulations/`, matching this repository's 
 
 The six LiDAR lessons include working principles, guided experiments, live calculations and self-check questions. See [the academic teaching review](docs/LIDAR_ACADEMIC_REVIEW.md) for the scientific corrections, conventions and model limits. Shared teaching content and numerical models live under `games/shared/` and serve both React and standalone pages.
 
-Run the numerical regression checks with `npm run test:lidar`, and verify production integration with `npm run build`.
+## Photogrammetry laboratories
+
+Bundle Block Adjustment now solves actual noisy image observations with a small Levenberg–Marquardt bundle, robust fitting, datum warnings and withheld checkpoints. **How a Camera Works — 3D** adds an orbitable cutaway covering lens focus, aperture, shutter, sensor, exposure/readout and calibration. See [models and verification](docs/PHOTOGRAMMETRY_LABS.md) and run `npm run test:photo` for numerical checks.
+
+Run numerical regression checks with `npm run test:lidar` and `npm run test:photo`, and verify production integration with `npm run build`.

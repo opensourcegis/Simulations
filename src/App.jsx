@@ -6,6 +6,7 @@ const SIMULATION_LOADERS = {
   'lidar-ranging': lazy(() => import('./simulations/LidarRanging.jsx')),
   'adaptive-tin': lazy(() => import('./simulations/AdaptiveTIN.jsx')),
   'block-adjustment': lazy(() => import('./simulations/BlockAdjustment.jsx')),
+  'camera-working': lazy(() => import('./simulations/CameraLab.jsx')),
   boresight: lazy(() => import('./simulations/Boresight.jsx')),
   gnss: lazy(() => import('./simulations/Gnss.jsx')),
   gpr: lazy(() => import('./simulations/Gpr.jsx')),
@@ -29,7 +30,8 @@ const simulators = [
   { title: 'Survey Mission Designer', category: 'Flight planning', level: 'Beginner', description: 'Plan a drone survey over terrain, place control points and obstructions, and explore the trade-offs behind a robust flight plan.', tags: ['Flight planning', 'Terrain', 'Coverage'], path: 'games/survey-mission-designer/', kind: 'survey' },
   { title: 'Aerial Triangulation', category: 'Photogrammetry', level: 'Intermediate', description: 'Build an image block, measure tie points, and see how bundle adjustment turns overlapping photographs into a connected survey.', tags: ['Image block', 'Tie points', 'Bundle adjustment'], path: 'games/aerial-triangulation/', kind: 'triangulation' },
   { title: 'Structure from Motion', category: 'Photogrammetry', level: 'Advanced', description: 'Match the same corner of a 3D object across photographs and watch triangulation and resection recover each camera’s position and orientation.', tags: ['Feature matching', 'Camera pose', '3D reconstruction'], path: '?simulation=sfm', kind: 'sfm', status: 'Native React' },
-  { title: 'Bundle Block Adjustment', category: 'Photogrammetry', level: 'Advanced', description: 'Explore Interior & Exterior Orientation parameters, degrees of freedom, collinearity equations, and see how photo overlap & tie points reduce GCP requirements.', tags: ['IO & EO Parameters', 'Collinearity equations', 'Tie Points & GCPs', 'Redundancy & DOF', 'Least-squares bundle'], path: '?simulation=block-adjustment', kind: 'block', status: 'Native React' },
+  { title: 'Bundle Block Adjustment', category: 'Photogrammetry', level: 'Advanced', description: 'Solve actual noisy image residuals across a six-camera block. Adjust camera poses and tie points, compare robust fitting, and check georeferencing against withheld checkpoints in 3D.', tags: ['Real least squares', 'Camera poses', 'Tie points & GCPs', 'Robust fitting', 'Checkpoints'], path: '?simulation=block-adjustment', kind: 'block', status: 'Native React' },
+  { title: 'How a Camera Works — 3D', category: 'Photogrammetry', level: 'Beginner', description: 'Explore a 3D cutaway from lens and aperture to shutter, sensor and processor. Focus light rays, compare diffraction and defocus, set exposure, and understand pixel sampling, rolling shutter and calibration.', tags: ['3D camera anatomy', 'Thin-lens focus', 'Aperture & diffraction', 'Exposure & sensor', 'Calibration'], path: '?simulation=camera-working', kind: 'camera', status: 'Native React' },
   { title: 'True Ortho-Rectification', category: 'Photogrammetry', level: 'Intermediate', description: 'Probe relief displacement and project buildings onto a datum to understand how true orthophotos remove lean and occlusions.', tags: ['Relief displacement', 'DSM vs DTM', 'True ortho'], path: 'games/ortho-rectification/', kind: 'ortho', status: 'Original' },
   { title: 'True Ortho-Rectification — React', category: 'Photogrammetry', level: 'Intermediate', description: 'React migration workspace for the same rectification renderer, with the original interaction model preserved while the engine is split into React modules.', tags: ['React migration', 'Canvas engine', 'DSM vs DTM'], path: '?simulation=ortho', kind: 'ortho', status: 'React preview' },
   { title: 'Adaptive TIN Ground Filter', category: 'LiDAR', level: 'Intermediate', description: 'Classify ground vs. non-ground points in LiDAR point clouds using Axelsson’s adaptive triangulated irregular network (TIN) algorithm with customizable distance and angle thresholds.', tags: ['Axelsson algorithm', 'Delaunay TIN', 'Ground classification', 'Point cloud', 'Iterative filtering'], path: '?simulation=adaptive-tin', kind: 'tin', status: 'Native React' },
@@ -55,6 +57,21 @@ function Grid({ id, tint = 'rgba(255,255,255,.06)' }) {
 }
 
 function Thumbnail({ kind }) {
+  if (kind === 'camera') return (
+    <svg viewBox="0 0 640 360" role="img" aria-label="Camera cutaway showing rays through a lens and aperture onto an inverted sensor image">
+      <defs><linearGradient id="camera-card" x2="1" y2="1"><stop stopColor="#102230" /><stop offset="1" stopColor="#203b41" /></linearGradient></defs>
+      <rect width="640" height="360" fill="url(#camera-card)" /><Grid id="camera" />
+      <path d="M170 100L370 135V285L170 260Z" fill="#253d4c" stroke="#637d8b" strokeWidth="2" />
+      <path d="M205 125V245L260 255V140Z" fill="#64b5d3" opacity=".65" />
+      <ellipse cx="372" cy="207" rx="23" ry="76" fill="#6099b0" opacity=".3" stroke="#9ce5f2" strokeWidth="3" />
+      <ellipse cx="389" cy="207" rx="15" ry="35" fill="#152a36" stroke="#ffd27d" strokeWidth="3" />
+      <path d="M548 84L389 180L232 244M548 84L389 232L232 244M548 84L389 207L232 244" fill="none" stroke="#ffc36c" strokeWidth="2" />
+      <path d="M548 220V84L532 110M548 84L564 110" fill="none" stroke="#ffb56d" strokeWidth="5" />
+      <path d="M232 180V244L222 230M232 244L242 230" fill="none" stroke="#91e0ef" strokeWidth="3" />
+      <text x="40" y="43" fill="#d1e5eb" fontSize="17" fontFamily="monospace">LIGHT → LENS → SENSOR → IMAGE</text>
+      <text x="390" y="317" fill="#f6c777" fontSize="16" fontFamily="monospace">1/f = 1/u + 1/v</text>
+    </svg>
+  );
   if (kind === 'gnss') return (
     <svg viewBox="0 0 640 360" role="img" aria-label="GNSS positioning with satellites and a rover">
       <defs><linearGradient id="bg-gn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0a1a30" /><stop offset="1" stopColor="#14202a" /></linearGradient></defs>
