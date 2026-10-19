@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as THREE from "three";
-import PhotoLabScene, { caption, marker, segment } from "./PhotoLabScene.jsx";
+import PhotoLabScene from "./PhotoLabScene.jsx";
+import { buildCameraScene } from "./camera-scene.js";
+import { renderCameraImage } from "./camera-image.js";
+import { SENSOR_MODEL } from "./camera-sensor-model.js";
 import { PhotoLab, Panel, Slider, Metric, MethodTabs } from "./PhotoLabUI.jsx";
-import {
-  cameraOptics,
-  lensRayAtSensor,
-  distort,
-} from "./photogrammetry-model.js";
+import { cameraOptics } from "./photogrammetry-model.js";
 
 const PARTS = {
   lens: [
@@ -35,7 +33,7 @@ const PARTS = {
   ],
   body: [
     "Camera body & mount",
-    "The light-tight housing holds the optical axis, shutter and sensor. Focus changes the image distance in this ideal lens. Real cameras often move internal groups, and their effective focal length and principal planes can change.",
+    "The housing and sensor remain fixed. Focusing moves the equivalent lens principal plane relative to the sensor; real lenses commonly move internal groups. The barrel and glass are an anatomical model, not a reverse-engineered lens prescription.",
   ],
 };
 const STAGES = [
@@ -61,7 +59,12 @@ export default function CameraLab() {
     [rays, setRays] = useState(true),
     [shutterOpen, setShutterOpen] = useState(true),
     [capture, setCapture] = useState(null),
-    [progress, setProgress] = useState(0);
+    [progress, setProgress] = useState(0),
+    [lightEV, setLightEV] = useState(12),
+    [noise, setNoise] = useState(true),
+    [snapshot, setSnapshot] = useState(null),
+    [showSnapshot, setShowSnapshot] = useState(false),
+    [upright, setUpright] = useState(true);
   const preview = useRef(null),
     metrics = cameraOptics({
       f,
@@ -90,317 +93,112 @@ export default function CameraLab() {
       }, 90);
     return () => clearInterval(timer);
   }, [capture]);
-  const build = useCallback(() => {
-    const g = new THREE.Group(),
-      sensorX = -optics.sensorDistance / 100,
-      halfW = sensorW / 200,
-      halfH = sensorW / 300;
-    const material = (color, opacity = 1) =>
-      new THREE.MeshStandardMaterial({
-        color,
-        transparent: opacity < 1,
-        depthWrite: opacity >= 1,
-        opacity,
-        side: THREE.DoubleSide,
-        roughness: 0.45,
-        metalness: 0.2,
-      });
-    const box = (size, pos, color, tag, opacity = 1) => {
-      const m = new THREE.Mesh(
-        new THREE.BoxGeometry(...size),
-        material(color, opacity),
-      );
-      m.position.set(...pos);
-      m.userData.part = tag;
-      g.add(m);
-      return m;
-    };
-    const highlight = (tag, color) => (part === tag ? 0xffc266 : color);
-    const housing = box(
-      [Math.abs(sensorX) + 0.16, 0.56, 0.4],
-      [sensorX / 2, 0, 0],
-      highlight("body", 0x304351),
-      "body",
-      cutaway ? 0.08 : 0.9,
-    );
-    if (cutaway) delete housing.userData.part;
-    box(
-      [Math.abs(sensorX) + 0.16, 0.56, 0.035],
-      [sensorX / 2, 0, -0.22],
-      0x435666,
-      "body",
-    );
-    box(
-      [0.018, sensorW / 100, sensorW / 150],
-      [sensorX, 0, 0],
-      highlight("sensor", 0x5ac4d8),
-      "sensor",
-    );
-    for (let i = 0; i < 12; i++)
-      for (let j = 0; j < 8; j++)
-        box(
-          [0.008, sensorW / 1250, sensorW / 1250],
-          [
-            sensorX + 0.016,
-            -halfW + ((i + 0.5) * sensorW) / 1200,
-            -halfH + ((j + 0.5) * sensorW) / 1200,
-          ],
-          stage === "anatomy"
-            ? i % 2 === j % 2
-              ? i % 2
-                ? 0x72a4d8
-                : 0xdf8867
-              : 0x9dd17a
-            : 0x337384,
-          "filter",
-          0.8,
-        );
-    const shutterX = sensorX + 0.065;
-    box(
-      [0.014, sensorW / 100, sensorW / 150],
-      [shutterX, 0, shutterOpen ? halfH * 2.5 : 0],
-      highlight("shutter", 0x566879),
-      "shutter",
-      0.9,
-    );
-    for (const x of [-0.035, 0.035]) {
-      const radius = Math.max(0.24, (optics.diameter / 200) * 1.1);
-      const lens = new THREE.Mesh(
-        new THREE.CylinderGeometry(radius, radius, 0.035, 48),
-        material(highlight("lens", 0x69c4e0), 0.2),
-      );
-      lens.rotation.z = Math.PI / 2;
-      lens.position.x = x;
-      lens.userData.part = "lens";
-      g.add(lens);
-    }
-    const shape = new THREE.Shape();
-    shape.absarc(
-      0,
-      0,
-      Math.max(0.255, optics.diameter / 200 + 0.04),
-      0,
-      Math.PI * 2,
-      false,
-    );
-    const hole = new THREE.Path();
-    hole.absarc(0, 0, optics.diameter / 200, 0, Math.PI * 2, true);
-    shape.holes.push(hole);
-    const iris = new THREE.Mesh(
-      new THREE.ShapeGeometry(shape),
-      material(highlight("iris", 0x7b8a93), 0.8),
-    );
-    iris.rotation.y = Math.PI / 2;
-    iris.position.x = 0.004;
-    iris.userData.part = "iris";
-    g.add(iris);
-    box(
-      [0.12, 0.22, 0.13],
-      [sensorX - 0.09, 0, -0.32],
-      highlight("processor", 0x79ab72),
-      "processor",
-    );
-    segment(
-      g,
-      [
-        [sensorX, 0, -halfH],
-        [sensorX - 0.09, 0, -0.32],
-      ],
-      0x77ddaa,
-    );
-    segment(
-      g,
-      [
-        [sensorX - 0.2, 0, 0],
-        [3.7, 0, 0],
-      ],
-      0x688996,
-      0.5,
-    );
-    // Object distance is compressed for readability. Sensor and pupil are
-    // mutually scaled correctly; the object height is also schematic.
-    const objectX = 1.6;
-    segment(
-      g,
-      [
-        [objectX, 0, -0.5],
-        [objectX, 0, 0.5],
-        [objectX, 0, 0.5],
-        [objectX, 0, 0.9],
-      ],
-      0xffa768,
-    );
-    marker(g, [objectX, 0, 0.9], 0xffc266, 0.055);
-    caption(
-      g,
-      "OBJECT · " + objectM.toFixed(1) + " m",
-      [objectX, 0, 1.15],
-      "#ffd1a3",
-      0.16,
-    );
-    const objectHeight = 120;
-    if (optics.blurPx > 1) {
-      const x = -optics.v / 100;
-      segment(
-        g,
-        [
-          [x, -halfW, -halfH],
-          [x, halfW, -halfH],
-          [x, halfW, halfH],
-          [x, -halfW, halfH],
-          [x, -halfW, -halfH],
-        ],
-        0x7bedad,
-        0.7,
-      );
-      caption(g, "BEST FOCUS", [x, 0.45, 0.3], "#8ae7bb", 0.12);
-    }
-    if (rays && shutterOpen)
-      for (let j = 0; j <= 12; j++) {
-        const angle = (j / 12) * Math.PI * 2,
-          radius = j === 12 ? 0 : optics.diameter * 0.45,
-          pupilY = radius * Math.sin(angle),
-          pupilHeight = radius * Math.cos(angle),
-          sensorHeight = lensRayAtSensor(optics, objectHeight, pupilHeight),
-          sensorY = pupilY * (1 - optics.sensorDistance / optics.v);
-        segment(
-          g,
-          [
-            [objectX, 0, 0.9],
-            [0, pupilY / 100, pupilHeight / 100],
-            [sensorX, sensorY / 100, sensorHeight / 100],
-          ],
-          j === 12 ? 0xffcd66 : 0x72cde0,
-          0.65,
-        );
-        marker(
-          g,
-          [sensorX + 0.012, sensorY / 100, sensorHeight / 100],
-          0xffbe66,
-          0.003,
-        );
-      }
-    if (stage === "calibration")
-      for (let i = -4; i <= 4; i++)
-        for (const horizontal of [false, true]) {
-          const points = [];
-          for (let j = -40; j <= 40; j++) {
-            const a = i / 4,
-              b = j / 40,
-              xx = ((horizontal ? b : a) * sensorW) / 2 / f,
-              yy = ((horizontal ? a : b) * sensorW) / 3 / f,
-              [dx, dy] = distort(xx, yy, k1);
-            points.push([sensorX + 0.028, (dx * f) / 100, (dy * f) / 100]);
-          }
-          segment(g, points, 0xffc46b, 0.85);
-        }
-    if (capture && progress < 1) {
-      box(
-        [0.025, sensorW / 100, 0.008],
-        [sensorX + 0.035, 0, halfH - progress * 2 * halfH],
-        0xffff99,
-        "sensor",
-      );
-    }
-    const position = {
-      lens: [0.15, 0.3, 0.25],
-      iris: [0.15, -0.35, -0.2],
-      shutter: [shutterX, -0.45, 0.28],
-      sensor: [sensorX, -0.4, -0.25],
-      filter: [sensorX, -0.45, 0.15],
-      processor: [sensorX - 0.1, 0, -0.48],
-      body: [sensorX / 2, 0.45, 0.4],
-    };
-    caption(g, PARTS[part][0], position[part], "#ffd28b", 0.14);
-    if (part !== "sensor" && part !== "filter")
-      caption(g, "INVERTED SENSOR", [sensorX, 0, -0.62], "#9bd9ee", 0.12);
-    return g;
-  }, [
-    optics,
-    sensorW,
-    part,
-    cutaway,
-    rays,
-    stage,
-    k1,
-    shutterOpen,
-    capture,
-    Math.floor(progress * 10),
-  ]);
+  const imageSettings = useMemo(
+    () => ({
+      f,
+      objectM,
+      focusM,
+      fNumber,
+      sensorW,
+      shutter: 1 / shutterDen,
+      iso,
+      speed,
+      readoutMs,
+      k1,
+      lightEV,
+      noise,
+      shutterOpen,
+      seed: 17,
+    }),
+    [
+      f,
+      objectM,
+      focusM,
+      fNumber,
+      sensorW,
+      shutterDen,
+      iso,
+      speed,
+      readoutMs,
+      k1,
+      lightEV,
+      noise,
+      shutterOpen,
+    ],
+  );
+  const liveImage = useMemo(
+    () => renderCameraImage(imageSettings),
+    [imageSettings],
+  );
+  const shownImage = showSnapshot && snapshot ? snapshot : liveImage;
+  const build = useCallback(
+    () =>
+      buildCameraScene({
+        optics,
+        objectM,
+        f,
+        focusM,
+        fNumber,
+        sensorW,
+        part,
+        cutaway,
+        rays,
+        shutterOpen,
+        progress,
+        capture,
+        image: liveImage,
+        partName: PARTS[part][0],
+      }),
+    [
+      optics,
+      objectM,
+      f,
+      focusM,
+      fNumber,
+      sensorW,
+      part,
+      cutaway,
+      rays,
+      shutterOpen,
+      capture,
+      liveImage,
+    ],
+  );
   useEffect(() => {
-    const canvas = preview.current,
-      ctx = canvas.getContext("2d"),
-      W = 600,
-      H = 400;
-    ctx.fillStyle = "#101c27";
-    ctx.fillRect(0, 0, W, H);
-    const exposure = Math.min(3, optics.exposure),
-      blur = Math.min(
-        18,
-        (Math.sqrt(optics.blurPx ** 2 + optics.airyPx ** 2) * W) / 6000,
-      );
+    const c = preview.current,
+      ctx = c.getContext("2d");
+    ctx.fillStyle = "#070b0e";
+    ctx.fillRect(0, 0, c.width, c.height);
     ctx.save();
-    ctx.translate(W / 2, H / 2);
-    ctx.scale(-1, -1);
-    ctx.filter = `blur(${blur.toFixed(2)}px)`;
-    const scale = (((optics.sensorDistance / optics.u) * 120) / sensorW) * W;
-    const samples = stage === "exposure" ? 12 : 1,
-      motion = (optics.motionPx * W) / 6000;
-    for (let sample = 0; sample < samples; sample++) {
-      const shift = (sample / Math.max(1, samples - 1) - 0.5) * motion;
-      ctx.globalAlpha = 1 / samples;
-      ctx.fillStyle = `rgb(${Math.min(255, 210 * exposure)},${Math.min(255, 156 * exposure)},${Math.min(255, 88 * exposure)})`;
-      ctx.beginPath();
-      ctx.moveTo(shift, -scale);
-      ctx.lineTo(shift + scale * 0.4, -scale * 0.4);
-      ctx.lineTo(shift + scale * 0.15, -scale * 0.4);
-      ctx.lineTo(shift + scale * 0.15, scale);
-      ctx.lineTo(shift - scale * 0.15, scale);
-      ctx.lineTo(shift - scale * 0.15, -scale * 0.4);
-      ctx.lineTo(shift - scale * 0.4, -scale * 0.4);
-      ctx.closePath();
-      ctx.fill();
+    if (upright) {
+      ctx.translate(c.width, c.height);
+      ctx.scale(-1, -1);
     }
-    ctx.restore();
-    if (stage === "calibration") {
-      ctx.strokeStyle = "#74c6da";
-      ctx.lineWidth = 1;
-      for (let i = -4; i <= 4; i++)
-        for (const horizontal of [false, true]) {
-          ctx.beginPath();
-          for (let j = -40; j <= 40; j++) {
-            const a = i / 4,
-              b = j / 40,
-              x = ((horizontal ? b : a) * sensorW) / 2 / f,
-              y = ((horizontal ? a : b) * sensorW) / 3 / f,
-              [dx, dy] = distort(x, y, k1);
-            const u = W / 2 + ((dx * f) / sensorW) * W,
-              v = H / 2 + ((dy * f) / ((sensorW * 2) / 3)) * H;
-            j === -40 ? ctx.moveTo(u, v) : ctx.lineTo(u, v);
-          }
-          ctx.stroke();
-        }
-    }
-    ctx.strokeStyle = "#ffffff30";
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - 12, H / 2);
-    ctx.lineTo(W / 2 + 12, H / 2);
-    ctx.moveTo(W / 2, H / 2 - 12);
-    ctx.lineTo(W / 2, H / 2 + 12);
-    ctx.stroke();
-    ctx.fillStyle = "#c8dae3";
-    ctx.font = "12px monospace";
-    ctx.fillText("INVERTED SENSOR · illustrative preview", 16, 24);
-    if (stage === "exposure") {
-      ctx.fillStyle = "#9cb6c2";
-      ctx.fillText(
-        "Motion blur shown · rolling-shutter displacement in readout",
-        16,
-        H - 18,
+    const fraction = showSnapshot && capture && progress < 1 ? progress : 1;
+    const rows = Math.floor(c.height * fraction);
+    if (rows > 0)
+      ctx.drawImage(
+        shownImage.canvas,
+        0,
+        0,
+        c.width,
+        rows,
+        0,
+        0,
+        c.width,
+        rows,
       );
-    }
-  }, [optics, sensorW, stage, k1]);
+    ctx.restore();
+  }, [shownImage, upright, showSnapshot, capture, Math.floor(progress * 20)]);
   const captureImage = () => {
+    setSnapshot(
+      renderCameraImage({
+        ...imageSettings,
+        seed: Math.floor(performance.now()),
+        shutterOpen: true,
+      }),
+    );
+    setShowSnapshot(true);
     setCapture(performance.now());
     setShutterOpen(true);
   };
@@ -456,7 +254,9 @@ export default function CameraLab() {
           <p>
             Entrance pupil D = f/N. Relative exposure index ∝ t·ISO/N²; this is
             an output-brightness index with constant illumination and
-            transmission, not calibrated electrons or noise. Airy-disc
+            transmission. The separate sensor model converts scene radiance to
+            expected electrons using an explicitly illustrative reference, with
+            pixel-area and finite-conjugate aperture corrections. Airy-disc
             first-zero diameter ≈ 2.44λNeff with λ = 550 nm and paraxial
             image-space Neff = s/D (approaching N at infinity). Pixel pitch =
             sensor width / 6000. Geometric horizontal FOV is 2atan(sensor
@@ -468,10 +268,11 @@ export default function CameraLab() {
             For lateral speed V at depth u, image motion ≈ V·s/u. Multiply by
             exposure time for motion blur and by top-to-bottom row delay for
             rolling-shutter displacement, then divide by pixel pitch. The
-            preview shows exposure motion blur; rolling displacement is
-            calculated, not rendered. Radial calibration uses x′ = x(1 + k₁r²),
-            y′ = y(1 + k₁r²), with x,y normalised by focal length; k₁ is
-            dimensionless. Tangential and higher-order distortion are omitted.
+            preview integrates five exposure-time samples per row and renders
+            rolling displacement at each object's depth. Radial calibration uses
+            x′ = x(1 + k₁r²), y′ = y(1 + k₁r²), with x,y normalised by focal
+            length; k₁ is dimensionless. Tangential and higher-order distortion
+            are omitted.
           </p>
           <h3>Try it</h3>
           <ol>
@@ -499,10 +300,16 @@ export default function CameraLab() {
             are visually exaggerated; this is not a dimensionally faithful
             camera CAD model. The pupil and sensor share a consistent transverse
             scale. Real compound optics, aberrations, focus breathing,
-            wavelength-dependent coatings, radiometry, photon noise, sensor
-            saturation, demosaicing and JPEG processing are explained but not
-            quantitatively simulated. Aperture, defocus, motion, FOV and
-            distortion readouts use the declared ideal equations.
+            wavelength-dependent coatings, exact radiometry, demosaicing and
+            JPEG processing are not simulated. Shot noise is Poisson below 25
+            electrons and a Gaussian approximation above that, followed by
+            3-electron Gaussian read noise, 20,000-electron full-well clipping,
+            ISO gain and 12-bit quantisation. These constants are illustrative,
+            not camera specifications. Colour channels approximate an RGB
+            response, not a physical Bayer reconstruction. The preview samples
+            representative photosites at display resolution rather than
+            simulating every one of the 6000 sensor columns. Defocus is a
+            Gaussian disc-moment approximation, not a compound-lens PSF.
             Capture/readout animation is slowed to 1.2 seconds, independent of
             the actual exposure and row times. Further reading: Hecht, Optics;
             Szeliski, Computer Vision: Algorithms and Applications; EMVA 1288
@@ -608,14 +415,33 @@ export default function CameraLab() {
               max={50}
               onChange={setReadoutMs}
             />
+            <Slider
+              id="camera-light"
+              label="Scene illumination (relative EV)"
+              value={lightEV}
+              display={"EV " + lightEV}
+              min={7}
+              max={15}
+              step={0.5}
+              onChange={setLightEV}
+            />
+            <label className="photo-check">
+              <input
+                id="camera-noise"
+                type="checkbox"
+                checked={noise}
+                onChange={(e) => setNoise(e.target.checked)}
+              />
+              Shot noise + 3 e⁻ read noise
+            </label>
             {stage === "calibration" && (
               <Slider
                 id="camera-k1"
                 label="Radial distortion k₁"
                 value={k1}
                 display={k1.toFixed(2)}
-                min={-0.6}
-                max={0.6}
+                min={-0.18}
+                max={0.25}
                 step={0.02}
                 onChange={setK1}
               />
@@ -631,14 +457,22 @@ export default function CameraLab() {
             <PhotoLabScene
               build={build}
               label="Orbitable camera cutaway with lens, aperture, shutter, inverted sensor, processor and object-to-sensor rays. Click a component or use the component buttons."
-              initial={[2.1, -3, 1.6]}
-              target={[0.4, 0, 0.1]}
+              initial={[3.0, -4, 2.0]}
+              target={[0.8, 0, 0.1]}
               closeup={{ position: [0.3, -1.2, 0.65], target: [-0.25, 0, 0] }}
               onSelect={setPart}
+              onFrame={(group, now) => {
+                const scan = group.userData.readout;
+                if (scan) {
+                  const t = capture ? Math.min(1, (now - capture) / 1200) : 1;
+                  scan.visible = t < 1;
+                  scan.position.z = (sensorW / 300) * (1 - 2 * t);
+                }
+              }}
             />
             <div className="photo-stage-key">
-              Object distance compressed · pupil and sensor share a transverse
-              scale · labels schematic
+              Fixed sensor · moving focus group · object space compressed · ray
+              markers schematic
             </div>
           </Panel>
           <div className="photo-part-buttons">
@@ -682,15 +516,22 @@ export default function CameraLab() {
             </div>
           </Panel>
           <Panel
-            tag="PREDICTED SENSOR IMAGE"
-            title="Light is sampled, not simply copied"
+            tag={
+              showSnapshot
+                ? "RETAINED CAPTURE"
+                : "LIVE VIEW · THREE SCENE DEPTHS"
+            }
+            title={
+              upright ? "Processed upright image" : "Inverted sensor image"
+            }
           >
             <canvas
               ref={preview}
               width="600"
               height="400"
               role="img"
-              aria-label="Inverted sensor image with illustrative defocus, exposure, motion blur and calibration grid."
+              id="camera-image"
+              aria-label="Scene with a near ball, focus target and background, with depth-dependent blur, exposure noise and rolling shutter."
             />
             <div className="photo-actions">
               <button
@@ -701,18 +542,42 @@ export default function CameraLab() {
               >
                 Capture / animate row readout
               </button>
+              {snapshot && (
+                <button
+                  id="camera-live"
+                  onClick={() => setShowSnapshot(!showSnapshot)}
+                >
+                  {showSnapshot
+                    ? "Return to live view"
+                    : "Show retained capture"}
+                </button>
+              )}
+              <label className="photo-check">
+                <input
+                  type="checkbox"
+                  checked={upright}
+                  onChange={(e) => setUpright(e.target.checked)}
+                />
+                Processed upright orientation
+              </label>
               <span role="status">
-                {!capture
-                  ? "Live predicted preview"
+                {!showSnapshot
+                  ? shutterOpen
+                    ? "Live predicted preview"
+                    : "Shutter closed · dark frame / read noise"
                   : progress < 1
                     ? "Reading rows · animation slowed"
-                    : `Readout complete · actual exposure ${(1000 / shutterDen).toFixed(2)} ms, row delay ${readoutMs} ms`}
+                    : `Readout complete · retained 1/${Math.round(1 / (snapshot?.settings.shutter || 1 / shutterDen))} s, ISO ${snapshot?.settings.iso || iso}`}
               </span>
             </div>
             <p className="photo-note">
-              Brightness is a relative exposure index, not calibrated
-              radiometry. Blur is illustrative. Rolling-shutter displacement is
-              a readout below, not a rendered shear.
+              Near ball, focus board and background have different depth blur.
+              Moving image rows are integrated at different times, so rolling
+              shutter is rendered. The exposure model includes photon
+              statistics, read noise, full-well clipping and 12-bit conversion
+              using illustrative sensor constants. A retained capture does not
+              change when controls change; the 3D sensor continues to show the
+              live setup.
             </p>
           </Panel>
         </div>
@@ -743,13 +608,14 @@ export default function CameraLab() {
                 value={optics.sensorDistance.toFixed(2)}
                 unit="mm"
               />
+              <Metric label="Sensor position in body" value="Fixed" />
               <Metric
                 label="Entrance-pupil diameter"
                 value={optics.diameter.toFixed(2)}
                 unit="mm"
               />
               <Metric
-                label="Magnification (inverted)"
+                label="Best-focus magnification"
                 value={optics.magnification.toFixed(4)}
               />
               <Metric
@@ -771,6 +637,20 @@ export default function CameraLab() {
           </Panel>
           <Panel tag="03 / READ THE SENSOR" title="Exposure is not sensitivity">
             <dl>
+              <Metric
+                label="Mid-grey collected charge (live)"
+                value={liveImage.midGrayElectrons.toFixed(0)}
+                unit="e⁻"
+              />
+              <Metric
+                label="Clipped pixels in shown frame"
+                value={shownImage.clippedPercent.toFixed(1)}
+                unit="%"
+              />
+              <Metric
+                label="Model full-well / ADC"
+                value={SENSOR_MODEL.fullWell + " e⁻ / 12 bit"}
+              />
               <Metric
                 label="Relative output exposure index"
                 value={optics.exposure.toFixed(2)}

@@ -1,6 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  cameraFocusGeometry,
+  expectedElectrons,
+  sensorGain,
+  SENSOR_MODEL,
+  rollingTime,
+  sensorShiftPx,
+  cameraScene,
+  blurSigmaDisplay,
+  inverseRadial,
+} from "../src/simulations/camera-sensor-model.js";
+import {
   project,
   cameraRay,
   createBundle,
@@ -12,7 +23,71 @@ import {
   lensRayAtSensor,
   distort,
 } from "../src/simulations/photogrammetry-model.js";
+test("radial inverse recovers valid rays without edge folding", () => {
+  for (const k of [-0.18, 0.25]) {
+    const [x, y] = distort(0.35, 0.2, k),
+      p = inverseRadial(x, y, k, 0.9);
+    assert(p);
+    assert(Math.abs(p[0] - 0.35) < 1e-6);
+    assert(Math.abs(p[1] - 0.2) < 1e-6);
+  }
+});
+test("radial inverse rejects rays outside its supported domain", () => {
+  assert.equal(inverseRadial(1, 1, -0.18, 0.9), null);
+  assert.equal(inverseRadial(0.3, 0.2, -1, 1), null);
+});
 const close = (a, b, t = 1e-9) => assert(Math.abs(a - b) < t, `${a} != ${b}`);
+test("focusing moves the equivalent lens, never the fixed sensor", () => {
+  const a = cameraOptics({ focusM: 1 }),
+    b = cameraOptics({ focusM: 4 }),
+    ga = cameraFocusGeometry(a),
+    gb = cameraFocusGeometry(b);
+  close(ga.sensorX, gb.sensorX);
+  assert.notEqual(ga.lensX, gb.lensX);
+  close((ga.lensX - ga.sensorX) * 100, a.sensorDistance);
+});
+test("sensor charge scales with exposure time and scene illumination, not ISO", () => {
+  const o = cameraOptics(),
+    e = expectedElectrons(0.18, o, 1 / 125, 12);
+  close(expectedElectrons(0.18, o, 2 / 125, 12), 2 * e);
+  close(expectedElectrons(0.18, o, 1 / 125, 13), 2 * e);
+  close(expectedElectrons(0.18, cameraOptics({ iso: 3200 }), 1 / 125, 12), e);
+});
+test("sensor photon collection responds to pupil area and pixel area", () => {
+  const a = cameraOptics({ fNumber: 4 }),
+    b = cameraOptics({ fNumber: 8 }),
+    crop = cameraOptics({ sensorW: 18 });
+  close(expectedElectrons(0.18, a, 0.01) / expectedElectrons(0.18, b, 0.01), 4);
+  close(
+    expectedElectrons(0.18, crop, 0.01) / expectedElectrons(0.18, a, 0.01),
+    0.25,
+  );
+});
+test("full well and ADC gain clipping are distinct and bounded", () => {
+  assert.equal(sensorGain(SENSOR_MODEL.fullWell * 2, 100), 4095);
+  assert.equal(sensorGain(10000, 200), 4095);
+  assert.equal(sensorGain(-3, 100), 0);
+  assert(sensorGain(1000, 200) > sensorGain(1000, 100));
+});
+test("rolling readout row delay is independent of exposure duration", () => {
+  close(rollingTime(1, 20) - rollingTime(0, 20), 0.02);
+  close(rollingTime(0.5, 20), 0);
+  close(rollingTime(1, 0), 0);
+});
+test("moving image displacement depends on each object depth and row time", () => {
+  const o = cameraOptics();
+  close(sensorShiftPx(1, 2, o, 0.02) / sensorShiftPx(1, 4, o, 0.02), 2);
+  close(sensorShiftPx(0, 2, o, 0.02), 0);
+  close(sensorShiftPx(2, 2, o, 0), 0);
+});
+test("the near subject and background blur differently from the focus target", () => {
+  const layers = cameraScene(2),
+    sigmas = layers.map((o) =>
+      blurSigmaDisplay(cameraOptics({ objectM: o.depth, focusM: 2 })),
+    );
+  assert(sigmas[0] > sigmas[1]);
+  assert(sigmas[2] > sigmas[1]);
+});
 const fit = (data, robust = true, n = 22) => {
   let state = data.initial,
     lambda = 0.01;

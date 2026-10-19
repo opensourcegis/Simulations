@@ -127,13 +127,34 @@ for (const width of [1920, 1440, 1024, 768, 390, 320]) {
   }
 }
 console.log("Camera four stages at six responsive widths passed.");
-await evaluate(`photoTest.set('camera-k1',-.4)`);
+await evaluate(`photoTest.set('camera-k1',-.16)`);
 await pause(100);
 await evaluate(`document.getElementById('camera-capture').click()`);
-await pause(1500);
+for (let i = 0; i < 40; i++) {
+  await pause(200);
+  if (await evaluate(`document.body.textContent.includes('Readout complete')`))
+    break;
+}
 assert(
   await evaluate(`document.body.textContent.includes('Readout complete')`),
 );
+const sensorChecks = await evaluate(`(async()=>{
+  const image=()=>document.getElementById('camera-image').toDataURL();
+  const frozen=image();photoTest.set('camera-iso',800);await photoTest.wait(100);const retained=image()===frozen;
+  document.getElementById('camera-live').click();await photoTest.wait(100);const liveChanged=image()!==frozen;
+  photoTest.set('camera-iso',100);photoTest.set('camera-speed',3);photoTest.set('camera-readout',0);photoTest.set('camera-k1',0);document.getElementById('camera-noise').click();await photoTest.wait(100);
+  const global=image();photoTest.set('camera-readout',40);await photoTest.wait(100);const rollingRendered=image()!==global;
+  photoTest.set('camera-speed',0);await photoTest.wait(100);const still=image();photoTest.set('camera-readout',0);await photoTest.wait(100);const staticUnaffected=image()===still;
+  photoTest.set('camera-focal',50);photoTest.set('camera-aperture',4);photoTest.set('camera-speed',1);photoTest.set('camera-readout',20);document.getElementById('camera-noise').click();await photoTest.wait(100);
+  const gate=[...document.querySelectorAll('label')].find(l=>l.textContent.includes('Hold shutter open')).querySelector('input');gate.click();await photoTest.wait(100);const closedDark=document.body.textContent.includes('Shutter closed · dark frame');gate.click();await photoTest.wait(100);
+  return {retained,liveChanged,rollingRendered,staticUnaffected,closedDark};
+})()`);
+assert(sensorChecks.retained);
+assert(sensorChecks.liveChanged);
+assert(sensorChecks.rollingRendered);
+assert(sensorChecks.staticUnaffected);
+assert(sensorChecks.closedDark);
+console.log("Sensor rendering:", sensorChecks);
 await cdp("Emulation.setDeviceMetricsOverride", {
   width: 1440,
   height: 1100,

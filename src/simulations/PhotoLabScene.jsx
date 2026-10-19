@@ -65,15 +65,18 @@ export default function PhotoLabScene({
   initial = [36, 30, 44],
   target = [0, 0, 10],
   onSelect,
+  onFrame,
   closeup,
 }) {
   const host = useRef(null),
     context = useRef(null),
     selectRef = useRef(onSelect),
+    frameRef = useRef(onFrame),
     initialRef = useRef(initial),
     targetRef = useRef(target);
   const [error, setError] = useState(false);
   selectRef.current = onSelect;
+  frameRef.current = onFrame;
   useEffect(() => {
     const el = host.current;
     let renderer;
@@ -135,6 +138,7 @@ export default function PhotoLabScene({
     let frame;
     const loop = () => {
       controls.update();
+      frameRef.current?.(context.current.group, performance.now());
       renderer.render(scene, camera);
       frame = requestAnimationFrame(loop);
     };
