@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:lidar": "node --test scripts/lidar-physics.test.js",
+    "test:lidar:browser": "node scripts/ranging-browser.mjs",
     "test:photo": "node --test scripts/photogrammetry.test.js",
     "test:photo:browser": "node scripts/photogrammetry-browser.mjs"
   },

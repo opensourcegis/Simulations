@@ -3,6 +3,8 @@ import './simulation.css';
 import './native.css';
 import './ranging.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
+import RangingHardware from './RangingHardware.jsx';
+import { rangingBudget, simulateRangingShot, shotNormal, RANGING_INSTRUMENT } from './ranging-model.js';
 import { LIGHT_SPEED, roundTripNs, phaseMeasurement, pulseAmbiguity } from '../../games/shared/lidar-physics.js';
 
 const C = LIGHT_SPEED;
@@ -14,13 +16,12 @@ const tofNs = roundTripNs;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const TAU = Math.PI * 2;
 
-// A short oscillating wave packet (sine under a Gaussian envelope) — used so the
-// outgoing pulse and the returning echo actually look like waves.
-function wavePacket(ctx, cx, yBase, color, amp, half, k, phase = 0) {
+// Optical intensity envelope, not a visible oscillating optical carrier.
+function wavePacket(ctx, cx, yBase, color, amp, half) {
   ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.beginPath();
   for (let x = -half; x <= half; x += 2) {
     const env = Math.exp(-((x / (half * 0.55)) ** 2));
-    const y = yBase - amp * env * Math.sin(x * k + phase);
+    const y = yBase - amp * env;
     const px = cx + x;
     if (x === -half) ctx.moveTo(px, y); else ctx.lineTo(px, y);
   }
@@ -32,7 +33,7 @@ function wavePacket(ctx, cx, yBase, color, amp, half, k, phase = 0) {
 // ---------------------------------------------------------------------------
 // PULSED (time-of-flight) scene.  prog: 0..1 over one round trip.
 // ---------------------------------------------------------------------------
-function drawPulseScene(ctx, { distance, prog, active }) {
+function drawPulseScene(ctx, { distance, prog, active, budget, shot }) {
   ctx.clearRect(0, 0, SCENE_W, SCENE_H);
   const g = ctx.createLinearGradient(0, 0, 0, SCENE_H);
   g.addColorStop(0, '#0e1e2e'); g.addColorStop(1, '#0a1420');
@@ -64,53 +65,52 @@ function drawPulseScene(ctx, { distance, prog, active }) {
     const outbound = prog < 0.5;
     const frac = outbound ? prog / 0.5 : 1 - (prog - 0.5) / 0.5;
     const px = sensorX + 18 + frac * (targetX - sensorX - 18);
-    wavePacket(ctx, px, y, outbound ? '#5ad1ff' : '#ffae4d', 15, 34, 0.5, prog * 40);
+    wavePacket(ctx, px, y, outbound ? '#5ad1ff' : '#ffae4d', outbound ? 20 : clamp(budget.snr, 3, 18), 22);
     if (!outbound) { ctx.fillStyle = '#ffae4d'; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('return echo', px, y - 44); ctx.textAlign = 'left'; }
     if (outbound && frac > 0.9) { ctx.strokeStyle = 'rgba(255,174,77,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(targetX, y, 10 + (frac - 0.9) * 200, 0, TAU); ctx.stroke(); }
   }
 
-  const t = prog * tofNs(distance);
+  const t = prog * budget.flightNs;
   ctx.fillStyle = '#dbe9f2'; ctx.font = '700 20px "Segoe UI", system-ui'; ctx.textAlign = 'left';
   ctx.fillText(`t = ${t.toFixed(0)} ns`, 44, 42);
   ctx.fillStyle = '#7ee0c4'; ctx.font = '600 13px system-ui';
-  ctx.fillText(prog >= 1 ? `echo detected → R = ${(C * (t * 1e-9) / 2).toFixed(1)} m` : 'range unknown until the echo is detected', 44, 64);
+  ctx.fillText(prog >= 1 ? shot?.detected ? `valid return → R = ${shot.range.toFixed(2)} m` : 'no valid return · insufficient signal-to-noise ratio' : 'range unknown until a valid return is processed', 44, 64);
 }
 
 // Pulsed timing diagram: transmitted + received wave packets on a time axis.
-function drawPulseTiming(ctx, { distance, prog, active, pulseWidth }) {
+function drawPulseTiming(ctx, { prog, active, budget, shot }) {
   ctx.clearRect(0, 0, TIME_W, TIME_H);
   ctx.fillStyle = '#0e1620'; ctx.fillRect(0, 0, TIME_W, TIME_H);
-  const left = 60; const right = TIME_W - 24; const mid = TIME_H / 2 + 6; const top = 30;
-  const tMax = tofNs(DMAX) * 1.05;
+  const left = 60; const right = TIME_W - 24; const top = 26;
+  const tMax = tofNs(DMAX) * 1.05 + RANGING_INSTRUMENT.systemDelayNs;
   const X = (ns) => left + (ns / tMax) * (right - left);
-
-  ctx.strokeStyle = 'rgba(140,163,181,.5)'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(left, mid); ctx.lineTo(right, mid); ctx.stroke();
   ctx.fillStyle = '#8ea3b5'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
   for (let ns = 0; ns <= tMax; ns += 400) { const x = X(ns); ctx.strokeStyle = 'rgba(140,163,181,.16)'; ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, TIME_H - 24); ctx.stroke(); ctx.fillStyle = '#8ea3b5'; ctx.fillText(`${ns}`, x, TIME_H - 10); }
-  ctx.textAlign = 'left'; ctx.fillText('time (ns)', right - 54, TIME_H - 10);
-
-  const half = clamp((pulseWidth / tMax) * (right - left) * 1.6, 10, 60);
-  const packet = (cx, color, label) => {
-    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
-    for (let x = -half; x <= half; x += 0.5) { const yy = mid - 44 * Math.exp(-((x / (half / 3)) ** 2) / 2); x === -half ? ctx.moveTo(cx + x, yy) : ctx.lineTo(cx + x, yy); }
-    ctx.stroke(); ctx.fillStyle = color; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(label, cx, top - 8); ctx.textAlign = 'left';
+  ctx.textAlign = 'left'; ctx.fillText('raw time (ns)', right - 78, TIME_H - 10);
+  const finished = prog >= 1;
+  const center = shot?.rawDelayNs ?? budget.flightNs + RANGING_INSTRUMENT.systemDelayNs;
+  const sigmaPx = Math.max(1.4, budget.echoFwhmNs / 2.355 / tMax * (right-left));
+  ctx.fillStyle = '#5ad1ff'; ctx.fillText('TX', 18, 70);
+  ctx.fillStyle = '#ffae4d'; ctx.fillText('RX', 18, 144);
+  for (const y of [72,145]) { ctx.strokeStyle = '#3e515e'; ctx.beginPath(); ctx.moveTo(left,y); ctx.lineTo(right,y); ctx.stroke(); }
+  const curve = (base, cx, amplitude, color, noise = false) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let x = left; x <= right; x += .5) {
+      // Trace is illustrative input-referred noise; acceptance uses expected
+      // matched-filter SNR, not a crossing of these display samples.
+      const jitter = noise ? shotNormal((shot?.seed ?? 1)*7919 + Math.round(x*2))*2.5 : 0;
+      const yy = base - amplitude*Math.exp(-.5*((x-cx)/sigmaPx)**2) + jitter;
+      if (x === left) ctx.moveTo(x,yy); else ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
   };
-
-  const tof = tofNs(distance);
-  packet(X(0), '#5ad1ff', 'TX (emitted)');
-  const nowNs = prog * tof;
-  if (prog >= 1) packet(X(tof), '#ffae4d', 'RX (detected)');
-  else { ctx.globalAlpha = 0.35; packet(X(tof), '#ffae4d', 'predicted RX'); ctx.globalAlpha = 1; }
-
-  if (prog >= 1) {
-    ctx.strokeStyle = '#f6c85f'; ctx.lineWidth = 1.5; const yb = top - 2;
-    ctx.beginPath(); ctx.moveTo(X(0), yb); ctx.lineTo(X(tof), yb); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(X(0), yb - 4); ctx.lineTo(X(0), yb + 4); ctx.moveTo(X(tof), yb - 4); ctx.lineTo(X(tof), yb + 4); ctx.stroke();
-    ctx.fillStyle = '#f6c85f'; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText(`Δt = ${tof.toFixed(0)} ns`, (X(0) + X(tof)) / 2, yb - 5); ctx.textAlign = 'left';
-  }
-  if (active && prog < 1) { ctx.strokeStyle = 'rgba(126,224,196,.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(X(nowNs), top); ctx.lineTo(X(nowNs), TIME_H - 24); ctx.stroke(); ctx.setLineDash([]); }
+  curve(72, X(0), 35, '#5ad1ff');
+  ctx.globalAlpha = finished ? 1 : .3;
+  curve(145, X(center), Math.min(48,budget.snr*2.5), '#ffae4d', finished);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = finished ? '#dbe9f2' : '#8ea3b5'; ctx.font = '600 11px system-ui';
+  ctx.fillText(finished ? shot?.detected ? `Raw timestamp ${center.toFixed(1)} ns · subtract 12 ns internal delay` : `No valid return · SNR ${budget.snr.toFixed(1)} < ${RANGING_INSTRUMENT.minimumSnr}` : 'Expected RX (guide only) · no captured measurement', left, 20);
+  if (active && prog < 1) { ctx.strokeStyle = '#7ee0c4'; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(X(prog*budget.flightNs),top); ctx.lineTo(X(prog*budget.flightNs),176); ctx.stroke(); ctx.setLineDash([]); }
 }
 
 // ---------------------------------------------------------------------------
@@ -347,6 +347,12 @@ export default function LidarRanging() {
   const [fMod, setFMod] = useState(13); // MHz (CW modulation frequency)
   const [nTones, setNTones] = useState(3); // multi-frequency ladder size
   const [measured, setMeasured] = useState(null);
+  const [reflectivity, setReflectivity] = useState(35);
+  const [aperture, setAperture] = useState(30);
+  const [ambient, setAmbient] = useState(25);
+  const [extinction, setExtinction] = useState(0.15);
+  const [airIndex, setAirIndex] = useState(1.00027);
+  const [playback, setPlayback] = useState({ progress: 0, active: false });
   const [motion, setMotion] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   const sceneRef = useRef(null); const chartRef = useRef(null); const combRef = useRef(null);
@@ -354,16 +360,19 @@ export default function LidarRanging() {
   const params = useRef({}); const anim = useRef({ active: false, start: 0, prog: 0 });
   const combAnim = useRef({ playing: false, start: 0 });
   const multiAnim = useRef({ playing: false, start: 0 });
-  params.current = { mode, distance, speed, continuous, pulseWidth, fMod, nTones, motion };
+  const shotSeed = useRef(0), lastPlaybackUpdate = useRef(0);
+  const budget = rangingBudget({ distance, pulseWidth, reflectivity, aperture, ambient, extinction, airIndex });
+  params.current = { mode, distance, speed, continuous, pulseWidth, fMod, nTones, motion, reflectivity, aperture, ambient, extinction, airIndex, budget };
 
-  const fire = () => { setMeasured(null); anim.current = { active: true, start: performance.now(), prog: 0 }; };
+  const fire = () => { setMeasured(null); setPlayback({ progress: 0, active: true }); anim.current = { active: true, start: performance.now(), prog: 0, shot: simulateRangingShot(params.current, ++shotSeed.current) }; };
   const playComb = () => { combAnim.current = { playing: true, start: performance.now() }; };
   const playResolve = () => { multiAnim.current = { playing: true, start: performance.now() }; };
 
   useEffect(() => {
     setMeasured(null);
+    setPlayback({ progress: 0, active: false });
     anim.current = { active: false, start: 0, prog: 0 };
-  }, [distance, mode]);
+  }, [distance, mode, pulseWidth, reflectivity, aperture, ambient, extinction, airIndex]);
 
   useEffect(() => {
     let raf;
@@ -396,10 +405,11 @@ export default function LidarRanging() {
         if (a.active) {
           const dur = (0.7 + (p.distance / DMAX) * 3.0) / p.speed;
           a.prog = clamp((now - a.start) / (dur * 1000), 0, 1);
-          if (a.prog >= 1) { const tof = tofNs(p.distance); setMeasured({ range: C * (tof * 1e-9) / 2 }); if (p.continuous) { a.start = now; a.prog = 0; } else { a.active = false; } }
+          if (a.prog >= 1) { setMeasured(a.shot); if (p.continuous) { a.start = now; a.prog = 0; a.shot = simulateRangingShot(p, ++shotSeed.current); } else { a.active = false; } }
+          if (now - lastPlaybackUpdate.current > 85 || !a.active) { setPlayback({ progress: a.prog, active: a.active }); lastPlaybackUpdate.current = now; }
         }
-        if (sc) drawPulseScene(sc.getContext('2d'), { distance: p.distance, prog: a.prog, active: a.active });
-        if (ch) drawPulseTiming(ch.getContext('2d'), { distance: p.distance, prog: a.prog, active: a.active, pulseWidth: p.pulseWidth });
+        if (sc) drawPulseScene(sc.getContext('2d'), { distance: p.distance, prog: a.prog, active: a.active, budget: p.budget, shot: a.shot });
+        if (ch) drawPulseTiming(ch.getContext('2d'), { prog: a.prog, active: a.active, budget: p.budget, shot: a.shot });
       } else {
         const f = p.fMod * 1e6; const lambda = C / f; const unamb = lambda / 2;
         const ratio = p.distance / unamb; const Nn = Math.floor(ratio); const fr = ratio - Nn;
@@ -431,8 +441,8 @@ export default function LidarRanging() {
   }, []);
 
   // Pulsed readouts
-  const tof = tofNs(distance); const oneWay = tof / 2;
-  const rangeRes = C * (pulseWidth * 1e-9) / 2;
+  const tof = budget.flightNs; const oneWay = tof / 2;
+  const rangeRes = C / airIndex * (pulseWidth * 1e-9) / 2;
   const { limit: rMax, ambiguous, apparentRange } = pulseAmbiguity(distance, prf);
   // Phase readouts (fine tone)
   const { wavelength: lambda, interval: unamb, cycles: N, phaseDegrees: phiDeg, remainder: rPhase } = phaseMeasurement(distance, fMod);
@@ -451,7 +461,7 @@ export default function LidarRanging() {
   return (
     <div className="rng-lab">
       <header className="rng-header"><a href={import.meta.env.BASE_URL}><span className="rng-brand" aria-hidden="true">⌁</span> GEOSIM <span>/</span> All laboratories</a><span className="rng-lab-id">REMOTE SENSING · LAB 01 / 06</span></header>
-      <div className="rng-intro"><div><p className="rng-eyebrow">THE RANGING LAB</p><h1>Light travels. Distance follows.</h1><p>Time a pulse, compare a phase, resolve a cycle. Three ways to turn a light signal into range.</p></div><div className="rng-constant">c = 299,792,458 m/s<small>VACUUM SPEED · AIR APPROXIMATION</small></div></div>
+      <div className="rng-intro"><div><p className="rng-eyebrow">THE RANGING LAB</p><h1>Light travels. Distance follows.</h1><p>Look inside the optics. Follow the electronics. Find out when a returning pulse can actually become a measurement.</p></div><div className="rng-constant">c = 299,792,458 m/s<small>PULSE MODE · v = c / n IN AIR</small></div></div>
       <div className="rng-modebar">
         <div className="rng-modes" role="tablist" aria-label="Ranging method" onKeyDown={event => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -463,8 +473,9 @@ export default function LidarRanging() {
         }}>
           {[['pulsed','01','Pulse timing'],['phase','02','Phase comparison'],['multi','03','Multi-frequency']].map(([key,number,title]) => <button key={key} id={'rng-tab-'+key} role="tab" aria-selected={mode === key} aria-controls="rng-workspace" tabIndex={mode === key ? 0 : -1} className={mode === key ? 'on' : ''} onClick={() => setMode(key)}><span>{number}</span>{title}</button>)}
         </div>
-        <span className="rng-model-note">IDEALISED MONOSTATIC SENSOR</span>
+        <span className="rng-model-note">FIXED HEAD · NEAR-COAXIAL FAR-FIELD MODEL</span>
       </div>
+      <RangingHardware mode={mode} progress={playback.progress} active={playback.active} measured={measured} budget={budget} aperture={aperture} distance={distance} onFire={fire} />
       <main id="rng-workspace" className="rng-workspace" role="tabpanel" aria-labelledby={'rng-tab-'+mode} key={mode}>
         <aside className="rng-controls" aria-label="Experiment configuration">
           <section className="rng-panel">
@@ -477,6 +488,15 @@ export default function LidarRanging() {
             </> : mode === 'phase' ? <label className="rng-control">Modulation frequency <b>{fMod} MHz</b><input id="rng-frequency" type="range" min="1" max="30" step="1" value={fMod} onChange={e => setFMod(Number(e.target.value))} /></label>
               : <label className="rng-control">Modulation tones <b>{nTones}</b><input id="rng-tones" type="range" min="2" max="4" step="1" value={nTones} onChange={e => setNTones(Number(e.target.value))} /></label>}
           </section>
+          {mode === 'pulsed' && <section className="rng-panel">
+            <h2><span>RECEIVER &amp; ENVIRONMENT</span>Will the echo survive?</h2>
+            <label className="rng-control">Target reflectance <b>{reflectivity}%</b><input id="rng-reflectivity" type="range" min="1" max="90" step="1" value={reflectivity} onChange={e => setReflectivity(Number(e.target.value))} /></label>
+            <label className="rng-control">Receiver aperture <b>{aperture} mm</b><input id="rng-aperture" type="range" min="10" max="80" step="1" value={aperture} onChange={e => setAperture(Number(e.target.value))} /></label>
+            <label className="rng-control">In-band background <b>{ambient} e⁻/ns*</b><input id="rng-ambient" type="range" min="0" max="150" step="1" value={ambient} onChange={e => setAmbient(Number(e.target.value))} /></label>
+            <label className="rng-control">Atmospheric extinction <b>{extinction.toFixed(2)} km⁻¹</b><input id="rng-extinction" type="range" min="0" max="4" step="0.05" value={extinction} onChange={e => setExtinction(Number(e.target.value))} /></label>
+            <label className="rng-control">Air refractive index <b>{airIndex.toFixed(5)}</b><input id="rng-air-index" type="range" min="1" max="1.0004" step="0.00001" value={airIndex} onChange={e => setAirIndex(Number(e.target.value))} /></label>
+            <p className="rng-hint">*Background rate at 30 mm aperture, after the optical filter; scales with collecting area. A large, normal-incidence diffuse target fills the beam. Pulse energy is fixed at 100 nJ; the small optical reference tap is included in the assumed optical efficiency.</p>
+          </section>}
           <section className="rng-panel">
             <h2><span>02 / OBSERVE</span>{mode === 'pulsed' ? 'Launch the pulse' : mode === 'phase' ? 'Follow the modulation' : 'Resolve the cycles'}</h2>
             {mode === 'pulsed' ? <>
@@ -486,7 +506,7 @@ export default function LidarRanging() {
             {mode !== 'multi' && <label className="rng-control">Playback speed <b>{speed.toFixed(1)}×</b><input id="rng-speed" type="range" min="0.3" max="4" step="0.1" value={speed} onChange={e => setSpeed(Number(e.target.value))} /></label>}
             <p className="rng-hint">Motion is slowed dramatically. Diagram dimensions and wave heights are schematic, not physical light speed or received power.</p>
           </section>
-          <section className="rng-prompt"><span className="rng-eyebrow">TRY THIS</span><p>{mode === 'pulsed' ? 'Double the distance. Predict the echo delay before firing again.' : mode === 'phase' ? 'Raise the frequency. How many more possible ranges share the same phase?' : 'Add a tone. What shrinks: the overall range or the finest uncertainty window?'}</p></section>
+          <section className="rng-prompt"><span className="rng-eyebrow">TRY THIS</span><p>{mode === 'pulsed' ? 'Move the target to 300 m and fire. Then enlarge the receiver aperture. Can a stronger echo recover a valid range?' : mode === 'phase' ? 'Raise the frequency. How many more possible ranges share the same phase?' : 'Add a tone. What shrinks: the overall range or the finest uncertainty window?'}</p></section>
         </aside>
         <div className="rng-instruments">
           <section className="rng-panel rng-stage">
@@ -497,23 +517,23 @@ export default function LidarRanging() {
           <section className="rng-panel rng-trace">
             <h2><span>{mode === 'multi' ? 'CYCLE RESOLUTION' : 'RECEIVER TRACE'}</span>{mode === 'pulsed' ? 'Measure the delay' : mode === 'phase' ? 'Compare the phase' : 'Narrow the range window'}</h2>
             {mode === 'multi' ? <canvas ref={narrowRef} className="rng-canvas" width={660} height={110} role="img" aria-label="Illustrative range window narrows with each modulation tone." /> : <canvas ref={chartRef} className="rng-canvas" width={TIME_W} height={TIME_H} role="img" aria-label={mode === 'pulsed' ? 'Transmitted and received pulses on a round-trip time axis.' : 'Reference and received sinusoids with a phase-lag bracket and phasor.'} />}
-            <p className="rng-caption">{mode === 'pulsed' ? 'A faint predicted RX is a guide, not a measurement. The pulse shapes are enlarged for visibility; the detected delay gives range.' : mode === 'phase' ? 'These are metre-scale AMCW modulation waves, not optical carrier waves. Phase repeats every 360°; the missing integer cycle must be resolved separately.' : 'Windows are centred on the known synthetic target. They illustrate cycle selection and an assumed ±3° phase error, not a noisy range estimator.'}</p>
+            <p className="rng-caption">{mode === 'pulsed' ? 'TX and RX use separate gain scales. The captured RX has illustrative, shot-seeded input noise; peaks are display-clipped and at least 3 pixels wide. Acceptance uses the expected matched-filter SNR, not a crossing of the plotted noise samples. The timestamp includes a calibrated 12 ns internal delay.' : mode === 'phase' ? 'These are metre-scale AMCW modulation waves, not optical carrier waves. Phase repeats every 360°; the missing integer cycle must be resolved separately.' : 'Windows are centred on the known synthetic target. They illustrate cycle selection and an assumed ±3° phase error, not a noisy range estimator.'}</p>
           </section>
           {mode === 'phase' && <section className="rng-panel rng-trace"><h2><span>DISAMBIGUATION</span>Which whole cycle?</h2><div className="rng-comb-action"><button className="rng-action secondary" onClick={playComb}>Animate the calculation</button><span>0.45 MHz coarse tone → {unambCoarse.toFixed(0)} m interval</span></div><canvas ref={combRef} className="rng-canvas" width={COMB_W} height={COMB_H} role="img" aria-label="Fine-phase candidate ranges with a coarse estimate selecting the correct cycle." /><p className="rng-caption">N = round(Rcoarse / (λ/2) − Δφ/360°) = {Ncalc}. The coarse estimate must select the correct fine cycle; here it is ideal and unambiguous across the scene.</p></section>}
         </div>
         <aside className="rng-diagnostics" aria-label="Measurements and interpretation">
           <section className="rng-panel">
             <h2><span>03 / READ THE RESULT</span>{mode === 'pulsed' ? 'Time becomes distance' : mode === 'phase' ? 'Phase gives a remainder' : 'Coarse meets fine'}</h2>
-            <div className="rng-result" id="rng-result">{mode === 'pulsed' ? (measured && Math.abs(measured.range-distance)<1e-6 ? measured.range.toFixed(1) : '—') : mode === 'phase' ? rPhase.toFixed(2) : distance.toFixed(2)}<small>m</small></div>
-            <p className="rng-result-label">{mode === 'pulsed' ? 'Detected range · available after the echo' : mode === 'phase' ? 'Phase-only remainder · not full range' : 'Ideal reconstructed range'}</p>
-            <div className="rng-equation">{mode === 'pulsed' ? 'R = c · Δt / 2' : mode === 'phase' ? 'R = (N + Δφ/360°) · λ/2' : 'Coarse cycle + fine phase'}</div>
+            <div className="rng-result" id="rng-result">{mode === 'pulsed' ? (measured?.detected ? measured.range.toFixed(2) : '—') : mode === 'phase' ? rPhase.toFixed(2) : distance.toFixed(2)}<small>m</small></div>
+            <p className="rng-result-label" id="rng-detection" role="status">{mode === 'pulsed' ? measured ? measured.detected ? 'Last shot · valid return (includes timing noise)' : 'No valid return · expected SNR below 6' : 'Awaiting a new valid return' : mode === 'phase' ? 'Phase-only remainder · not full range' : 'Ideal reconstructed range'}</p>
+            <div className="rng-equation">{mode === 'pulsed' ? 'R = c · (tRAW − tCAL) / (2n)' : mode === 'phase' ? 'R = (N + Δφ/360°) · λ/2' : 'Coarse cycle + fine phase'}</div>
             <dl className="rng-metrics">
-              {mode === 'pulsed' ? <><div><dt>Expected round-trip Δt</dt><dd>{tof.toFixed(1)} ns</dd></div><div><dt>Expected one-way time</dt><dd>{oneWay.toFixed(1)} ns</dd></div><div><dt>Pulse-limited scale cτ/2</dt><dd>{rangeRes.toFixed(2)} m</dd></div></> : mode === 'phase' ? <><div><dt>Phase shift Δφ</dt><dd>{phiDeg.toFixed(1)}°</dd></div><div><dt>Modulation wavelength</dt><dd>{lambda.toFixed(2)} m</dd></div><div><dt>Ambiguity interval λ/2</dt><dd>{unamb.toFixed(2)} m</dd></div><div><dt>Range per degree</dt><dd>{(phasePrecision*100).toFixed(1)} cm</dd></div><div><dt>Resolved whole cycles N</dt><dd>{Ncalc}</dd></div><div><dt>With ideal coarse tone</dt><dd>{((Ncalc+frac)*unamb).toFixed(2)} m</dd></div></> : <><div><dt>Coarsest interval</dt><dd>{tones[0].unamb.toFixed(0)} m</dd></div><div><dt>Fine bound, assuming ±3°</dt><dd>±{(finePrecision/2).toFixed(3)} m</dd></div></>}
+              {mode === 'pulsed' ? <><div><dt>Expected round-trip Δt</dt><dd>{tof.toFixed(1)} ns</dd></div><div><dt>Expected one-way time</dt><dd>{oneWay.toFixed(1)} ns</dd></div><div><dt>Expected signal electrons</dt><dd id="rng-electrons">{budget.electrons.toFixed(0)} e⁻</dd></div><div><dt>Expected SNR / gate</dt><dd id="rng-snr">{budget.snr.toFixed(1)} / 6</dd></div><div><dt>Two-way transmission</dt><dd>{(budget.transmission*100).toFixed(1)}%</dd></div><div><dt>Captured raw timestamp</dt><dd>{measured?.rawDelayNs?.toFixed(1) ?? '—'} ns</dd></div><div><dt>Internal delay removed</dt><dd>12.0 ns</dd></div><div><dt>Timestamp bin / clock jitter</dt><dd>100 / 80 ps</dd></div><div><dt>Approx. range σ, if detected</dt><dd>{budget.detected ? `${(budget.rangeSigmaM*100).toFixed(1)} cm` : 'Below gate'}</dd></div><div><dt>Pulse-limited scale cτ/(2n)</dt><dd>{rangeRes.toFixed(2)} m</dd></div></> : mode === 'phase' ? <><div><dt>Phase shift Δφ</dt><dd>{phiDeg.toFixed(1)}°</dd></div><div><dt>Modulation wavelength</dt><dd>{lambda.toFixed(2)} m</dd></div><div><dt>Ambiguity interval λ/2</dt><dd>{unamb.toFixed(2)} m</dd></div><div><dt>Range per degree</dt><dd>{(phasePrecision*100).toFixed(1)} cm</dd></div><div><dt>Resolved whole cycles N</dt><dd>{Ncalc}</dd></div><div><dt>With ideal coarse tone</dt><dd>{((Ncalc+frac)*unamb).toFixed(2)} m</dd></div></> : <><div><dt>Coarsest interval</dt><dd>{tones[0].unamb.toFixed(0)} m</dd></div><div><dt>Fine bound, assuming ±3°</dt><dd>±{(finePrecision/2).toFixed(3)} m</dd></div></>}
             </dl>
           </section>
           <section className="rng-panel">
             <h2><span>INTERPRETATION</span>{mode === 'pulsed' ? 'Do not confuse the scales' : mode === 'phase' ? 'The missing integer' : 'The tone ladder'}</h2>
-            {mode === 'pulsed' ? <><p className="rng-hint"><b>Why divide by two?</b> The light travels out and back: total path = 2R. A 1 ns timing error corresponds to about 15 cm of range error.</p><p className="rng-hint"><b>Resolution is not accuracy.</b> cτ/2 is a characteristic echo-separation scale. Pulse shape, amplitude, bandwidth, noise and processing determine actual separation and precision.</p><div className={'rng-alert '+(ambiguous ? 'warning' : '')} role="status"><b>{ambiguous ? 'Pulse identity is ambiguous' : 'Within one pulse interval'}</b><span>Rmax = {rMax.toFixed(2)} m</span><span>Untagged periodic apparent R = {apparentRange.toFixed(2)} m</span></div><p className="rng-hint">The single-pulse animation uses true travel time. Real multiple-time-around systems can use pulse identification to resolve periodic ambiguity.</p></>
+            {mode === 'pulsed' ? <><p className="rng-hint"><b>Why divide by two?</b> The light travels out and back: total path ≈ 2R. The two apertures are separated in the drawing; their small physical baseline is neglected at 10–300 m.</p><p className="rng-hint"><b>Precision is not resolution.</b> The pulse-limited scale concerns echo separation. A fitted peak can have much finer timing precision. The displayed σ is an approximate Gaussian timing model, not an accuracy guarantee.</p><p className="rng-hint"><b>Calibration matters.</b> The air index changes travel speed. Without removing the 12 ns instrument delay, range would be biased by about 1.8 m. Timing noise gives a different captured range on each shot.</p><div className={'rng-alert '+(ambiguous ? 'warning' : '')} role="status"><b>{ambiguous ? 'Pulse identity is ambiguous' : 'Within one pulse interval'}</b><span>Vacuum reference Rmax = {rMax.toFixed(2)} m</span><span>Vacuum periodic apparent R = {apparentRange.toFixed(2)} m</span></div><p className="rng-hint">The periodic ambiguity example and both phase modes retain the vacuum approximation. Single-pulse timing uses the selected air index. The model omits multiple scattering, finite-target interception, saturation, dead time and calibrated weather/sunlight spectra.</p></>
               : mode === 'phase' ? <><p className="rng-hint">The same fine phase occurs at {rPhase.toFixed(2)} m, {(rPhase+unamb).toFixed(2)} m, and further intervals. Phase alone does not observe N.</p><p className="rng-hint">A coarse tone with interval {unambCoarse.toFixed(0)} m identifies the fine cycle. Its error must be less than about ±{(unamb/2).toFixed(2)} m to choose the nearest correct candidate.</p><p className="rng-hint">This is AMCW phase ranging, not FMCW beat-frequency ranging. Real precision depends on phase noise and calibration.</p></>
               : <><div className="rng-tone-table"><div><b>Tone</b><b>λ/2</b><b>Phase</b></div>{tones.map((t,i) => <div key={t.f}><span>{(t.f/1e6).toFixed(i===0 ? 2 : 1)} MHz</span><span>{t.unamb.toFixed(2)} m</span><span>{((distance/t.unamb)%1*360).toFixed(1)}°</span></div>)}</div><p className="rng-hint">The {tones[0].unamb.toFixed(0)} m coarsest interval exceeds the full 0–{DMAX} m scene. Higher frequencies refine the phase fraction only after the correct cycle is chosen.</p><p className="rng-hint">The ±3° assumption is illustrative. More tones alone do not guarantee precision or absolute accuracy.</p></>}
           </section>
@@ -523,7 +543,7 @@ export default function LidarRanging() {
         <LidarLearningPanel topic="ranging" workedExample={mode === 'multi'
         ? `${nTones} illustrative tones: the coarsest interval is ${tones[0].unamb.toFixed(0)} m, exceeding the ${DMAX} m scene; the finest interval is ${tones.at(-1).unamb.toFixed(3)} m. An assumed ±3° phase error maps to ±${(finePrecision / 2).toFixed(3)} m only after the correct cycle is identified.`
         : mode === 'pulsed'
-        ? `Δt = 2 × ${distance} / ${C} = ${tof.toFixed(2)} ns; pulse-limited scale cτ/2 = ${rangeRes.toFixed(3)} m. PRF ${prf} kHz gives Rmax = ${rMax.toFixed(2)} m${ambiguous ? ` and an untagged-pulse apparent range of ${apparentRange.toFixed(2)} m` : ', beyond this target'}.`
+        ? `In pulse mode, Δt = 2 × n × ${distance} / ${C} = ${tof.toFixed(2)} ns with n = ${airIndex.toFixed(5)}; cτ/(2n) = ${rangeRes.toFixed(3)} m. Expected receiver SNR = ${budget.snr.toFixed(1)}; the acceptance gate is 6. The separate vacuum PRF example at ${prf} kHz gives Rmax = ${rMax.toFixed(2)} m${ambiguous ? ` and an untagged-pulse apparent range of ${apparentRange.toFixed(2)} m` : ', beyond this target'}.`
         : `At ${fMod} MHz: λmod/2 = ${unamb.toFixed(3)} m; Δφ = ${phiDeg.toFixed(2)}°; R = (${N} + ${(frac).toFixed(4)}) × ${unamb.toFixed(3)} = ${distance} m. Phase alone does not observe N.`}
         onExperiment={(id) => { if (id === 'phase') { setMode('phase'); setDistance(120); setFMod(10); } else { setMode('pulsed'); setDistance(id === 'timing' ? 150 : 220); setPrf(id === 'timing' ? 100 : 1000); setPulseWidth(10); } }} />
       </details>

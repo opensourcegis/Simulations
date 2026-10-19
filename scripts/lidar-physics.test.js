@@ -4,6 +4,69 @@ import { LIGHT_SPEED, roundTripNs, pulseAmbiguity, phaseMeasurement, beamFootpri
 import { LIDAR_LESSONS } from '../games/shared/lidar-lessons.js';
 import { canopyWaveform, detectCanopyPeaks } from '../games/shared/lidar-waveform.js';
 import { traceCanopy } from '../games/shared/lidar-canopy.js';
+import { rangingBudget, simulateRangingShot, RANGING_INSTRUMENT } from '../src/simulations/ranging-model.js';
+
+test('ranging receiver follows the extended Lambertian-target inverse-square law', () => {
+  const near = rangingBudget({ distance: 100, extinction: 0 });
+  const far = rangingBudget({ distance: 200, extinction: 0 });
+  close(near.electrons / far.electrons, 4);
+  close(rangingBudget({ distance: 100, reflectivity: 70 }).electrons / rangingBudget({ distance: 100, reflectivity: 35 }).electrons, 2);
+});
+test('ranging collecting area and in-band background both grow with diameter squared', () => {
+  const a = rangingBudget({ distance: 120, aperture: 20 });
+  const b = rangingBudget({ distance: 120, aperture: 40 });
+  close(b.electrons / a.electrons, 4);
+  close(b.backgroundElectrons / a.backgroundElectrons, 4);
+  assert(b.snr > a.snr);
+});
+test('ranging attenuation applies to both outbound and return paths with km units', () => {
+  const clear = rangingBudget({ distance: 300, extinction: 0 });
+  const haze = rangingBudget({ distance: 300, extinction: 2 });
+  close(haze.transmission, Math.exp(-1.2));
+  close(haze.electrons / clear.electrons, haze.transmission);
+});
+test('a broader fixed-energy pulse preserves signal charge but collects more background', () => {
+  const narrow = rangingBudget({ distance: 120, pulseWidth: 1 });
+  const broad = rangingBudget({ distance: 120, pulseWidth: 40 });
+  close(narrow.electrons, broad.electrons);
+  assert(broad.echoFwhmNs > narrow.echoFwhmNs);
+  assert(broad.backgroundElectrons > narrow.backgroundElectrons);
+  assert(broad.rangeSigmaM > narrow.rangeSigmaM);
+});
+test('background noise worsens precision without changing the physical echo energy', () => {
+  const dark = rangingBudget({ distance: 120, ambient: 0 });
+  const bright = rangingBudget({ distance: 120, ambient: 150 });
+  close(dark.electrons, bright.electrons);
+  assert(dark.snr > bright.snr);
+  assert(dark.timingSigmaNs < bright.timingSigmaNs);
+});
+test('weak returns do not report a range; a larger aperture recovers detection', () => {
+  const weak = simulateRangingShot({ distance: 300 });
+  assert.equal(weak.detected, false);
+  assert.equal(weak.range, null);
+  assert.equal(weak.rawDelayNs, null);
+  assert.equal(simulateRangingShot({ distance: 300, aperture: 80 }).detected, true);
+});
+test('air refractive index changes flight time but is corrected in reported range', () => {
+  const vacuum = rangingBudget({ distance: 150, airIndex: 1 });
+  const air = rangingBudget({ distance: 150, airIndex: 1.00027 });
+  close(air.flightNs / vacuum.flightNs, 1.00027);
+  const shot = simulateRangingShot({ distance: 150, airIndex: 1.00027 });
+  assert(Math.abs(shot.range - 150) < 5 * air.rangeSigmaM);
+  close(shot.correctedDelayNs, shot.rawDelayNs - RANGING_INSTRUMENT.systemDelayNs);
+});
+test('captured timestamps are binned, reproducible, and change across pulse seeds', () => {
+  const settings = { distance: 120 };
+  const a = simulateRangingShot(settings, 42);
+  assert.deepEqual(a, simulateRangingShot(settings, 42));
+  close(a.rawDelayNs / RANGING_INSTRUMENT.tdcBinNs, Math.round(a.rawDelayNs / RANGING_INSTRUMENT.tdcBinNs), 1e-8);
+  const ranges = new Set(Array.from({ length: 20 }, (_, i) => simulateRangingShot(settings, i + 1).range));
+  assert(ranges.size > 5);
+});
+test('timing precision remains bounded by clock and timestamp-bin uncertainty', () => {
+  const b = rangingBudget({ distance: 10, reflectivity: 90, aperture: 80, pulseWidth: 1, ambient: 0 });
+  assert(b.timingSigmaNs >= Math.hypot(RANGING_INSTRUMENT.clockJitterNs, RANGING_INSTRUMENT.tdcBinNs / Math.sqrt(12)));
+});
 
 test('a ground echo is an interior peak, not lost at the waveform boundary', () => {
   const peaks = detectCanopyPeaks(canopyWaveform([{ h: 0, amp: 0.3 }]));
