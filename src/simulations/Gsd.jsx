@@ -1,401 +1,639 @@
-import { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import './simulation.css';
-import './native.css';
-import './gsd.css';
-
-// ---------------------------------------------------------------------------
-// Ground Sampling Distance (GSD).
-//
-// An aerial camera at flying height H, with a lens of focal length f and a
-// sensor whose pixels have pitch p (= sensor width / pixels-across), images a
-// patch of ground. By similar triangles through the lens (pinhole model), one
-// pixel maps to a square of ground of side:
-//
-//     GSD = p · H / f  =  (sensor_width · H) / (pixels · f)
-//
-// The scene shows a small block of ground GSD-cells, the lens, and the matching
-// block of sensor pixels, with the light of each ground cell converging through
-// the lens onto one (inverted) pixel.
-// ---------------------------------------------------------------------------
-
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-// Number of pixels shown per side of the block — grows with the resolution
-// slider (the sensor size stays fixed; more pixels just divide it more finely).
-const gridM = (pixels) => clamp(Math.round(pixels / 650), 3, 12);
-
-// Standard digital-camera sensor sizes (sensor WIDTH in mm, native aspect ratio
-// W/H). Ordered largest → smallest, as in the classic sensor-comparison chart.
-const SENSORS = [
-  { label: 'Full-frame', sub: '36 × 24 mm', w: 36.0, aspect: 3 / 2 },
-  { label: 'APS-C', sub: '1.5× crop', w: 23.5, aspect: 3 / 2 },
-  { label: 'APS-C', sub: '1.6× crop', w: 22.3, aspect: 3 / 2 },
-  { label: 'Four Thirds', sub: '2× crop', w: 17.3, aspect: 4 / 3 },
-  { label: '1″ Type', sub: '2.7× crop', w: 13.2, aspect: 4 / 3 },
-  { label: '1/1.7″', sub: '4.6× crop', w: 7.6, aspect: 4 / 3 },
-  { label: '1/2.5″', sub: '6.0× crop', w: 5.76, aspect: 4 / 3 },
-];
-// Resolution choices in megapixels; pixels-across = √(MP · aspect).
-const MPS = [16, 20.1, 24, 48];
-const pixelsAcross = (mp, aspect) => Math.round(Math.sqrt(mp * 1e6 * aspect));
-
-function computeGsd(f, H, sensorW, pixels) {
-  const pitchUm = (sensorW / pixels) * 1000; // µm
-  const gsdCm = (sensorW * H) / (pixels * f) * 100; // cm / pixel
-  const footprintM = (sensorW * H) / f; // full-width ground coverage (m)
-  return { pitchUm, gsdCm, footprintM };
-}
-
-// ---- ground check-marker imaging -----------------------------------------
-// Pattern value at (u,v) in [0,1]²: 0 = black, 1 = white.
-function patternVal(target, u, v) {
-  if (target === 'bowtie') { const du = u - 0.5; const dv = v - 0.5; return Math.abs(du) >= Math.abs(dv) ? 0 : 1; }
-  return (u < 0.5) === (v < 0.5) ? 0 : 1; // 2×2 checkerboard
-}
-let gCache = 0; let gHave = false;
-function gauss() { // standard normal (Box–Muller, cached pair)
-  if (gHave) { gHave = false; return gCache; }
-  let a = 0; let b = 0; while (a === 0) a = Math.random(); while (b === 0) b = Math.random();
-  const r = Math.sqrt(-2 * Math.log(a)); gCache = r * Math.sin(2 * Math.PI * b); gHave = true;
-  return r * Math.cos(2 * Math.PI * b);
-}
-// The crisp physical target on the ground.
-function drawGround(cv, target) {
-  const ctx = cv.getContext('2d'); const W = cv.width; const img = ctx.createImageData(W, W); const d = img.data;
-  for (let py = 0; py < W; py += 1) for (let px = 0; px < W; px += 1) {
-    const c = patternVal(target, (px + 0.5) / W, (py + 0.5) / W) * 255;
-    const p = (py * W + px) * 4; d[p] = c; d[p + 1] = c; d[p + 2] = c; d[p + 3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
-}
-// The photo: the target sampled at the current GSD (each pixel box-averages a
-// GSD patch of ground) with shot noise that grows as the pixel pitch shrinks
-// (smaller pixels catch less light → lower SNR).
-function drawCaptured(cv, target, targetM, gsdM, pitchUm) {
-  const n = clamp(Math.round(targetM / gsdM), 1, 200); // sensor pixels across the target
-  // The canvas buffer IS the sensor grid: one buffer pixel per sensor pixel.
-  // CSS (image-rendering:pixelated) upscales it to 200px, so each sensor pixel
-  // shows as a crisp block — few big blocks at coarse GSD, sharp when GSD is fine.
-  cv.width = n; cv.height = n;
-  const ctx = cv.getContext('2d'); const img = ctx.createImageData(n, n); const d = img.data;
-  const sigma = 0.05 * (5 / pitchUm); const s = 3; // noise ∝ 1/pitch; 3×3 box-average
-  for (let j = 0; j < n; j += 1) for (let i = 0; i < n; i += 1) {
-    let sum = 0;
-    for (let a = 0; a < s; a += 1) for (let b = 0; b < s; b += 1) sum += patternVal(target, (i + (a + 0.5) / s) / n, (j + (b + 0.5) / s) / n);
-    const val = clamp(sum / (s * s) + gauss() * sigma, 0, 1); const c = Math.round(val * 255);
-    const p = (j * n + i) * 4; d[p] = c; d[p + 1] = c; d[p + 2] = c; d[p + 3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
-}
-
-function label(text, color = '#16202c', bg = 'rgba(255,255,255,0.88)') {
-  const font = 'bold 27px system-ui'; const pad = 20;
-  const meas = document.createElement('canvas').getContext('2d'); meas.font = font;
-  const W = Math.ceil(meas.measureText(text).width + pad * 2); const Hh = 64;
-  const c = document.createElement('canvas'); const s = 2; c.width = W * s; c.height = Hh * s;
-  const x = c.getContext('2d'); x.scale(s, s);
-  x.fillStyle = bg; x.beginPath(); x.roundRect(1, 2, W - 2, Hh - 4, 12); x.fill();
-  x.fillStyle = color; x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(text, W / 2, Hh / 2);
-  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  spr.scale.set(W / 100, Hh / 100, 1); spr.renderOrder = 10;
-  return spr;
-}
-
-// A filled M×M grid plane (in the XZ plane) at height y, with grid lines and
-// one highlighted cell (hi = [i, j] or null).
-function gridPlane(size, M, y, faceMat, lineMat, hiMat, hi) {
-  const g = new THREE.Group();
-  const cell = size / M; const half = size / 2;
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(size, size), faceMat);
-  plane.rotation.x = -Math.PI / 2; plane.position.y = y; g.add(plane);
-  const pts = [];
-  for (let i = 0; i <= M; i += 1) {
-    const t = -half + i * cell;
-    pts.push(-half, y + 0.01, t, half, y + 0.01, t);
-    pts.push(t, y + 0.01, -half, t, y + 0.01, half);
-  }
-  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-  g.add(new THREE.LineSegments(lg, lineMat));
-  if (hi) {
-    const [i, j] = hi;
-    const q = new THREE.Mesh(new THREE.PlaneGeometry(cell * 0.94, cell * 0.94), hiMat);
-    q.rotation.x = -Math.PI / 2; q.position.set(-half + (i + 0.5) * cell, y + 0.02, -half + (j + 0.5) * cell); g.add(q);
-  }
-  return g;
-}
-
-// A small arrow (shaft + cone) pointing up (+Y) or down (−Y).
-function arrowMesh(h, mat, up) {
-  const grp = new THREE.Group();
-  const s = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, h * 0.78, 10), mat); s.position.y = (up ? 1 : -1) * h * 0.39;
-  const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, h * 0.28, 14), mat); t.position.y = (up ? 1 : -1) * h * 0.9; if (!up) t.rotation.x = Math.PI;
-  grp.add(s, t); return grp;
-}
-
-function buildScene(f, H, sensorW, pixels, sel, mats) {
-  const g = new THREE.Group();
-  const { gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
-  const M = gridM(pixels);                          // pixels per side ∝ resolution
-
-  // Thin-lens layout (compressed): ground object at y=0, lens at gY, real
-  // image on the sensor at gY+sY. Diagram magnification m = sY/gY (the true
-  // f/H is far smaller, so the sensor is drawn hugely exaggerated).
-  const gY = clamp(2.8 + H / 55, 3.2, 6.4);       // object → lens distance ∝ H
-  const sY = clamp(1.0 + f / 60, 1.1, 2.6);       // lens → image distance ∝ f
-  // Block sizes depend only on the physical footprint (sensor width, H, f) —
-  // NOT on resolution. More resolution just adds more/finer pixels (M ↑).
-  const groundSize = clamp(1.35 * Math.cbrt(footprintM), 1.6, 6.2); // ∝ ground footprint
-  const mag = sY / gY;                             // sensor is the reduced, inverted image
-  const sensorSize = groundSize * mag;             // ∝ sensor width, fixed vs resolution
-  const lensY = gY; const sensorY = gY + sY;
-  const lensP = new THREE.Vector3(0, lensY, 0);
-  const hiI = clamp(sel.i, 0, M - 1); const hiJ = clamp(sel.j, 0, M - 1); // selected pixel
-
-  // optical axis (dashed) + ground context plane
-  const gp = new THREE.Mesh(new THREE.CircleGeometry(40, 48), mats.ground); gp.rotation.x = -Math.PI / 2; gp.position.y = -0.03; g.add(gp);
-  const axisG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, sensorY + 0.5, 0)]);
-  const axis = new THREE.Line(axisG, mats.axis); axis.computeLineDistances(); g.add(axis);
-
-  // ground GSD grid (object) + small sensor grid (inverted real image)
-  g.add(gridPlane(groundSize, M, 0.02, mats.groundFace, mats.line, mats.groundHi, [hiI, hiJ]));
-  g.add(gridPlane(sensorSize, M, sensorY, mats.sensorFace, mats.lineS, mats.sensorHi, [M - 1 - hiI, M - 1 - hiJ]));
-
-  // small biconvex lens (thin oblate glass) + rim
-  const lens = new THREE.Mesh(new THREE.SphereGeometry(0.8, 28, 18), mats.glass); lens.scale.set(1, 0.24, 1); lens.position.copy(lensP); g.add(lens);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.04, 12, 40), mats.rim); rim.rotation.x = Math.PI / 2; rim.position.copy(lensP); g.add(rim);
-  // focal points at ±f from the lens (image forms ~at the focal plane)
-  [-1, 1].forEach((s) => { const fp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), mats.focal); fp.position.set(0, lensY + s * sY, 0); g.add(fp); });
-
-  // Focus on ONE selected pixel: the light of its ground GSD cell fills the
-  // lens and converges to that single (inverted) pixel. Object & real-image
-  // arrows make the inversion explicit.
-  const cellG = groundSize / M; const halfG = groundSize / 2;
-  const gcx = -halfG + (hiI + 0.5) * cellG; const gcz = -halfG + (hiJ + 0.5) * cellG;
-  const ah = Math.min(cellG * 1.05, 0.9);
-  const oArrow = arrowMesh(ah, mats.obj, true); oArrow.position.set(gcx, 0, gcz); g.add(oArrow);
-  const iArrow = arrowMesh(ah * mag, mats.obj, false); iArrow.position.set(-gcx * mag, sensorY, -gcz * mag); g.add(iArrow);
-
-  // corner rays: ground cell corners → through the lens → matching pixel corners
-  const gC = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => new THREE.Vector3(gcx + sx * cellG / 2, 0.05, gcz + sz * cellG / 2));
-  const sC = gC.map((c) => new THREE.Vector3(-c.x * mag, sensorY, -c.z * mag)); // inverted image corners
-  const rays = [];
-  gC.forEach((c, k) => { rays.push(c.x, c.y, c.z, lensP.x, lensP.y, lensP.z, lensP.x, lensP.y, lensP.z, sC[k].x, sC[k].y, sC[k].z); });
-  const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(rays, 3));
-  g.add(new THREE.LineSegments(hg, mats.rayHi));
-
-  // translucent double-cone (ground cell → lens → pixel)
-  const coneV = [];
-  for (let k = 0; k < 4; k += 1) { const a = gC[k]; const b = gC[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
-  for (let k = 0; k < 4; k += 1) { const a = sC[k]; const b = sC[(k + 1) % 4]; coneV.push(a.x, a.y, a.z, b.x, b.y, b.z, lensP.x, lensP.y, lensP.z); }
-  const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(coneV, 3)); cg.computeVertexNormals();
-  g.add(new THREE.Mesh(cg, mats.cone));
-
-  // labels
-  const l1 = label('real image (sensor) ×20', '#1d3b57'); l1.position.set(0, sensorY + 0.7, 0); g.add(l1);
-  const l2 = label(`lens · f = ${f.toFixed(0)} mm`, '#7a4a00'); l2.position.set(1.8, lensY + 0.1, 0); g.add(l2);
-  const l3 = label(`1 px → GSD = ${gsdCm.toFixed(2)} cm`, '#0f5a34'); l3.position.set(gcx, ah + 0.6, gcz); g.add(l3);
-  const l4 = label(`object · H = ${H.toFixed(0)} m`, '#334'); l4.position.set(-groundSize / 2 - 1.6, lensY / 2, 0); g.add(l4);
-
-  return g;
-}
-
-function disposeGroup(group) { group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map) o.material.map.dispose(); }); }
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import PhotoLabScene, { caption, marker, segment } from "./PhotoLabScene.jsx";
+import { PhotoLab, Panel, Slider, Metric } from "./PhotoLabUI.jsx";
+import {
+  CAMERA_SENSORS,
+  gsdCamera,
+  groundPixelRay,
+  localGsd,
+  imageFootprint,
+  imageBlur,
+  sampleGroundTarget,
+} from "./gsd-model.js";
+import "./survey-realism.css";
+const cm = (x) => (Number.isFinite(x) ? (x * 100).toFixed(2) : "—");
 
 export default function Gsd() {
-  const [f, setF] = useState(50);
-  const [H, setH] = useState(100);
-  const [si, setSi] = useState(0); // sensor size index (default: full-frame)
-  const [mp, setMp] = useState(24); // resolution in megapixels
-  const sensor = SENSORS[si];
-  const sensorW = sensor.w;
-  const pixels = pixelsAcross(mp, sensor.aspect);
-  const [sel, setSel] = useState({ i: 1, j: 3 });
-  const [spin, setSpin] = useState(true);
-  const [target, setTarget] = useState('check');
-  const [targetM, setTargetM] = useState(2);
-  const M = gridM(pixels);
-
-  const mountRef = useRef(null); const three = useRef(null);
-  const groundRef = useRef(null); const imgRef = useRef(null);
-
+  const [f, setF] = useState(50),
+    [height, setHeight] = useState(100),
+    [elevation, setElevation] = useState(0),
+    [tilt, setTilt] = useState(20),
+    [slope, setSlope] = useState(0),
+    [sensor, setSensor] = useState(0),
+    [megapixels, setMegapixels] = useState(24),
+    [cell, setCell] = useState([4, 3]);
+  const [fNumber, setFNumber] = useState(5.6),
+    [exposureMs, setExposure] = useState(1),
+    [speed, setSpeed] = useState(15),
+    [targetSize, setTarget] = useState(0.5),
+    [phase, setPhase] = useState(0),
+    [pattern, setPattern] = useState("check"),
+    [noise, setNoise] = useState(false),
+    [seed, setSeed] = useState(7);
+  const camera = useMemo(
+    () => gsdCamera({ f, height, elevation, tilt, slope, sensor, megapixels }),
+    [f, height, elevation, tilt, slope, sensor, megapixels],
+  );
+  const u = Math.floor((camera.width * (cell[0] + 0.5)) / 9) + 0.5,
+    v = Math.floor((camera.imageHeight * (cell[1] + 0.5)) / 7) + 0.5;
+  const footprint = useMemo(() => localGsd(camera, u, v), [camera, u, v]),
+    bounds = imageFootprint(camera),
+    near = localGsd(camera, camera.width * 0.1, camera.imageHeight / 2),
+    far = localGsd(camera, camera.width * 0.9, camera.imageHeight / 2),
+    blur = imageBlur(camera, footprint, {
+      fNumber,
+      exposure: exposureMs / 1000,
+      speed,
+    });
+  const captured = useMemo(
+    () =>
+      sampleGroundTarget(camera, footprint, {
+        size: targetSize,
+        pattern,
+        phase,
+        seed,
+        noise,
+        fNumber,
+        exposure: exposureMs / 1000,
+        speed,
+      }),
+    [
+      camera,
+      footprint,
+      targetSize,
+      pattern,
+      phase,
+      seed,
+      noise,
+      fNumber,
+      exposureMs,
+      speed,
+    ],
+  );
+  const imageRef = useRef(null),
+    targetRef = useRef(null);
   useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return undefined;
-    const w = mount.clientWidth; const h = mount.clientHeight;
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio)); renderer.setSize(w, h);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; mount.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe7ef); scene.fog = new THREE.Fog(0xdfe7ef, 40, 90);
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.4, 500); camera.position.set(7.5, 4.6, 8.5);
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; controls.dampingFactor = 0.08; controls.target.set(0, 3.7, 0);
-    controls.minDistance = 5; controls.maxDistance = 40; controls.maxPolarAngle = Math.PI * 0.54;
-    controls.autoRotate = true; controls.autoRotateSpeed = 0.9;
-
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa6b2, 1.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(10, 20, 8); scene.add(sun);
-
-    const mats = {
-      ground: new THREE.MeshStandardMaterial({ color: 0xe7ecf1, roughness: 1 }),
-      groundFace: new THREE.MeshStandardMaterial({ color: 0xbfe3c9, roughness: 0.95, transparent: true, opacity: 0.85 }),
-      groundHi: new THREE.MeshStandardMaterial({ color: 0xffd85e, roughness: 0.7, emissive: 0x5a4a00, emissiveIntensity: 0.4 }),
-      sensorFace: new THREE.MeshStandardMaterial({ color: 0x274b6e, roughness: 0.5, metalness: 0.2 }),
-      sensorHi: new THREE.MeshStandardMaterial({ color: 0xffd85e, roughness: 0.5, emissive: 0x6a5500, emissiveIntensity: 0.6 }),
-      line: new THREE.LineBasicMaterial({ color: 0x2f7a4b, transparent: true, opacity: 0.75 }),
-      lineS: new THREE.LineBasicMaterial({ color: 0x6f93b4, transparent: true, opacity: 0.9 }),
-      glass: new THREE.MeshStandardMaterial({ color: 0xbcd8ee, roughness: 0.1, metalness: 0.05, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-      rim: new THREE.MeshStandardMaterial({ color: 0x6c86a0, roughness: 0.5 }),
-      focal: new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.5 }),
-      obj: new THREE.MeshStandardMaterial({ color: 0x2e9e4f, roughness: 0.6 }),
-      axis: new THREE.LineDashedMaterial({ color: 0x9aa7b4, dashSize: 0.16, gapSize: 0.13, transparent: true, opacity: 0.8 }),
-      rayHi: new THREE.LineBasicMaterial({ color: 0xe8443a }),
-      cone: new THREE.MeshBasicMaterial({ color: 0xe8544a, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }),
-    };
-
-    three.current = { renderer, scene, camera, controls, mats, modelRef: { current: null } };
-    let raf = 0; const loop = () => { controls.update(); renderer.render(scene, camera); raf = requestAnimationFrame(loop); }; loop();
-    const onResize = () => { const W = mount.clientWidth; const Hh = mount.clientHeight; camera.aspect = W / Hh; camera.updateProjectionMatrix(); renderer.setSize(W, Hh); };
-    window.addEventListener('resize', onResize);
-    return () => {
-      cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); controls.dispose();
-      if (three.current.modelRef.current) disposeGroup(three.current.modelRef.current);
-      Object.values(mats).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); renderer.dispose();
-      if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); three.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const t = three.current; if (!t) return;
-    if (t.modelRef.current) { t.scene.remove(t.modelRef.current); disposeGroup(t.modelRef.current); }
-    const grp = buildScene(f, H, sensorW, pixels, sel, t.mats); t.scene.add(grp); t.modelRef.current = grp;
-  }, [f, H, si, mp, sel]);
-
-  useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin; }, [spin]);
-  useEffect(() => { setSel((s) => (s.i < M && s.j < M ? s : { i: Math.min(s.i, M - 1), j: Math.min(s.j, M - 1) })); }, [M]);
-  useEffect(() => {
-    const gg = computeGsd(f, H, sensorW, pixels);
-    if (groundRef.current) drawGround(groundRef.current, target);
-    if (imgRef.current) drawCaptured(imgRef.current, target, targetM, gg.gsdCm / 100, gg.pitchUm);
-  }, [target, targetM, f, H, si, mp]);
-  const resetView = () => { const t = three.current; if (!t) return; t.camera.position.set(7.5, 4.6, 8.5); t.controls.target.set(0, 3.7, 0); };
-
-  const { pitchUm, gsdCm, footprintM } = computeGsd(f, H, sensorW, pixels);
-  const nAcross = clamp(Math.round(targetM / (gsdCm / 100)), 1, 200);
-
+    const canvas = imageRef.current,
+      ctx = canvas.getContext("2d");
+    canvas.width = 48;
+    canvas.height = 48;
+    const image = ctx.createImageData(48, 48);
+    for (let i = 0; i < 48 * 48; i++) {
+      const value = captured
+        ? Math.round(Math.pow(captured.pixels[i], 1 / 2.2) * 255)
+        : 20;
+      image.data.set([value, value, value, 255], i * 4);
+    }
+    ctx.putImageData(image, 0, 0);
+    const t = targetRef.current,
+      tc = t.getContext("2d");
+    tc.fillStyle = "#d1d5c7";
+    tc.fillRect(0, 0, 200, 200);
+    for (let y = 0; y < 200; y++)
+      for (let x = 0; x < 200; x++) {
+        const white =
+          pattern === "bowtie"
+            ? Math.abs(x - 100) < Math.abs(y - 100)
+            : x < 100 !== y < 100;
+        tc.fillStyle = white ? "#e8e8e1" : "#242b2d";
+        tc.fillRect(x, y, 1, 1);
+      }
+  }, [captured, pattern]);
+  const build = useCallback(() => {
+    const group = new THREE.Group(),
+      gradient = Math.tan((camera.slope * Math.PI) / 180),
+      groundSize = 260;
+    const positions = [
+      -groundSize,
+      -groundSize,
+      camera.elevation - gradient * groundSize,
+      groundSize,
+      -groundSize,
+      camera.elevation + gradient * groundSize,
+      groundSize,
+      groundSize,
+      camera.elevation + gradient * groundSize,
+      -groundSize,
+      groundSize,
+      camera.elevation - gradient * groundSize,
+    ];
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3),
+    );
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    geometry.computeVertexNormals();
+    group.add(
+      new THREE.Mesh(
+        geometry,
+        new THREE.MeshStandardMaterial({
+          color: 0x697d59,
+          side: THREE.DoubleSide,
+          roughness: 1,
+        }),
+      ),
+    );
+    for (let a = -250; a <= 250; a += 25) {
+      segment(
+        group,
+        [
+          [-250, a, camera.elevation - 250 * gradient + 0.05],
+          [250, a, camera.elevation + 250 * gradient + 0.05],
+        ],
+        0xb0bc87,
+        0.3,
+      );
+      segment(
+        group,
+        [
+          [a, -250, camera.elevation + a * gradient + 0.05],
+          [a, 250, camera.elevation + a * gradient + 0.05],
+        ],
+        0xb0bc87,
+        0.3,
+      );
+    }
+    const origin = [0, 0, camera.height];
+    marker(group, origin, 0xe4e8de, 1.8);
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(4, 5, 2),
+      new THREE.MeshStandardMaterial({ color: 0x617783 }),
+    );
+    body.position.set(...origin);
+    body.rotation.y = (-camera.tilt * Math.PI) / 180;
+    group.add(body);
+    for (let row = 0; row <= 7; row++)
+      for (let col = 0; col <= 9; col++) {
+        if (row !== 0 && row !== 7 && col !== 0 && col !== 9) continue;
+        const p = groundPixelRay(
+          camera,
+          (col / 9) * camera.width,
+          (row / 7) * camera.imageHeight,
+        );
+        if (p && Math.hypot(...p) < 1500)
+          segment(group, [origin, p], 0x9cc9d5, 0.15);
+      }
+    for (let row = 0; row < 7; row++)
+      for (let col = 0; col < 9; col++) {
+        const corners = [
+          [col, row],
+          [col + 1, row],
+          [col + 1, row + 1],
+          [col, row + 1],
+        ].map(([x, y]) =>
+          groundPixelRay(
+            camera,
+            (x / 9) * camera.width,
+            (y / 7) * camera.imageHeight,
+          ),
+        );
+        if (corners.every((p) => p && Math.hypot(...p) < 1500))
+          segment(
+            group,
+            [...corners, corners[0]].map((p) => [p[0], p[1], p[2] + 0.1]),
+            col === cell[0] && row === cell[1] ? 0xffd36a : 0xabc5bc,
+            col === cell[0] && row === cell[1] ? 0.95 : 0.35,
+          );
+      }
+    if (footprint && footprint.range < 1500) {
+      segment(group, [origin, footprint.center], 0xffd36a, 0.9);
+      marker(group, footprint.center, 0xffd36a, 0.5);
+      const enlarged = footprint.corners.map((p) =>
+        p.map(
+          (x, j) =>
+            footprint.center[j] +
+            80 * (x - footprint.center[j]) +
+            (j === 2 ? 0.25 : 0),
+        ),
+      );
+      segment(group, [...enlarged, enlarged[0]], 0xffd36a);
+      caption(
+        group,
+        "Native pixel outline ×80",
+        [footprint.center[0], footprint.center[1], footprint.center[2] + 5],
+        "#ffe0a4",
+        4,
+      );
+    }
+    caption(
+      group,
+      `${camera.width} × ${camera.imageHeight} photosites`,
+      [0, 0, camera.height + 8],
+      "#c2d7e2",
+      5,
+    );
+    caption(
+      group,
+      "25 m surface grid · actual ray-plane intersections",
+      [-80, -95, camera.elevation - 80 * gradient + 2],
+      "#d2ddc7",
+      4,
+    );
+    return group;
+  }, [camera, cell, footprint]);
   return (
-    <div className="sim-app">
-      <header className="sim-topbar">
-        <a className="back-link" href={import.meta.env.BASE_URL}>&larr; All simulators</a>
-        <div className="title-block">
-          <h1>Ground Sampling Distance <span className="native-badge">Native React</span></h1>
-          <span className="sub">How one sensor pixel maps to a patch of ground through the lens — and what sets its size</span>
+    <PhotoLab
+      name="Ground sampling distance"
+      title="A pixel is a footprint—not a resolution guarantee."
+      intro="Trace a native camera pixel onto tilted, elevated terrain. Compare near and far sampling, optical blur, motion and subpixel alignment using actual ray–plane intersections."
+      notebook={
+        <>
+          <h3>Sampling geometry</h3>
+          <p>
+            For level, nadir imagery over a horizontal plane, GSD = pixel pitch
+            × height above ground / focal length. Height above a datum is not
+            automatically height above terrain. This model uses the selected
+            sensor dimensions and native image resolution. Each selected pixel's
+            four corner rays intersect z = elevation + tan(slope) X; lengths and
+            area are measured on that sloping surface, not a horizontal map
+            projection.
+          </p>
+          <p>
+            Camera tilt, terrain slope and image position make footprints
+            anisotropic and variable. A ray parallel to or above the plane has
+            no forward ground hit. No horizon is silently clamped to a finite
+            footprint. The 9 × 7 display regions group many native pixels and
+            are not sensor photosites. The selected native-pixel outline is
+            enlarged 80×; camera housing is enlarged for visibility. The ground
+            viewport is finite; distant intersections may be outside its
+            drawing.
+          </p>
+          <h3>Sampling is not resolving</h3>
+          <p>
+            A 2 cm pixel footprint does not mean a 2 cm object can be resolved.
+            Ideal band-limited sampling requires at least two samples per cycle;
+            optics, contrast, pixel integration, demosaicing and motion can make
+            practical resolution worse. More pixels do not automatically add
+            optical detail. Read GSD separately from diffraction and motion
+            blur.
+          </p>
+          <h3>Native-pixel target crop</h3>
+          <p>
+            The preview is a fixed 48 × 48 native-pixel crop, not a
+            rounded/resized count of pixels forced across a target. Each sensor
+            pixel integrates nine subpixel ray-plane samples and a five-tap
+            moment-matched blur kernel. The checker/bowtie is defined on the
+            ground plane. Moving its phase by a fraction of a pixel changes
+            sampling without changing GSD. Large markers may be cropped; the
+            true marker size and fractional pixels across it are shown
+            numerically.
+          </p>
+          <p>
+            The Airy first-zero diameter is 2.44 λN with λ = 550 nm. Its central
+            lobe is approximated by a Gaussian sigma of 0.18 times that
+            diameter. Along-image-X ground motion is approximated by a box-blur
+            variance (speed × exposure / local GSDx)²/12; this combines with
+            diffraction along X, while Y retains diffraction only. This is not a
+            compound lens prescription, measured MTF or complete flight-motion
+            projection.
+          </p>
+          <p>
+            Optional noise uses an illustrative fixed-exposure charge budget:
+            10,000 electrons for unit radiance at 6 µm pitch, f/4 and 1 ms,
+            scaled by pixel area, f-number and exposure. Gaussian shot/read
+            noise (3 e⁻ RMS), 20,000 e⁻ clipping and a display gamma are
+            included. Sensor pitch alone does not determine real SNR. The seed
+            is stable until a new sample is requested. No automatic camera
+            exposure or resolution certification is simulated.
+          </p>
+        </>
+      }
+    >
+      <div className="photo-workspace">
+        <aside className="photo-controls">
+          <Panel tag="01 / CAMERA & SURFACE" title="Project the actual pixel">
+            <Slider
+              id="gsd-height"
+              label="Camera height above datum"
+              value={height}
+              display={height + " m"}
+              min={30}
+              max={200}
+              step={5}
+              onChange={setHeight}
+            />
+            <Slider
+              id="gsd-elevation"
+              label="Terrain elevation at X = 0"
+              value={elevation}
+              display={elevation + " m"}
+              min={-20}
+              max={25}
+              onChange={setElevation}
+            />
+            <Slider
+              id="gsd-focal"
+              label="Focal length"
+              value={f}
+              display={f + " mm"}
+              min={16}
+              max={100}
+              onChange={setF}
+            />
+            <Slider
+              id="gsd-tilt"
+              label="Camera off-nadir tilt"
+              value={tilt}
+              display={tilt + "°"}
+              min={0}
+              max={70}
+              onChange={setTilt}
+            />
+            <Slider
+              id="gsd-slope"
+              label="Terrain slope along X"
+              value={slope}
+              display={slope + "°"}
+              min={-25}
+              max={25}
+              onChange={setSlope}
+            />
+            <label className="photo-select">
+              Sensor format
+              <select
+                id="gsd-sensor"
+                value={sensor}
+                onChange={(e) => setSensor(+e.target.value)}
+              >
+                {CAMERA_SENSORS.map((s, i) => (
+                  <option key={s.name} value={i}>
+                    {s.name} · {s.width} mm wide
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="photo-select">
+              Native resolution
+              <select
+                id="gsd-resolution"
+                value={megapixels}
+                onChange={(e) => setMegapixels(+e.target.value)}
+              >
+                {[12, 24, 48, 96].map((n) => (
+                  <option key={n} value={n}>
+                    {n} MP
+                  </option>
+                ))}
+              </select>
+            </label>
+          </Panel>
+          <Panel tag="02 / IMAGE FORMATION" title="Separate sampling from blur">
+            <Slider
+              id="gsd-fnumber"
+              label="Aperture f-number"
+              value={fNumber}
+              display={"f/" + fNumber}
+              min={2}
+              max={22}
+              step={0.1}
+              onChange={setFNumber}
+            />
+            <Slider
+              id="gsd-exposure"
+              label="Exposure time"
+              value={exposureMs}
+              display={exposureMs.toFixed(1) + " ms"}
+              min={0.1}
+              max={10}
+              step={0.1}
+              onChange={setExposure}
+            />
+            <Slider
+              id="gsd-speed"
+              label="Local along-image ground speed"
+              value={speed}
+              display={speed + " m/s"}
+              min={0}
+              max={50}
+              onChange={setSpeed}
+            />
+            <label className="photo-check">
+              <input
+                id="gsd-noise"
+                type="checkbox"
+                checked={noise}
+                onChange={(e) => setNoise(e.target.checked)}
+              />
+              Illustrative shot/read noise
+            </label>
+            <div className="photo-actions">
+              <button id="gsd-new-sample" onClick={() => setSeed(seed + 1)}>
+                New sensor-noise sample
+              </button>
+              <button
+                id="gsd-nadir"
+                onClick={() => {
+                  setTilt(0);
+                  setSlope(0);
+                  setElevation(0);
+                }}
+              >
+                Nadir / flat-datum reference
+              </button>
+            </div>
+          </Panel>
+        </aside>
+        <div className="photo-instruments">
+          <Panel
+            tag="ACTUAL PROJECTION GEOMETRY"
+            title="Oblique image footprint on the terrain"
+            className="photo-stage"
+          >
+            <PhotoLabScene
+              build={build}
+              initial={[130, -155, 145]}
+              target={[40, 0, 40]}
+              maxDistance={2000}
+              label="Aerial camera, oblique ground footprint and selected pixel ray on a sloping terrain plane."
+            />
+            <div className="photo-stage-key">
+              <span>9 × 7 grouped image regions—not individual pixels</span>
+              <span>gold native pixel outline ×80</span>
+            </div>
+          </Panel>
+          <Panel
+            tag="INSPECT IMAGE POSITION"
+            title="Select a region and inspect its central native pixel"
+          >
+            <div
+              className="gsd-region-picker"
+              role="group"
+              aria-label="Image-region selection"
+            >
+              {Array.from({ length: 63 }, (_, i) => {
+                const col = i % 9,
+                  row = Math.floor(i / 9);
+                return (
+                  <button
+                    key={i}
+                    aria-label={`Image region ${col + 1}, ${row + 1}`}
+                    aria-pressed={cell[0] === col && cell[1] === row}
+                    onClick={() => setCell([col, row])}
+                  />
+                );
+              })}
+            </div>
+            <p className="photo-note">
+              Native sample u = {u.toFixed(1)}, v = {v.toFixed(1)}. Moving
+              toward the far image edge changes GSD even though the camera and
+              pixel pitch stay the same.
+            </p>
+          </Panel>
+          <Panel
+            tag="NATIVE SENSOR CROP"
+            title="Same marker, different sampling"
+          >
+            <div className="gsd-samples">
+              <figure>
+                <canvas ref={targetRef} width="200" height="200" />
+                <figcaption>
+                  Physical {targetSize.toFixed(2)} m marker
+                </figcaption>
+              </figure>
+              <figure>
+                <canvas id="gsd-captured" ref={imageRef} />
+                <figcaption>48 × 48 native pixels · may crop marker</figcaption>
+              </figure>
+            </div>
+            <div className="photo-inline">
+              <label>
+                Pattern
+                <select
+                  id="gsd-pattern"
+                  value={pattern}
+                  onChange={(e) => setPattern(e.target.value)}
+                >
+                  <option value="check">Checkerboard</option>
+                  <option value="bowtie">Bowtie</option>
+                </select>
+              </label>
+            </div>
+            <Slider
+              id="gsd-target"
+              label="Ground marker side length"
+              value={targetSize}
+              display={targetSize.toFixed(2) + " m"}
+              min={0.05}
+              max={2}
+              step={0.05}
+              onChange={setTarget}
+            />
+            <Slider
+              id="gsd-phase"
+              label="Marker shift in local pixel units"
+              value={phase}
+              display={phase.toFixed(2) + " px"}
+              min={-0.5}
+              max={0.5}
+              step={0.05}
+              onChange={setPhase}
+            />
+            <p className="photo-note">
+              Pixel-area integration and optics/motion blur occur before
+              sampling. Noise is optional and fixed until the seed changes. The
+              crop is not rescaled to fit the marker.
+            </p>
+          </Panel>
         </div>
-        <span className="score-chip">GSD = <b>{gsdCm.toFixed(2)} cm/px</b></span>
-      </header>
-
-      <div className="sim-layout">
-        <div className="sim-col">
-          <section className="sim-panel">
-            <h2><span className="stepno">1</span> Sensor → lens → ground <small>&mdash; drag to orbit, scroll to zoom</small></h2>
-            <div className="gsd-stage" ref={mountRef}>
-              <div className="gsd-badge">GSD = <b>{gsdCm.toFixed(2)} cm</b> / pixel</div>
-              <div className="gsd-hint">drag = orbit · scroll = zoom</div>
+        <aside className="photo-diagnostics">
+          <Panel
+            tag="GEOMETRY / SURFACE DISTANCES"
+            title="Read the local footprint"
+          >
+            <div className="photo-result" id="gsd-local">
+              {footprint ? cm(footprint.gx) : "—"}
+              <small>cm/px along X</small>
             </div>
-            <div className="gsd-legend">
-              <span><i className="gsd-sw" style={{ background: '#bfe3c9' }} /> object · ground GSD grid</span>
-              <span><i className="gsd-sw" style={{ background: '#bcd8ee' }} /> lens (focal length f)</span>
-              <span><i className="gsd-sw" style={{ background: '#274b6e' }} /> sensor · real image (×20)</span>
-              <span><i className="gsd-sw" style={{ background: '#e8443a' }} /> light rays</span>
-              <span><i className="gsd-sw" style={{ background: '#ffd85e' }} /> one pixel &harr; one GSD cell</span>
-            </div>
-            <div className="gsd-toolbar">
-              <label><input type="checkbox" checked={spin} onChange={(e) => setSpin(e.target.checked)} /> auto-rotate (360°)</label>
-              <button className="gsd-btn" onClick={resetView}>reset view</button>
-            </div>
-          </section>
-
-          <section className="sim-panel">
-            <h2><span className="stepno">2</span> The check-marker in the photo <small>&mdash; sampled at this GSD</small></h2>
-            <div className="gsd-targets">
-              <button className={`gsd-tbtn ${target === 'check' ? 'on' : ''}`} onClick={() => setTarget('check')}>▦ Checkerboard</button>
-              <button className={`gsd-tbtn ${target === 'bowtie' ? 'on' : ''}`} onClick={() => setTarget('bowtie')}>⧗ Bowtie</button>
-              <label className="gsd-tsize">target size <b>{targetM.toFixed(1)} m</b><input type="range" min="0.3" max="4" step="0.1" value={targetM} onChange={(e) => setTargetM(Number(e.target.value))} /></label>
-            </div>
-            <div className="gsd-imgrow">
-              <figure><canvas ref={groundRef} width={200} height={200} /><figcaption><b>on the ground</b> · {targetM.toFixed(1)} m target</figcaption></figure>
-              <figure><canvas ref={imgRef} width={200} height={200} /><figcaption><b>in the image</b> · {nAcross} px across · pitch {pitchUm.toFixed(1)} µm</figcaption></figure>
-            </div>
-            <div className="gsd-note">Each photo pixel averages a <b>GSD-sized</b> patch of ground, so the marker is only readable when it spans several pixels (GSD ≪ target). Fly <b>higher</b> or shorten the <b>lens</b> → GSD grows → the pattern smears toward grey. <b>Smaller pixels</b> (more resolution / smaller sensor) sample finer but each collects <b>less light</b>, so the photo gets <b>noisier</b>.</div>
-          </section>
-        </div>
-
-        <div className="sim-col">
-          <section className="sim-panel">
-            <h2><span className="stepno">3</span> Camera &amp; flight</h2>
-            <div className="control-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <label>focal length f <b>{f.toFixed(0)} mm</b><input type="range" min="16" max="80" step="1" value={f} onChange={(e) => setF(Number(e.target.value))} /></label>
-              <label>flying height H <b>{H.toFixed(0)} m</b><input type="range" min="20" max="300" step="5" value={H} onChange={(e) => setH(Number(e.target.value))} /></label>
-            </div>
-
-            <div className="gsd-sub">Sensor size <span style={{ textTransform: 'none', color: '#9aa7b4', fontWeight: 400 }}>({sensorW.toFixed(2)} mm wide)</span></div>
-            <div className="gsd-presets">
-              {SENSORS.map((s, k) => (
-                <button key={`${s.label}-${s.sub}`} className={`gsd-pbtn ${si === k ? 'on' : ''}`} onClick={() => setSi(k)}>
-                  <b>{s.label}</b><span>{s.sub}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="gsd-sub">Resolution <span style={{ textTransform: 'none', color: '#9aa7b4', fontWeight: 400 }}>({pixels.toLocaleString()} px across)</span></div>
-            <div className="gsd-presets">
-              {MPS.map((m) => (
-                <button key={m} className={`gsd-pbtn wide ${mp === m ? 'on' : ''}`} onClick={() => setMp(m)}><b>{m} MP</b></button>
-              ))}
-            </div>
-
-            <div className="gsd-sub">Trace one pixel &mdash; pick a ground cell <span style={{ textTransform: 'none', color: '#9aa7b4', fontWeight: 400 }}>({M}×{M} shown)</span></div>
-            <div className="gsd-pick" style={{ gridTemplateColumns: `repeat(${M}, 1fr)`, maxWidth: `${Math.min(260, M * 34)}px` }}>
-              {Array.from({ length: M }, (_, r) => Array.from({ length: M }, (_, c) => (
-                <button key={`${r}-${c}`} className={`gsd-px ${sel.i === c && sel.j === r ? 'on' : ''}`} onClick={() => setSel({ i: c, j: r })} aria-label={`cell ${c},${r}`} />
-              )))}
-            </div>
-
-            <div className="gsd-eq">
-              pixel pitch&nbsp; p = sensor width / pixels-across = {sensorW.toFixed(2)} mm / {pixels.toLocaleString()} ({mp} MP) = <b>{pitchUm.toFixed(2)} µm</b><br />
-              <span className="big">GSD = <b>p · H / f</b> = {pitchUm.toFixed(2)} µm · {H} m / {f} mm = <b>{gsdCm.toFixed(2)} cm/px</b></span>
-            </div>
-
-            <div className="readouts" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-              <div><span>pixel pitch p</span><b>{pitchUm.toFixed(2)} µm</b></div>
-              <div><span>GSD</span><b>{gsdCm.toFixed(2)} cm</b></div>
-              <div><span>ground footprint</span><b>{footprintM.toFixed(1)} m</b></div>
-              <div><span>magnification f/H</span><b>1:{(H / (f / 1000)).toFixed(0)}</b></div>
-            </div>
-
-            <div className="gsd-sub">How GSD responds</div>
-            <div className="gsd-note">
-              GSD is the size of ground that <b>one pixel</b> sees, so smaller is sharper. From <b>GSD = p·H/f</b>:
-              flying <b>higher (↑H)</b> or using a <b>shorter lens (↓f)</b> makes each pixel cover more ground → <b>coarser</b>;
-              a <b>longer lens (↑f)</b> or <b>smaller pixels</b> (more resolution / smaller pitch) makes it <b>finer</b>. The lens
-              sets the magnification f/H — the ground block in the view is that magnification larger than the pixel block.
-            </div>
-
-            <div className="rect-summary">
-              <b>Why GSD matters</b>
-              <p>
-                Every ground cell in the grid focuses its light through the lens onto exactly <b>one pixel</b> (the image is
-                flipped, so opposite corners map across). The side of that cell is the <b>Ground Sampling Distance</b>. It is the
-                practical resolution of an aerial or drone survey: a 2&nbsp;cm GSD means the smallest thing one pixel can resolve is
-                about 2&nbsp;cm on the ground. Mission planning trades <b>height</b> and <b>lens</b> against the GSD you need.
-              </p>
-            </div>
-          </section>
-        </div>
+            <p
+              id="gsd-validity"
+              className={footprint ? "photo-note" : "photo-alert warning"}
+            >
+              {footprint
+                ? "Selected native pixel has a forward surface intersection."
+                : "No forward intersection for this pixel. Check tilt, terrain slope and camera clearance."}
+            </p>
+            <dl>
+              <Metric
+                label="Across-image local GSD"
+                value={footprint ? cm(footprint.gy) : "—"}
+                unit="cm/px"
+              />
+              <Metric
+                label="Pixel surface area"
+                value={footprint ? (footprint.area * 10000).toFixed(3) : "—"}
+                unit="cm²"
+              />
+              <Metric
+                label="Slant distance"
+                value={footprint ? footprint.range.toFixed(2) : "—"}
+                unit="m"
+              />
+              <Metric
+                label="Height above terrain at camera XY"
+                value={(height - elevation).toFixed(1)}
+                unit="m"
+              />
+              <Metric
+                label="Nadir flat-plane reference"
+                value={cm(camera.nominal)}
+                unit="cm/px"
+              />
+              <Metric
+                label="Near / far image-X samples"
+                value={cm(near?.gx) + " / " + cm(far?.gx)}
+                unit="cm/px"
+              />
+              <Metric
+                label="Complete image-plane footprint"
+                value={
+                  bounds
+                    ? "four corners forward"
+                    : "one or more corners invalid"
+                }
+              />
+              <Metric
+                label="Native pixel pitch"
+                value={(camera.pitchMm * 1000).toFixed(2)}
+                unit="µm"
+              />
+              <Metric
+                label="Marker along-X samples"
+                value={footprint ? (targetSize / footprint.gx).toFixed(2) : "—"}
+                unit="pixels"
+              />
+            </dl>
+          </Panel>
+          <Panel
+            tag="OPTICS & MOTION"
+            title="Smaller GSD is not always sharper"
+          >
+            <dl>
+              <Metric
+                label="Airy first-zero diameter"
+                value={blur.airyPx.toFixed(2)}
+                unit="px"
+              />
+              <Metric
+                label="Exposure motion length"
+                value={
+                  Number.isFinite(blur.motionPx)
+                    ? blur.motionPx.toFixed(2)
+                    : "—"
+                }
+                unit="px"
+              />
+            </dl>
+            <p className="photo-note">
+              Sampling sets the ground spacing, not a smallest resolvable
+              object. Diffraction, motion, contrast and pixel integration affect
+              actual detail. Change f-number or exposure without changing GSD to
+              see the distinction.
+            </p>
+          </Panel>
+        </aside>
       </div>
-    </div>
+    </PhotoLab>
   );
 }

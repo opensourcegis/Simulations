@@ -3,6 +3,7 @@ import './simulation.css';
 import './native.css';
 import './boresight.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
+import GeoreferencingExperiment from './GeoreferencingExperiment.jsx';
 import { eulerAxes, boresightComparison } from '../../games/shared/lidar-physics.js';
 
 // ---------------------------------------------------------------------------
@@ -299,6 +300,7 @@ export default function Boresight() {
         <span className="score-chip">IMU records: <b>{aRoll.toFixed(0)}° / {aPitch.toFixed(0)}° / {aYaw.toFixed(0)}°</b></span>
       </header>
 
+      <GeoreferencingExperiment arms={arms} attitude={att} boresight={bores.scanner}/>
       <LidarLearningPanel topic="boresight"
         workedExample={comparison ? `Measured slant range ρ = ${comparison.range.toFixed(3)} m; scanner height = ${comparison.sensorHeight.toFixed(3)} m. Omitting boresight shifts the same-range endpoint by Δhorizontal = ${(comparison.horizontalError * 100).toFixed(2)} cm and Δz = ${(comparison.verticalError * 100).toFixed(2)} cm. Attitude is included in both endpoints.` : 'The selected scanner position or ray has no forward ground intersection. Restore a higher platform or a downward-looking ray.'}
         onExperiment={(id) => { setSel('scanner'); setAtt(id === 'zero' ? [12, -6, 15] : [0, 0, 0]); setBores({ scanner: id === 'zero' ? [0, 0, 0] : [0, 0, 10] }); setScanAngle(id === 'yaw-scan' ? 30 : 0); setHeight(6); }} />

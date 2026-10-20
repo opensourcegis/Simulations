@@ -40,8 +40,8 @@ Each lesson includes a learning objective, a three-step working principle, three
 - Footprints use small full-angle geometric divergence, not Gaussian beam propagation. Incidence uses a horizontal plane. Energy per area is not received intensity.
 - Scanning optics and sample rates are schematic. Ground point placement does not solve occlusion against a complete 3D scene. Mechanism comparisons are not equal-specification sensor benchmarks.
 - Material coefficients, specular lobes and thresholds are illustrative, not measured spectra or a calibrated radiometric sensor model. Canopy attenuation is relative, not a recovered leaf-area index.
-- Boresight geometry assumes exact range, GNSS/IMU observations and rigid mounting on flat terrain. It omits timing offsets, antenna phase-centre variation and mounting flexure.
-- TIN densification is inspired by Axelsson, but uses fixed thresholds, extra boundary anchors, small display batches and a finite iteration cap. It does not reproduce every adaptive control of the original algorithm. It does not repair low outliers or guarantee valid seeds. Ground-truth labels affect evaluation only.
+- The boresight assembly view retains an exact-range, flat-ground anatomical comparison. Its added survey-scale panel models residual mounting/rotation errors, timestamp offset, local Euler angular rates, range bias and a sloping plane. Antenna phase-centre variation, stochastic navigation covariance and mounting flexure remain omitted.
+- TIN densification is inspired by Axelsson, with optional geometry-only low-point screening, an edge/noise-scaled distance bound, maximum supported facet edge and finite iteration cap. No artificial boundary anchors remain in the native lab. Screening can reject real depressions and cannot guarantee valid seeds. Ground-truth labels affect evaluation only.
 
 ## Validation
 
@@ -85,6 +85,38 @@ Changing target, receiver, environment, pulse width or method invalidates the ca
 `npm run test:lidar` covers link-budget scaling, two-way extinction/units, fixed-energy pulse broadening, background noise, weak-return rejection and aperture recovery, air-index correction, latency removal, timestamp quantisation, reproducible shot noise and the timing floor. With a local production preview and Chromium remote debugging running, `npm run test:lidar:browser` exercises all three modes at six viewport widths, component inspection, capture lifecycle/noise stability, missed returns/recovery, control invalidation and keyboard tab navigation. Optional `RANGING_BASE_URL` and `RANGING_CDP_URL` override its defaults.
 
 Browser validation should exercise all three experiments, self-check feedback and narrow-screen layouts in each of the six lessons. It should additionally fire a pulse and change its target, inspect a final TIN point, compare yaw at nadir/off-axis, and check waveform return readouts after changing canopy attenuation.
+
+## Survey-scale realism additions
+
+### TIN acquisition, support and independent terrain checks
+
+`src/simulations/tin-model.js` is the pure numerical source used by the native TIN interface and its tests. A deterministic jittered raster produces synthetic ground, roofs and canopy observations. Elevation noise is independently seeded with a selectable sigma. A canopy pulse may have a lower return on ground or lower foliage; its projected XY follows an illustrative cross-footprint scan direction. Return number does not determine class. This is not waveform propagation or a radiometrically calibrated pulse simulator.
+
+Before selecting cell minima, an optional low-point screen fits a plane to up to ten XY neighbours within 22 m. A candidate below the fitted plane by more than `max(2.5 m, 3 × median absolute neighbour residual)` is withheld. Only XYZ and point IDs enter that decision. Real sharp depressions and poorly sampled slope breaks can be falsely screened. Screened points are red, not silently deleted from the cloud.
+
+No forced corner anchors expand the seed hull. Facets exceeding the selected maximum XY edge are unsupported and omitted from the displayed/interpolated TIN. Optional local distance tolerance is `min(d_max, max(3 sigma_z, 0.15 m + 0.02 × shortest XY edge))`. The insertion angle is still facet-relative, not terrain slope. Candidates are queued in small display batches, but each insertion is tested against the freshly re-triangulated surface. Convergence means no further supported candidates, not a correct DTM or perfect terrain recovery.
+
+At each snapshot, supported facets are interpolated onto a separate 100-location grid (5–95 m at 10 m spacing). Height RMSE and bias compare against analytic terrain truth; coverage counts only valid supported locations. These samples do not influence seeding or insertion. Errors at covered locations must be read alongside missing coverage. This is synthetic surface evaluation, not independently surveyed field checkpoints or a universal accuracy claim.
+
+### Boresight, lever arm and synchronization
+
+`georeferencing-model.js` composes an antenna position, a rotated antenna-to-scanner vector and a calibrated scanner ray in one local frame. Mount vectors use forward/left/up. Attitude and boresight use right-handed NED `Rz(yaw) Ry(pitch) Rx(roll)`; local scene axes are north, west, up. The survey panel uses a cross-track scanner angle. The assembly's legacy angle remains its separately labelled anatomical off-axis example.
+
+The true pulse intersects a sloping plane. Reconstruction reuses that exact recorded range, optionally with a range bias; an erroneous direction is **not intersected with terrain a second time**. An ideal antenna/lever composition cancels changes in the antenna mounting location when its absolute position and lever arm remain consistent. Missing or incorrect translation produces a body-rotated endpoint offset.
+
+Navigation time offset displaces the antenna by velocity × delta time and changes recorded attitude by a local Euler-angle-rate approximation. This is not quaternion trajectory interpolation or a full inertial navigation model. Lever-arm residuals, boresight residuals, timing and range bias can be isolated. Their deterministic vector effects can cancel or reinforce and are not combined by an unjustified RSS rule. Opposite-heading synthetic swaths use 0°/180° headings and retain roll/pitch; their plotted error vectors are explicitly exaggerated 10×. Numerical values are unexaggerated. The old small assembly is retained to explain sensor anatomy, with distinct survey-scale controls above it.
+
+### Ground sampling distance and sensor evidence
+
+The rebuilt `?simulation=gsd` uses `gsd-model.js`. Each native pixel's corner rays intersect `z = elevation + tan(slope) X`. Local along/across surface distances, area and slant range share that intersection; camera height above datum is not substituted for AGL. Level nadir sampling reduces to `pitch × AGL / focal length`. At the optical centre over horizontal terrain, tilt gives along-tilt GSD proportional to sec²(tilt) and cross-tilt GSD proportional to sec(tilt). Pixel footprint dimensions vary across the frame. Rays at/above the plane horizon or below local ground return no valid hit rather than being clamped.
+
+The 9 × 7 selectable drawing regions group native pixels. The selected native-pixel outline is enlarged 80× for inspection; camera housing is enlarged and the ground viewport is finite. Those are labelled display choices, not a physical lens/sensor scale model. Sensor formats and megapixels determine native pixel pitch, not a hand-tuned scene-grid count.
+
+The marker preview is a fixed 48 × 48 **native pixel crop**, including fractional marker size and subpixel phase. A large marker can be cropped rather than forced to fit. Each pixel integrates a 3 × 3 subpixel quadrature and a five-tap blur approximation before sampling. At 550 nm, Airy first-zero diameter is `2.44 lambda N`; central-lobe sigma is approximated by 0.18 times this diameter. Local image-X ground motion adds box-blur variance `(speed × exposure / GSD_x)² / 12` along X only. This is not full camera-motion reprojection or a measured MTF.
+
+Optional seeded Gaussian shot/read noise uses 3 e⁻ read noise, 20,000 e⁻ full well and a fixed 10,000 e⁻ display-gain normalization with clipping/gamma. Expected charge scales with pixel area, exposure and inverse f-number squared from an illustrative 10,000 e⁻ reference at 6 µm, f/4, 1 ms and unit radiance. Noise does not change GSD and does not shimmer until a new sample is requested. Real QE, spectral response, demosaicing, automatic exposure, lens aberrations and calibrated MTF are omitted. GSD is sampling distance, not a smallest resolvable object or accuracy guarantee.
+
+`npm run test:lidar` now includes `scripts/survey-realism.test.js` for acquisition/return semantics, no-oracle TIN decisions, outlier contamination, support/coverage, frame composition, timestamp sensitivity, same-range endpoints, oblique/slope GSD, horizon rejection, fractional sampling and stable noise. `npm run test:survey:browser` checks all three routes at six screen widths, the controls and numerical/visual state changes, using the existing local CDP/preview conventions.
 
 ## Further reading
 

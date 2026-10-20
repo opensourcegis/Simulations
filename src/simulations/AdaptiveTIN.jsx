@@ -5,437 +5,10 @@ import './simulation.css';
 import './native.css';
 import './tin.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
-import { evaluateTinCandidate, tinProfileSegment } from '../../games/shared/lidar-physics.js';
+import { tinProfileSegment } from '../../games/shared/lidar-physics.js';
+import { generateSceneData, computeAdaptiveTINHistory, tinTerrainQuality } from './tin-model.js';
 
-// ---------------------------------------------------------------------------
-// 2D Delaunay Triangulation (Bowyer-Watson Algorithm)
-// ---------------------------------------------------------------------------
-function circumcircle(p1, p2, p3) {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const ex = p3.x - p1.x;
-  const ey = p3.y - p1.y;
-
-  const bl = dx * dx + dy * dy;
-  const cl = ex * ex + ey * ey;
-  const d = 2 * (dx * ey - dy * ex);
-
-  if (Math.abs(d) < 1e-9) return null;
-
-  const x = (ey * bl - dy * cl) / d;
-  const y = (dx * cl - ex * bl) / d;
-
-  const r2 = x * x + y * y;
-  return { x: p1.x + x, y: p1.y + y, r: Math.sqrt(r2), r2 };
-}
-
-function delaunay2D(points) {
-  if (points.length < 3) return [];
-
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  points.forEach((p) => {
-    if (p.x < minX) minX = p.x;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.y > maxY) maxY = p.y;
-  });
-
-  const dx = (maxX - minX) * 10 || 1000;
-  const dy = (maxY - minY) * 10 || 1000;
-
-  const stP0 = { x: minX - dx, y: minY - dy * 3 };
-  const stP1 = { x: minX - dx, y: maxY + dy * 3 };
-  const stP2 = { x: maxX + dx * 3, y: minY - dy };
-
-  const allPts = [...points, stP0, stP1, stP2];
-  const n = points.length;
-  const stIndices = [n, n + 1, n + 2];
-
-  let triangles = [
-    {
-      a: stIndices[0],
-      b: stIndices[1],
-      c: stIndices[2],
-      cc: circumcircle(allPts[stIndices[0]], allPts[stIndices[1]], allPts[stIndices[2]]),
-    },
-  ];
-
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
-    const badTriangles = [];
-
-    for (let j = 0; j < triangles.length; j++) {
-      const tri = triangles[j];
-      if (!tri.cc) continue;
-      const distSq = (p.x - tri.cc.x) ** 2 + (p.y - tri.cc.y) ** 2;
-      if (distSq <= tri.cc.r2) {
-        badTriangles.push(tri);
-      }
-    }
-
-    const edges = [];
-    badTriangles.forEach((tri) => {
-      edges.push({ a: tri.a, b: tri.b });
-      edges.push({ a: tri.b, b: tri.c });
-      edges.push({ a: tri.c, b: tri.a });
-    });
-
-    const polygonEdges = [];
-    for (let e1 = 0; e1 < edges.length; e1++) {
-      let isShared = false;
-      for (let e2 = 0; e2 < edges.length; e2++) {
-        if (e1 !== e2) {
-          if (
-            (edges[e1].a === edges[e2].a && edges[e1].b === edges[e2].b) ||
-            (edges[e1].a === edges[e2].b && edges[e1].b === edges[e2].a)
-          ) {
-            isShared = true;
-            break;
-          }
-        }
-      }
-      if (!isShared) polygonEdges.push(edges[e1]);
-    }
-
-    triangles = triangles.filter((t) => !badTriangles.includes(t));
-
-    polygonEdges.forEach((edge) => {
-      const cc = circumcircle(allPts[edge.a], allPts[edge.b], p);
-      triangles.push({ a: edge.a, b: edge.b, c: i, cc });
-    });
-  }
-
-  return triangles
-    .filter((tri) => tri.a < n && tri.b < n && tri.c < n)
-    .map((tri) => [tri.a, tri.b, tri.c]);
-}
-
-function pointInTriangle2D(px, py, ax, ay, bx, by, cx, cy) {
-  const v0x = cx - ax, v0y = cy - ay;
-  const v1x = bx - ax, v1y = by - ay;
-  const v2x = px - ax, v2y = py - ay;
-
-  const dot00 = v0x * v0x + v0y * v0y;
-  const dot01 = v0x * v1x + v0y * v1y;
-  const dot02 = v0x * v2x + v0y * v2y;
-  const dot11 = v1x * v1x + v1y * v1y;
-  const dot12 = v1x * v2x + v1y * v2y;
-
-  const invDenom = 1 / (dot00 * dot11 - dot01 * dot01 + 1e-12);
-  const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
-  const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
-
-  return u >= -1e-8 && v >= -1e-8 && u + v <= 1 + 1e-8;
-}
-
-// ---------------------------------------------------------------------------
-// Point Cloud & Physical 3D Structure Generation
-// ---------------------------------------------------------------------------
-function generateSceneData(preset, density = 180) {
-  const points = [];
-  const physicalObjects = [];
-  let idCounter = 0;
-
-  const terrainFunc = (x, y) => {
-    if (preset === 'hills' || preset === 'noise') {
-      // Realistic gentle rolling terrain (close to flat with subtle 1-2m undulations)
-      return 5 + 1.2 * Math.sin(x / 22) * Math.cos(y / 26) + 0.8 * Math.sin((x + y) / 36);
-    }
-    if (preset === 'steep') {
-      const s = 1 / (1 + Math.exp(-(x - 50) / 6));
-      return 5 + s * 14 + 1.5 * Math.cos(y / 16);
-    }
-    if (preset === 'urban') {
-      return 4 + 0.5 * Math.sin(x / 35) + 0.4 * Math.cos(y / 35);
-    }
-    return 5;
-  };
-
-  // Define 3D Physical Structures (Buildings & Trees)
-  if (preset === 'hills' || preset === 'noise') {
-    physicalObjects.push(
-      { type: 'tree', cx: 35, cy: 40, r: 11, baseZ: terrainFunc(35, 40), height: 13, label: 'Pine Tree Cluster' },
-      { type: 'tree', cx: 75, cy: 70, r: 9, baseZ: terrainFunc(75, 70), height: 11, label: 'Oak Tree Cluster' },
-      { type: 'building', x0: 55, x1: 72, y0: 20, y1: 35, baseZ: terrainFunc(63.5, 27.5), roofZ: terrainFunc(63.5, 27.5) + 6.5, label: 'Residential House' }
-    );
-  } else if (preset === 'steep') {
-    physicalObjects.push(
-      { type: 'building', x0: 70, x1: 85, y0: 40, y1: 60, baseZ: terrainFunc(77.5, 50), roofZ: terrainFunc(77.5, 50) + 7.5, label: 'Ridge Lookout Building' },
-      { type: 'tree', cx: 32, cy: 60, r: 9, baseZ: terrainFunc(32, 60), height: 11, label: 'Slope Trees' }
-    );
-  } else if (preset === 'urban') {
-    physicalObjects.push(
-      { type: 'building', x0: 15, x1: 45, y0: 15, y1: 45, baseZ: terrainFunc(30, 30), roofZ: terrainFunc(30, 30) + 15.0, label: 'Office Tower A' },
-      { type: 'building', x0: 55, x1: 85, y0: 55, y1: 85, baseZ: terrainFunc(70, 70), roofZ: terrainFunc(70, 70) + 21.0, label: 'Commercial Complex B' },
-      { type: 'tree', cx: 50, cy: 25, r: 4, baseZ: terrainFunc(50, 25), height: 6, label: 'Street Tree' },
-      { type: 'tree', cx: 50, cy: 75, r: 4, baseZ: terrainFunc(50, 75), height: 6, label: 'Street Tree' }
-    );
-  }
-
-  let seed = 42;
-  const rand = () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-
-  const cols = Math.floor(Math.sqrt(density * 1.2));
-  const rows = cols;
-  const stepX = 96 / cols;
-  const stepY = 96 / rows;
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = 2 + c * stepX + rand() * stepX * 0.8;
-      const y = 2 + r * stepY + rand() * stepY * 0.8;
-      if (x < 1 || x > 99 || y < 1 || y > 99) continue;
-
-      const baseZ = terrainFunc(x, y);
-      let z = baseZ + (rand() - 0.5) * 0.3;
-      let isTrueGround = true;
-      let objectType = 'Ground';
-
-      if (preset === 'hills' || preset === 'noise') {
-        const dTree1 = Math.hypot(x - 35, y - 40);
-        if (dTree1 < 11 && rand() > 0.28) {
-          z = baseZ + (11 - dTree1) * (0.55 + rand() * 0.6) + 2.5;
-          isTrueGround = false;
-          objectType = 'Tree Foliage';
-        }
-        const dTree2 = Math.hypot(x - 75, y - 70);
-        if (dTree2 < 9 && rand() > 0.32) {
-          z = baseZ + (9 - dTree2) * (0.6 + rand() * 0.5) + 2.0;
-          isTrueGround = false;
-          objectType = 'Tree Foliage';
-        }
-        if (x >= 55 && x <= 72 && y >= 20 && y <= 35) {
-          z = baseZ + 6.5 + (rand() - 0.5) * 0.2;
-          isTrueGround = false;
-          objectType = 'House Roof';
-        }
-        if (preset === 'noise' && rand() < 0.035) {
-          z = baseZ - 7 - rand() * 5;
-          isTrueGround = false;
-          objectType = 'Low Noise Outlier';
-        }
-      } else if (preset === 'steep') {
-        if (x >= 70 && x <= 85 && y >= 40 && y <= 60) {
-          z = baseZ + 7.5;
-          isTrueGround = false;
-          objectType = 'Building Roof';
-        }
-        const dTree = Math.hypot(x - 32, y - 60);
-        if (dTree < 9 && rand() > 0.3) {
-          z = baseZ + (9 - dTree) * 0.7 + 3;
-          isTrueGround = false;
-          objectType = 'Tree Foliage';
-        }
-      } else if (preset === 'urban') {
-        if (x >= 15 && x <= 45 && y >= 15 && y <= 45) {
-          z = baseZ + 15.0 + (rand() - 0.5) * 0.1;
-          isTrueGround = false;
-          objectType = 'Office Tower A';
-        } else if (x >= 55 && x <= 85 && y >= 55 && y <= 85) {
-          z = baseZ + 21.0 + (rand() - 0.5) * 0.1;
-          isTrueGround = false;
-          objectType = 'Commercial Complex B';
-        } else if (Math.abs(y - 50) < 3 && rand() > 0.6) {
-          z = baseZ + 1.8;
-          isTrueGround = false;
-          objectType = 'Vehicle';
-        } else if (Math.abs(x - 50) < 3 && rand() > 0.6) {
-          z = baseZ + 4.5 + rand() * 2;
-          isTrueGround = false;
-          objectType = 'Street Tree';
-        }
-      }
-
-      points.push({
-        id: idCounter++,
-        x: Number(x.toFixed(2)),
-        y: Number(y.toFixed(2)),
-        z: Number(z.toFixed(2)),
-        trueZ: Number(baseZ.toFixed(2)),
-        isTrueGround,
-        objectType,
-      });
-    }
-  }
-
-  return { points, physicalObjects };
-}
-
-// ---------------------------------------------------------------------------
-// Axelsson Adaptive TIN Iterations Algorithm (15-20 Gradual Steps)
-// ---------------------------------------------------------------------------
-function computeAdaptiveTINHistory(points, gridSize, maxAngleDeg, maxDist) {
-  if (points.length < 3) return [];
-
-  const minX = 0, maxX = 100, minY = 0, maxY = 100;
-  const colCount = Math.max(1, Math.floor((maxX - minX) / gridSize));
-  const rowCount = Math.max(1, Math.floor((maxY - minY) / gridSize));
-
-  const seedPointIds = new Set();
-  const cellWidth = (maxX - minX) / colCount;
-  const cellHeight = (maxY - minY) / rowCount;
-
-  // Step 0: Find lowest elevation point in each grid cell as initial seed
-  for (let r = 0; r < rowCount; r++) {
-    for (let c = 0; c < colCount; c++) {
-      const cx0 = minX + c * cellWidth;
-      const cx1 = cx0 + cellWidth;
-      const cy0 = minY + r * cellHeight;
-      const cy1 = cy0 + cellHeight;
-
-      let minPt = null;
-      let minZ = Infinity;
-
-      points.forEach((p) => {
-        if (p.x >= cx0 && p.x < cx1 && p.y >= cy0 && p.y < cy1) {
-          if (p.z < minZ) {
-            minZ = p.z;
-            minPt = p;
-          }
-        }
-      });
-
-      if (minPt) seedPointIds.add(minPt.id);
-    }
-  }
-
-  // Ensure corner boundary seeds exist for full convex cover
-  const cornerCoords = [
-    { x: 0, y: 0 },
-    { x: 100, y: 0 },
-    { x: 100, y: 100 },
-    { x: 0, y: 100 },
-  ];
-  cornerCoords.forEach((cc) => {
-    let closestPt = null;
-    let minDistSq = Infinity;
-    points.forEach((p) => {
-      const d2 = (p.x - cc.x) ** 2 + (p.y - cc.y) ** 2;
-      if (d2 < minDistSq) {
-        minDistSq = d2;
-        closestPt = p;
-      }
-    });
-    if (closestPt) seedPointIds.add(closestPt.id);
-  });
-
-  const calcAcc = (groundSet) => {
-    let correct = 0;
-    points.forEach((p) => {
-      const isAlgoGround = groundSet.has(p.id);
-      if (isAlgoGround === p.isTrueGround) {
-        correct++;
-      }
-    });
-    return Number(((correct / points.length) * 100).toFixed(1));
-  };
-
-  const history = [];
-  let currentGroundIds = new Set(seedPointIds);
-
-  // Record Step 0 (Initial Seed TIN)
-  const initialGroundPts = points.filter((p) => currentGroundIds.has(p.id));
-  const initialTriangles = delaunay2D(initialGroundPts);
-  history.push({
-    step: 0,
-    groundSet: new Set(currentGroundIds),
-    nonGroundSet: new Set(points.filter((p) => !currentGroundIds.has(p.id)).map((p) => p.id)),
-    seedSet: new Set(seedPointIds),
-    triangles: initialTriangles.map((t) => [initialGroundPts[t[0]].id, initialGroundPts[t[1]].id, initialGroundPts[t[2]].id]),
-    candidateEvaluations: [],
-    newlyAdded: [],
-    accuracy: calcAcc(currentGroundIds),
-    gridSize,
-    colCount,
-    rowCount,
-  });
-
-  let iterations = 1;
-  const maxIterations = Math.min(points.length, 100);
-  let converged = false;
-
-  while (iterations <= maxIterations) {
-    const groundPts = points.filter((p) => currentGroundIds.has(p.id));
-    const triangles = delaunay2D(groundPts);
-    const unclassified = points.filter((p) => !currentGroundIds.has(p.id));
-
-    const candidateEvaluations = [];
-    const qualifiedCandidates = [];
-
-    unclassified.forEach((p) => {
-      let matchedTri = null;
-      for (let t = 0; t < triangles.length; t++) {
-        const triIndices = triangles[t];
-        const v0 = groundPts[triIndices[0]];
-        const v1 = groundPts[triIndices[1]];
-        const v2 = groundPts[triIndices[2]];
-        if (pointInTriangle2D(p.x, p.y, v0.x, v0.y, v1.x, v1.y, v2.x, v2.y)) {
-          matchedTri = { v0, v1, v2 };
-          break;
-        }
-      }
-
-      if (!matchedTri) return;
-
-      const { v0, v1, v2 } = matchedTri;
-      const evaluation = evaluateTinCandidate(p, [v0, v1, v2], maxDist, maxAngleDeg);
-      if (!evaluation) return;
-      const { d, angle: maxAngle, passesDist, passesAngle, accepted, zPlane } = evaluation;
-
-      candidateEvaluations.push({
-        id: p.id,
-        d: Number(d.toFixed(2)),
-        angle: Number(maxAngle.toFixed(1)),
-        passesDist,
-        passesAngle,
-        accepted,
-        zPlane: Number(zPlane.toFixed(2)),
-      });
-
-      if (accepted) {
-        qualifiedCandidates.push({ id: p.id, d, angle: maxAngle });
-      }
-    });
-
-    if (qualifiedCandidates.length === 0) {
-      converged = true;
-      break;
-    }
-
-    // Sort qualified candidates by distance d ascending (closest to TIN surface first)
-    qualifiedCandidates.sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
-
-    // Small display batches; synthetic truth never controls insertion decisions.
-    const batchSize = Math.max(1, Math.min(10, Math.ceil(qualifiedCandidates.length / 14)));
-    const batchToAdd = qualifiedCandidates.slice(0, batchSize);
-
-    batchToAdd.forEach((c) => currentGroundIds.add(c.id));
-    const updatedGroundPts = points.filter(p => currentGroundIds.has(p.id));
-    const updatedTriangles = delaunay2D(updatedGroundPts);
-
-    history.push({
-      step: iterations,
-      groundSet: new Set(currentGroundIds),
-      nonGroundSet: new Set(points.filter((p) => !currentGroundIds.has(p.id)).map((p) => p.id)),
-      seedSet: new Set(seedPointIds),
-      triangles: updatedTriangles.map((t) => t.map(index => updatedGroundPts[index].id)),
-      candidateEvaluations,
-      newlyAdded: batchToAdd.map((c) => c.id),
-      accuracy: calcAcc(currentGroundIds),
-      gridSize,
-      colCount,
-      rowCount,
-    });
-
-    iterations++;
-  }
-
-  history[history.length - 1].stopReason = converged ? 'converged' : 'iteration-limit';
-  return history;
-}
+// Numerical generation and classification are shared with regression tests.
 
 // ---------------------------------------------------------------------------
 // Extract 3D Triangles & Materials from loaded Three.js GLTF Models
@@ -500,6 +73,7 @@ export default function AdaptiveTIN() {
   const [maxAngle, setMaxAngle] = useState(12);
   const [maxDist, setMaxDist] = useState(1.2);
   const [density, setDensity] = useState(320);
+  const [noiseSigma,setNoiseSigma]=useState(.06),[penetration,setPenetration]=useState(.3),[removeLow,setRemoveLow]=useState(true),[adaptive,setAdaptive]=useState(true),[maxEdge,setMaxEdge]=useState(55);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [view3D, setView3D] = useState(true);
@@ -556,19 +130,14 @@ export default function AdaptiveTIN() {
 
   // Generate Point Cloud & 3D Structures
   const { points, physicalObjects } = useMemo(() => {
-    return generateSceneData(preset, density);
-  }, [preset, density]);
+    return generateSceneData(preset, density,{noiseSigma,penetration});
+  }, [preset, density,noiseSigma,penetration]);
 
   // Compute Adaptive TIN algorithm iterations history
   const history = useMemo(() => {
-    return computeAdaptiveTINHistory(points, gridSize, maxAngle, maxDist);
-  }, [points, gridSize, maxAngle, maxDist]);
-
-  useEffect(() => {
-    if (currentStep >= history.length) {
-      setCurrentStep(Math.max(0, history.length - 1));
-    }
-  }, [history.length, currentStep]);
+    return computeAdaptiveTINHistory(points, gridSize, maxAngle, maxDist,{removeLow,adaptive,maxEdge,noiseSigma});
+  }, [points, gridSize, maxAngle, maxDist,removeLow,adaptive,maxEdge,noiseSigma]);
+  useEffect(()=>{setCurrentStep(0);setIsPlaying(false);},[points,gridSize,maxAngle,maxDist,removeLow,adaptive,maxEdge]);
 
   useEffect(() => {
     let timer;
@@ -585,6 +154,7 @@ export default function AdaptiveTIN() {
   }, [isPlaying, history.length]);
 
   const currentSnapshot = history[currentStep] || history[0];
+  const terrainQuality=useMemo(()=>currentSnapshot?tinTerrainQuality(points,currentSnapshot,preset,maxEdge):null,[points,currentSnapshot,preset,maxEdge]);
   const pointsById = useMemo(() => {
     const map = new Map();
     points.forEach((p) => map.set(p.id, p));
@@ -910,6 +480,7 @@ export default function AdaptiveTIN() {
         fillColor = '#94a3b8'; // Default Grey
         radius = 2.0;
       }
+      if(currentSnapshot.excludedSet.has(p.id))fillColor='#ff737a';
 
       if (view3D && !isGround) {
         const groundProj = project3D(p.x, p.y, p.trueZ || 0);
@@ -1117,7 +688,7 @@ export default function AdaptiveTIN() {
       const isSeed = currentSnapshot.seedSet.has(p.id);
       const isHovered = p.id === hoveredPointId;
 
-      ctx.fillStyle = isSeed ? '#f59e0b' : isGround ? '#c48b49' : '#94a3b8';
+      ctx.fillStyle = currentSnapshot.excludedSet.has(p.id)?'#ff737a':isSeed ? '#f59e0b' : isGround ? '#c48b49' : '#94a3b8';
       ctx.beginPath();
       ctx.arc(px, py, isHovered ? 5 : 2.4, 0, Math.PI * 2);
       ctx.fill();
@@ -1242,7 +813,7 @@ export default function AdaptiveTIN() {
         </a>
         <div className="title-block">
           <h1>
-            Adaptive TIN Ground Classification <span className="native-badge">Axelsson Algorithm</span>
+            Adaptive TIN Ground Classification <span className="native-badge">Progressive TIN teaching model</span>
           </h1>
           <span className="sub">
             Iterative triangulated irregular network densification for LiDAR point cloud ground filtering
@@ -1421,7 +992,7 @@ export default function AdaptiveTIN() {
               >
                 🔄 Reset to Seed
               </button>
-              <button className="tin-btn secondary" onClick={() => { setIsPlaying(false); setCurrentStep(history.length - 1); }}>Inspect final classification</button>
+              <button id="tin-final" className="tin-btn secondary" onClick={() => { setIsPlaying(false); setCurrentStep(history.length - 1); }}>Inspect final classification</button>
             </div>
 
             {/* Iteration Progress Bar & Accuracy Metric */}
@@ -1455,6 +1026,7 @@ export default function AdaptiveTIN() {
               <span>
                 <i className="rng-swatch" style={{ background: '#34d399' }} /> Newly Added in Step
               </span>
+              <span><i className="rng-swatch" style={{background:'#ff737a'}}/>Screened low return</span>
             </div>
           </section>
 
@@ -1558,8 +1130,9 @@ export default function AdaptiveTIN() {
 
             <div className="control-grid" style={{ gridTemplateColumns: '1fr' }}>
               <label>
-                Grid Seed Size (Max Object Size): <b>{gridSize} m</b>
+                Grid Seed Cell Width: <b>{gridSize} m</b>
                 <input
+                  id="tin-grid"
                   type="range"
                   min="10"
                   max="40"
@@ -1575,6 +1148,7 @@ export default function AdaptiveTIN() {
               <label>
                 Max Angle Threshold (θ<sub>max</sub>): <b>{maxAngle}°</b>
                 <input
+                  id="tin-angle"
                   type="range"
                   min="2"
                   max="25"
@@ -1590,6 +1164,7 @@ export default function AdaptiveTIN() {
               <label>
                 Max Distance Threshold (d<sub>max</sub>): <b>{maxDist.toFixed(1)} m</b>
                 <input
+                  id="tin-distance"
                   type="range"
                   min="0.2"
                   max="3.0"
@@ -1603,8 +1178,9 @@ export default function AdaptiveTIN() {
               </label>
 
               <label>
-                Point Cloud Density: <b>{density} points</b>
+                Raster acquisition density: <b>{density} nominal footprints</b>
                 <input
+                  id="tin-density"
                   type="range"
                   min="150"
                   max="600"
@@ -1617,6 +1193,22 @@ export default function AdaptiveTIN() {
                 />
               </label>
             </div>
+
+            <div className="control-grid" style={{gridTemplateColumns:'1fr'}}>
+              <label>Elevation measurement σ <b>{noiseSigma.toFixed(2)} m</b><input id="tin-noise" type="range" min="0" max=".25" step=".01" value={noiseSigma} onChange={e=>setNoiseSigma(+e.target.value)}/></label>
+              <label>Canopy penetration probability <b>{Math.round(penetration*100)}%</b><input id="tin-penetration" type="range" min="0" max="1" step=".05" value={penetration} onChange={e=>setPenetration(+e.target.value)}/></label>
+              <label>Maximum supported facet edge <b>{maxEdge} m</b><input id="tin-edge" type="range" min="25" max="90" step="5" value={maxEdge} onChange={e=>setMaxEdge(+e.target.value)}/></label>
+              <label><input id="tin-remove-low" type="checkbox" checked={removeLow} onChange={e=>setRemoveLow(e.target.checked)}/>Screen isolated low outliers before seeding</label>
+              <label><input id="tin-adaptive" type="checkbox" checked={adaptive} onChange={e=>setAdaptive(e.target.checked)}/>Tighten distance bound as facets become smaller</label>
+            </div>
+            <div className="rng-note">Synthetic jittered scan footprints can produce foliage and penetrated ground returns. Last return is <b>not</b> a ground label. The geometry-only low screen fits up to ten neighbours within 22 m; a 2.5 m / local-residual bound can also reject a real sharp depression. No truth label controls filtering. No forced corner anchors are added. Adaptive d = min(dmax, max(3σ, 0.15 + 0.02 × shortest facet edge)). Long facets remain unsupported.</div>
+            <div className="readouts" style={{gridTemplateColumns:'1fr 1fr'}}>
+              <div><span>Low returns screened</span><b id="tin-screened">{currentSnapshot?.excludedSet.size??0}</b></div>
+              <div><span>DTM test-grid coverage</span><b id="tin-coverage">{((terrainQuality?.coverage??0)*100).toFixed(1)}%</b></div>
+              <div><span>Independent-grid height RMSE</span><b id="tin-dtm-rmse">{terrainQuality?.rmse===null?'no support':terrainQuality?.rmse.toFixed(3)+' m'}</b></div>
+              <div><span>Independent-grid height bias</span><b>{terrainQuality?.bias===null?'no support':terrainQuality?.bias.toFixed(3)+' m'}</b></div>
+            </div>
+            <div className="rng-note">DTM validation interpolates supported facets at a separate 10 m grid and compares to the analytic terrain, including gaps beneath objects. It never feeds back into classification. Coverage and height error must be read together; no support means no terrain estimate. Sparse sampling and contaminated seeds can still fail on buildings, slopes and negative noise.</div>
 
             {/* Readout Statistics */}
             <div className="readouts" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginTop: 14 }}>
@@ -1656,7 +1248,7 @@ export default function AdaptiveTIN() {
               <span className="stepno">4</span> Candidate Point Inspector
             </h2>
             <label className="tin-point-selector">Inspect a point (keyboard or touch)
-              <select value={hoveredPointId ?? ''} onChange={event => setHoveredPointId(event.target.value === '' ? null : Number(event.target.value))}>
+              <select id="tin-point" value={hoveredPointId ?? ''} onChange={event => setHoveredPointId(event.target.value === '' ? null : Number(event.target.value))}>
                 <option value="">Choose a point…</option>
                 {points.map(point => <option key={point.id} value={point.id}>#{point.id} · X {point.x.toFixed(1)}, Y {point.y.toFixed(1)}, Z {point.z.toFixed(1)} m</option>)}
               </select>
@@ -1678,11 +1270,12 @@ export default function AdaptiveTIN() {
                 <div>
                   Coordinates: X={hoveredPoint.x}m, Y={hoveredPoint.y}m, Z={hoveredPoint.z}m
                 </div>
+                <div>Pulse {hoveredPoint.pulseId} · return {hoveredPoint.returnNumber}/{hoveredPoint.numberOfReturns}{currentSnapshot.excludedSet.has(hoveredPoint.id)?' · screened low point':''}</div>
 
                 {hoveredEvaluation ? (
                   <div className="tin-check-list">
                     <div className={`tin-check-item ${hoveredEvaluation.passesDist ? 'pass' : 'fail'}`}>
-                      Perpendicular d: {hoveredEvaluation.d}m (Max: {maxDist}m) {hoveredEvaluation.passesDist ? '✓' : '✗'}
+                      Perpendicular d: {hoveredEvaluation.d}m (Local bound: {hoveredEvaluation.distanceLimit?.toFixed(2)??maxDist}m) {hoveredEvaluation.passesDist ? '✓' : '✗'}
                     </div>
                     <div className={`tin-check-item ${hoveredEvaluation.passesAngle ? 'pass' : 'fail'}`}>
                       Angle θ: {hoveredEvaluation.angle}° (Max: {maxAngle}°) {hoveredEvaluation.passesAngle ? '✓' : '✗'}
@@ -1690,7 +1283,7 @@ export default function AdaptiveTIN() {
                   </div>
                 ) : currentSnapshot.seedSet.has(hoveredPoint.id) ? (
                   <div className="rng-note" style={{ marginTop: 6, padding: '4px 8px' }}>
-                    <b>Initial Seed Point:</b> A local cell minimum or a boundary anchor; selection is a ground hypothesis, not a guarantee.
+                    <b>Initial Seed Point:</b> An eligible local cell minimum; selection is a ground hypothesis, not a guarantee. No truth or artificial boundary anchor is supplied.
                   </div>
                 ) : (
                   <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
