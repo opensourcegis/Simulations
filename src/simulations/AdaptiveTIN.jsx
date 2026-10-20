@@ -6,6 +6,8 @@ import './native.css';
 import './tin.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
 import TinFieldView from './TinFieldView.jsx';
+import TinTeachingPanel from './TinTeachingPanel.jsx';
+import {tinTeachingTimeline} from './tin-teaching.js';
 import { tinProfileSegment } from '../../games/shared/lidar-physics.js';
 import { generateSceneData, computeAdaptiveTINHistory, tinTerrainQuality } from './tin-model.js';
 
@@ -76,7 +78,7 @@ export default function AdaptiveTIN() {
   const [density, setDensity] = useState(320);
   const [noiseSigma,setNoiseSigma]=useState(.06),[penetration,setPenetration]=useState(.3),[removeLow,setRemoveLow]=useState(true),[adaptive,setAdaptive]=useState(true),[maxEdge,setMaxEdge]=useState(55);
 
-  const [currentStep, setCurrentStep] = useState(0);
+  const [frameIndex, setFrameIndex] = useState(0);
   const [view3D, setView3D] = useState(true);
   const [yawAngle, setYawAngle] = useState(45); // horizontal orbit degrees
   const [pitchAngle, setPitchAngle] = useState(35); // vertical tilt degrees
@@ -138,23 +140,27 @@ export default function AdaptiveTIN() {
   const history = useMemo(() => {
     return computeAdaptiveTINHistory(points, gridSize, maxAngle, maxDist,{removeLow,adaptive,maxEdge,noiseSigma});
   }, [points, gridSize, maxAngle, maxDist,removeLow,adaptive,maxEdge,noiseSigma]);
-  useEffect(()=>{setCurrentStep(0);setIsPlaying(false);},[points,gridSize,maxAngle,maxDist,removeLow,adaptive,maxEdge]);
+  const teachingFrames=useMemo(()=>tinTeachingTimeline(points,history),[points,history]);
+  const activeFrame=teachingFrames[Math.min(frameIndex,teachingFrames.length-1)];
+  const currentStep=activeFrame?.batch??0;
+  useEffect(()=>{setFrameIndex(0);setIsPlaying(false);},[points,gridSize,maxAngle,maxDist,removeLow,adaptive,maxEdge]);
 
   useEffect(() => {
     let timer;
     if (isPlaying) {
       timer = setInterval(() => {
-        setCurrentStep((prev) => {
-          if (prev < history.length - 1) return prev + 1;
+        setFrameIndex((prev) => {
+          if (prev < teachingFrames.length - 1) return prev + 1;
           setIsPlaying(false);
           return prev;
         });
       }, 1200);
     }
     return () => clearInterval(timer);
-  }, [isPlaying, history.length]);
+  }, [isPlaying, teachingFrames.length]);
 
-  const currentSnapshot = history[currentStep] || history[0];
+  const currentSnapshot = activeFrame?.snapshot || history[0];
+  useEffect(()=>{setHoveredPointId(activeFrame?.event?.id??null);},[activeFrame]);
   const terrainQuality=useMemo(()=>currentSnapshot?tinTerrainQuality(points,currentSnapshot,preset,maxEdge):null,[points,currentSnapshot,preset,maxEdge]);
   const pointsById = useMemo(() => {
     const map = new Map();
@@ -826,8 +832,8 @@ export default function AdaptiveTIN() {
       </header>
 
       <LidarLearningPanel topic="tin"
-        workedExample={`Step ${currentStep}: ${groundCount} points in the ground hypothesis; ${correctGroundCount} are true ground in this synthetic scene. Ground precision = ${groundPrecision.toFixed(1)}%; recall = ${groundRecall.toFixed(1)}%. Acceptance requires perpendicular distance ≤ ${maxDist} m AND facet-relative angle ≤ ${maxAngle}°. Truth labels evaluate the result; they do not decide acceptance.`}
-        onExperiment={(id) => { setCurrentStep(0); setIsPlaying(false); setPreset(id === 'steep' ? 'steep' : 'hills'); setGridSize(25); setMaxAngle(id === 'strict' ? 4 : id === 'relaxed' ? 20 : 12); setMaxDist(id === 'strict' ? 0.3 : id === 'relaxed' ? 2.5 : 1.2); }} />
+        workedExample={`Step ${currentStep}: ${groundCount} points in the ground hypothesis; ${correctGroundCount} are true ground in this synthetic scene. Ground precision = ${groundPrecision.toFixed(1)}%; recall = ${groundRecall.toFixed(1)}%. Acceptance uses a local distance bound capped at ${maxDist} m AND facet-relative angle ≤ ${maxAngle}°. Truth labels evaluate the result; they do not decide acceptance.`}
+        onExperiment={(id) => { setFrameIndex(0); setIsPlaying(false); setPreset(id === 'steep' ? 'steep' : 'hills'); setGridSize(25); setMaxAngle(id === 'strict' ? 4 : id === 'relaxed' ? 20 : 12); setMaxDist(id === 'strict' ? 0.3 : id === 'relaxed' ? 2.5 : 1.2); }} />
 
       {/* Preset Terrain Selector */}
       <div style={{ maxWidth: 1520, margin: '14px auto 0' }}>
@@ -836,7 +842,7 @@ export default function AdaptiveTIN() {
             className={`scenario-card ${preset === 'hills' ? 'active' : ''}`}
             onClick={() => {
               setPreset('hills');
-              setCurrentStep(0);
+              setFrameIndex(0);
             }}
           >
             <strong>Rolling terrain &amp; trees</strong>
@@ -846,7 +852,7 @@ export default function AdaptiveTIN() {
             className={`scenario-card ${preset === 'steep' ? 'active' : ''}`}
             onClick={() => {
               setPreset('steep');
-              setCurrentStep(0);
+              setFrameIndex(0);
             }}
           >
             <strong>🧗 Steep Ridge & Slope</strong>
@@ -856,7 +862,7 @@ export default function AdaptiveTIN() {
             className={`scenario-card ${preset === 'urban' ? 'active' : ''}`}
             onClick={() => {
               setPreset('urban');
-              setCurrentStep(0);
+              setFrameIndex(0);
             }}
           >
             <strong>Urban block</strong>
@@ -866,7 +872,7 @@ export default function AdaptiveTIN() {
             className={`scenario-card ${preset === 'noise' ? 'active' : ''}`}
             onClick={() => {
               setPreset('noise');
-              setCurrentStep(0);
+              setFrameIndex(0);
             }}
           >
             <strong>📡 Low Noise Outliers</strong>
@@ -880,7 +886,7 @@ export default function AdaptiveTIN() {
         <div className="sim-col">
           <section className="sim-panel">
             <h2>
-              <span className="stepno">1</span> 3D Point Cloud &amp; Terrain Surface
+              <span className="stepno">1</span> Build the TIN, one decision at a time
               <small style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 <button
                   className="tin-btn secondary"
@@ -899,7 +905,8 @@ export default function AdaptiveTIN() {
               </small>
             </h2>
 
-            {view3D ? <TinFieldView points={points} physicalObjects={physicalObjects} preset={preset} snapshot={currentSnapshot} selectedId={hoveredPointId} onSelect={setHoveredPointId} showObjects={show3DObjects} maxEdge={maxEdge}/> : <canvas id="tin-plan" aria-label="Plan analysis of measured returns and the current ground triangulation"
+            <TinTeachingPanel frame={activeFrame} frames={teachingFrames} index={frameIndex} onChange={i=>{setIsPlaying(false);setFrameIndex(i);}} points={points} maxAngle={maxAngle}/>
+            {view3D ? <TinFieldView points={points} physicalObjects={physicalObjects} preset={preset} snapshot={currentSnapshot} selectedId={hoveredPointId} onSelect={setHoveredPointId} showObjects={show3DObjects} maxEdge={maxEdge} frame={activeFrame}/> : <canvas id="tin-plan" aria-label="Plan analysis of measured returns and the current ground triangulation"
               ref={mainCanvasRef}
               className="tin-canvas"
               width={700}
@@ -918,57 +925,57 @@ export default function AdaptiveTIN() {
             <div className="tin-toolbar">
               <button
                 className="tin-btn"
-                disabled={currentStep === 0}
-                onClick={() => setCurrentStep((prev) => Math.max(0, prev - 1))}
+                id="tin-lesson-prev" disabled={frameIndex === 0}
+                onClick={() => {setIsPlaying(false);setFrameIndex(prev=>Math.max(0,prev-1));}}
               >
-                ⏮ Prev Step
+                Previous stage
               </button>
               <button
                 className="tin-btn"
-                disabled={currentStep >= history.length - 1}
-                onClick={() => setCurrentStep((prev) => Math.min(history.length - 1, prev + 1))}
+                id="tin-lesson-next" disabled={frameIndex >= teachingFrames.length - 1}
+                onClick={() => {setIsPlaying(false);setFrameIndex(prev=>Math.min(teachingFrames.length-1,prev+1));}}
               >
-                Next Step ⏭
+                Next stage
               </button>
               <button
                 className={`tin-btn ${isPlaying ? 'accent' : 'secondary'}`}
                 onClick={() => setIsPlaying(!isPlaying)}
               >
-                {isPlaying ? '⏸ Pause' : '▶ Auto Play Iterations'}
+                {isPlaying ? 'Pause lesson' : 'Play construction stages'}
               </button>
               <button
                 className="tin-btn secondary"
                 onClick={() => {
-                  setCurrentStep(0);
+                  setFrameIndex(0);
                   setIsPlaying(false);
                 }}
               >
-                🔄 Reset to Seed
+                Restart from raw cloud
               </button>
-              <button id="tin-final" className="tin-btn secondary" onClick={() => { setIsPlaying(false); setCurrentStep(history.length - 1); }}>Inspect final classification</button>
+              <button id="tin-final" className="tin-btn secondary" onClick={() => { setIsPlaying(false); setFrameIndex(teachingFrames.length - 1); }}>Inspect final classification</button>
             </div>
 
             {/* Iteration Progress Bar & Accuracy Metric */}
             <div className="tin-step-progress">
               <span>
-                Iteration {currentStep} / {history.length - 1}
+                Iteration {currentStep} / {history.length - 1} · stage {Math.min(frameIndex+1,teachingFrames.length)} / {teachingFrames.length}
               </span>
               <div className="tin-step-bar">
                 <div
                   className="tin-step-fill"
-                  style={{ width: `${(currentStep / Math.max(1, history.length - 1)) * 100}%` }}
+                  style={{ width: `${(frameIndex / Math.max(1, teachingFrames.length - 1)) * 100}%` }}
                 />
               </div>
               <span style={{ fontWeight: 600, color: currentSnapshot && currentSnapshot.accuracy >= 80 ? '#10b981' : '#f59e0b' }}>
-                🎯 Accuracy: {currentSnapshot ? currentSnapshot.accuracy : 0}%
+                Accuracy: {['cloud','cells'].includes(activeFrame?.phase)?'not classified':(currentSnapshot?.accuracy??0).toFixed(1)+'%'}
               </span>
-              <span>{currentStep === history.length - 1 ? currentSnapshot?.stopReason === 'converged' ? 'No further supported candidates' : 'Display iteration limit reached' : 'In Progress'}</span>
+              <span>{activeFrame?.phase === 'complete' ? currentSnapshot?.stopReason === 'converged' ? 'No further supported candidates' : 'Display iteration limit reached' : 'In Progress'}</span>
             </div>
 
             {/* Legend */}
             <div className="rng-legend" style={{ marginTop: 10 }}>
               <span>
-                <i className="rng-swatch" style={{ background: '#94a3b8' }} /> Default Point / Non-Ground (Grey)
+                <i className="rng-swatch" style={{ background: '#7fabbc' }} /> Unclassified / not yet accepted—not proven non-ground
               </span>
               <span>
                 <i className="rng-swatch" style={{ background: '#f59e0b' }} /> Initial Seed (Gold)
@@ -990,7 +997,7 @@ export default function AdaptiveTIN() {
             </h2>
 
             <canvas ref={profileCanvasRef} className="tin-canvas" width={700} height={200} />
-            <div className="rng-note">Brown segments intersect the <b>actual TIN facets</b> at Y = {sliceY} m. Dashed lines show ±{maxDist} m perpendicular facet distance, projected into this profile. Dots come from a ±{sliceWidth} m-wide strip and are projected onto XZ; each insertion test uses the point&rsquo;s own XY. Horizontal and vertical plot scales differ.</div>
+            <div className="rng-note">Brown segments intersect the <b>actual TIN facets</b> at Y = {sliceY} m. Dashed lines show the <b>global cap</b> ±{maxDist} m perpendicular distance, projected into this profile; the tested facet&rsquo;s local bound shown above may be smaller. Dots come from a ±{sliceWidth} m-wide strip projected onto XZ; each insertion uses the point&rsquo;s own XY. Horizontal and vertical plot scales differ.</div>
 
             {/* Interactive Slice Controls & Zoom Sliders */}
             <div className="tin-profile-controls">
@@ -1093,7 +1100,7 @@ export default function AdaptiveTIN() {
                   value={gridSize}
                   onChange={(e) => {
                     setGridSize(Number(e.target.value));
-                    setCurrentStep(0);
+                    setFrameIndex(0);
                   }}
                 />
               </label>
@@ -1109,7 +1116,7 @@ export default function AdaptiveTIN() {
                   value={maxAngle}
                   onChange={(e) => {
                     setMaxAngle(Number(e.target.value));
-                    setCurrentStep(0);
+                    setFrameIndex(0);
                   }}
                 />
               </label>
@@ -1125,7 +1132,7 @@ export default function AdaptiveTIN() {
                   value={maxDist}
                   onChange={(e) => {
                     setMaxDist(Number(e.target.value));
-                    setCurrentStep(0);
+                    setFrameIndex(0);
                   }}
                 />
               </label>
@@ -1141,7 +1148,7 @@ export default function AdaptiveTIN() {
                   value={density}
                   onChange={(e) => {
                     setDensity(Number(e.target.value));
-                    setCurrentStep(0);
+                    setFrameIndex(0);
                   }}
                 />
               </label>
@@ -1180,7 +1187,7 @@ export default function AdaptiveTIN() {
               <div>
                 <span>Accuracy Rate</span>
                 <b style={{ color: currentSnapshot && currentSnapshot.accuracy >= 80 ? '#10b981' : '#f59e0b' }}>
-                  {currentSnapshot ? currentSnapshot.accuracy : 0}%
+                  {['cloud','cells'].includes(activeFrame?.phase)?'not classified':(currentSnapshot?.accuracy??0).toFixed(1)+'%'}
                 </b>
               </div>
               <div>
@@ -1226,12 +1233,12 @@ export default function AdaptiveTIN() {
                 <div>Pulse {hoveredPoint.pulseId} · return {hoveredPoint.returnNumber}/{hoveredPoint.numberOfReturns}{currentSnapshot.excludedSet.has(hoveredPoint.id)?' · screened low point':''}</div>
 
                 {hoveredEvaluation ? (
-                  <div className="tin-check-list">
+                  <div className="tin-check-list"><p>Stored test against facet {hoveredEvaluation.facetIds?.join(" / ")}. {activeFrame?.phase==='retriangulate'?'This is the PRE-insertion test; the mesh has now changed.':'Qualification is not an insertion record.'}</p>
                     <div className={`tin-check-item ${hoveredEvaluation.passesDist ? 'pass' : 'fail'}`}>
-                      Perpendicular d: {hoveredEvaluation.d}m (Local bound: {hoveredEvaluation.distanceLimit?.toFixed(2)??maxDist}m) {hoveredEvaluation.passesDist ? '✓' : '✗'}
+                      Perpendicular d: {hoveredEvaluation.d.toFixed(4)}m (Local bound: {hoveredEvaluation.distanceLimit?.toFixed(2)??maxDist}m) {hoveredEvaluation.passesDist ? '✓' : '✗'}
                     </div>
                     <div className={`tin-check-item ${hoveredEvaluation.passesAngle ? 'pass' : 'fail'}`}>
-                      Angle θ: {hoveredEvaluation.angle}° (Max: {maxAngle}°) {hoveredEvaluation.passesAngle ? '✓' : '✗'}
+                      Angle θ: {hoveredEvaluation.angle.toFixed(3)}° (Max: {maxAngle}°) {hoveredEvaluation.passesAngle ? '✓' : '✗'}
                     </div>
                   </div>
                 ) : currentSnapshot.seedSet.has(hoveredPoint.id) ? (
@@ -1246,7 +1253,7 @@ export default function AdaptiveTIN() {
               </div>
             ) : (
               <div className="rng-note">
-                💡 <b>Hover over any point in the canvas</b> to inspect its calculated distance <i>d</i> to the TIN facet, maximum vertex angle <i>θ</i>, and threshold pass/fail evaluation!
+                💡 <b>Click a visible point or choose its ID</b> to inspect the stored test distance <i>d</i> to the TIN facet, maximum vertex angle <i>θ</i>, and threshold pass/fail evaluation!
               </div>
             )}
           </section>

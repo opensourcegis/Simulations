@@ -1,11 +1,11 @@
 # Survey field views
 
-The TIN, boresight/lever-arm and GSD labs use `SurveyViewport` for their main perspective views. Numerical models are unchanged. Their analytical plots and pixel crop remain separate from the physical scene.
+The TIN, boresight/lever-arm and GSD labs use `SurveyViewport` for their main perspective views. Analytical views use the same numerical observations. The teaching-stage and event-trace contract is documented in `SURVEY_TEACHING.md`.
 
 ## Physical context versus observations
 
 - TIN context uses the actual `tinTerrainHeight` function and the generated building/tree footprints. It is a synthetic reference site, **not** a surface reconstructed from the returns. The returns view contains only the generated measured points. Recovered terrain uses accepted, supported TIN facets; it does not fill unsupported holes with the reference surface. Heights are not exaggerated.
-- Direct georeferencing uses the recorded range for both measured and reconstructed endpoints, without re-intersecting an erroneous endpoint with the ground. Equipment mounting points and body/boresight rotations follow the forward/left/up scene convention. The residual plan is separately labelled ×10; the perspective view is not exaggerated.
+- Direct georeferencing uses the recorded range for both measured and reconstructed endpoints, without re-intersecting an erroneous endpoint with the ground. Mount inputs use forward/left/up; the labelled body/scanner triads use forward/right/down and NED Euler angles. All teaching views share one observation. The ground inset auto-fits an explicitly metred local map; the perspective view is not exaggerated.
 - GSD uses the same sloping plane, optical centre, tilt, full-image corner rays and selected-pixel ray as the numerical model. The target has its declared physical size and subpixel phase on the terrain tangent. The 9 × 7 grid is an optional grouping guide, not individual photosites. The native target crop remains numerically sampled; the procedural field texture is **not** an optical-resolution test image.
 
 ## Rendering

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:lidar": "node --test scripts/lidar-physics.test.js scripts/survey-realism.test.js",
+    "test:lidar": "node --test scripts/lidar-physics.test.js scripts/survey-realism.test.js scripts/survey-teaching.test.js",
     "test:survey:browser": "node scripts/survey-realism-browser.mjs",
     "test:lidar:browser": "node scripts/ranging-browser.mjs",
     "test:photo": "node --test scripts/photogrammetry.test.js scripts/aerial.test.js",

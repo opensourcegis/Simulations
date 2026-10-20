@@ -73,7 +73,7 @@ try {
     await goto(route, selector);
     assert.equal(
       await evaluate(`document.querySelectorAll('.field-webgl canvas').length`),
-      route === "boresight" ? 2 : 1,
+      1,
       route + " uses perspective field renderers",
     );
     assert.equal(
@@ -110,6 +110,59 @@ try {
   }
   await resize(1440);
   await goto("adaptive-tin", "#tin-final");
+  const phase = () =>
+    evaluate(`document.querySelector('.tin-teaching-panel').dataset.phase`);
+  const triangles = () =>
+    evaluate(
+      `+document.querySelector('.tin-teaching-panel').dataset.triangleCount`,
+    );
+  assert.equal(await phase(), "cloud");
+  assert.equal(await triangles(), 0);
+  await evaluate(`document.getElementById('tin-lesson-next').click()`);
+  assert.equal(await phase(), "cells");
+  await evaluate(`document.getElementById('tin-lesson-next').click()`);
+  assert.equal(await phase(), "seeds");
+  assert.equal(await triangles(), 0);
+  assert(
+    (await evaluate(
+      `+document.querySelector('.tin-teaching-panel').dataset.groundCount`,
+    )) > 0,
+  );
+  await evaluate(`document.getElementById('tin-lesson-next').click()`);
+  assert.equal(await phase(), "initial");
+  assert.equal(await triangles(), 1);
+  await evaluate(`document.getElementById('tin-jump-test').click()`);
+  assert.equal(await phase(), "test");
+  const beforeDefer = await triangles();
+  await evaluate(`document.getElementById('tin-lesson-next').click()`);
+  assert.equal(await phase(), "decision");
+  assert.equal(await triangles(), beforeDefer);
+  assert(
+    (
+      await evaluate(
+        `document.getElementById('tin-event-decision').textContent`,
+      )
+    ).includes("Defer"),
+  );
+  await evaluate(`document.getElementById('tin-next-candidate').click()`);
+  assert.equal(await phase(), "test");
+  const preInsert = await evaluate(
+    `+document.querySelector('.tin-teaching-panel').dataset.groundCount`,
+  );
+  await evaluate(`document.getElementById('tin-lesson-next').click()`);
+  assert.equal(await phase(), "decision");
+  await evaluate(`document.getElementById('tin-lesson-next').click()`);
+  assert.equal(await phase(), "retriangulate");
+  assert.equal(
+    await evaluate(
+      `+document.querySelector('.tin-teaching-panel').dataset.groundCount`,
+    ),
+    preInsert + 1,
+  );
+  await evaluate(
+    `document.querySelector('.field-viewport').scrollIntoView({block:'center'})`,
+  );
+  await screenshot("/tmp/tin-teaching-insertion.png");
   for (const name of [
     "Measured returns",
     "Recovered terrain",
@@ -178,6 +231,59 @@ try {
   });
 
   await goto("boresight", "#geo-horizontal");
+  assert.equal(
+    await evaluate(`document.querySelectorAll('.field-webgl canvas').length`),
+    1,
+    "one shared observation view",
+  );
+  const total = () =>
+    evaluate(`parseFloat(document.getElementById('geo-total').textContent)`);
+  assert((await total()) > 100, "lever lesson starts with omitted translation");
+  const trueHit = await evaluate(
+    `document.getElementById('geo-actual').textContent`,
+  );
+  await evaluate(`document.getElementById('geo-use-lever').click()`);
+  assert((await total()) < 0.01);
+  assert.equal(
+    await evaluate(`document.getElementById('geo-actual').textContent`),
+    trueHit,
+    "correction does not move actual hit",
+  );
+  await evaluate(`document.getElementById('geo-stage-boresight').click()`);
+  assert((await total()) > 100);
+  const mount = await evaluate(`document.getElementById('geo-mount-0').value`),
+    boreHit = await evaluate(
+      `document.getElementById('geo-actual').textContent`,
+    );
+  await evaluate(`document.getElementById('geo-use-bore').click()`);
+  assert((await total()) < 0.01);
+  assert.equal(
+    await evaluate(`document.getElementById('geo-mount-0').value`),
+    mount,
+  );
+  assert.equal(
+    await evaluate(`document.getElementById('geo-actual').textContent`),
+    boreHit,
+  );
+  await evaluate(`document.getElementById('geo-stage-attitude').click()`);
+  assert((await total()) > 100);
+  await evaluate(`document.getElementById('geo-use-attitude').click()`);
+  assert((await total()) < 0.01);
+  await evaluate(
+    `surveyTest.set('geo-latency',10);surveyTest.set('geo-range',5);document.getElementById('geo-preset-zero').click()`,
+  );
+  assert(
+    (await total()) < 0.01,
+    "zero-boresight experiment resets unrelated residuals",
+  );
+  await evaluate(`document.getElementById('geo-preset-yaw-nadir').click()`);
+  assert((await total()) < 0.01);
+  await evaluate(`document.getElementById('geo-preset-yaw-scan').click()`);
+  assert((await total()) > 100);
+  await evaluate(
+    `document.querySelector('.teaching-geometry').scrollIntoView({block:'start'})`,
+  );
+  await screenshot("/tmp/boresight-teaching-yaw.png");
   await evaluate(`document.getElementById('geo-perfect').click()`);
   await pause(100);
   assert(

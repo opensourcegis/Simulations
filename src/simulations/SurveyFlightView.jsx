@@ -9,7 +9,12 @@ import {
   trace,
   box,
 } from "./survey-field-assets.js";
-import { rotateBody, directGeoreference } from "./georeferencing-model.js";
+import {
+  rotateBody,
+  scannerDirection,
+  directGeoreference,
+} from "./georeferencing-model.js";
+import { caption } from "./PhotoLabScene.jsx";
 
 function orient(o, attitude) {
   o.setRotationFromMatrix(
@@ -31,24 +36,27 @@ export default function SurveyFlightView({
   shot: surveyShot,
   scanAngle = 0,
   inspection = false,
+  teaching = false,
+  lessonStage = "combined",
   onSelect,
   showArms = true,
   showLaser = true,
   showGhost = false,
 }) {
-  const [guides, setGuides] = useState(inspection),
+  const [guides, setGuides] = useState(inspection || teaching),
     h = height;
-  const shot = inspection
-    ? directGeoreference({
-        height: h,
-        antennaArm: arms.gps,
-        scannerArm: arms.scanner,
-        attitude,
-        boresight,
-        scanAngle,
-        useBore: false,
-      })
-    : surveyShot;
+  const shot =
+    inspection && surveyShot === undefined
+      ? directGeoreference({
+          height: h,
+          antennaArm: arms.gps,
+          scannerArm: arms.scanner,
+          attitude,
+          boresight,
+          scanAngle,
+          useBore: false,
+        })
+      : surveyShot;
   const world = useCallback(() => {
     const g = new THREE.Group(),
       z = (x) => Math.tan((slope * Math.PI) / 180) * x;
@@ -81,6 +89,120 @@ export default function SurveyFlightView({
       rotateBody(v, attitude).map((x, i) => x + (i === 2 ? h : 0));
     if (guides && showArms)
       trace(g, [p(arms.gps), p(arms.scanner)], 0xe1bc78, 0.8);
+    if (teaching) {
+      const antenna = p(arms.gps),
+        origin = p(arms.scanner);
+      caption(
+        g,
+        "GNSS antenna",
+        antenna.map((v, i) => v + (i === 2 ? 0.4 : 0)),
+        "#f1db9e",
+        0.36,
+      );
+      caption(g, "IMU / body origin", [0, 0, h + 0.85], "#f1ddd0", 0.34);
+      caption(
+        g,
+        "LiDAR origin",
+        origin.map((v, i) => v + (i === 2 ? -0.32 : 0)),
+        "#c1e6e3",
+        0.34,
+      );
+      const lever = arms.scanner.map((v, i) => v - arms.gps[i]);
+      const a = new THREE.ArrowHelper(
+        new THREE.Vector3(...origin)
+          .sub(new THREE.Vector3(...antenna))
+          .normalize(),
+        new THREE.Vector3(...antenna),
+        Math.hypot(...lever),
+        0xe1bc78,
+        0.3,
+        0.075,
+      );
+      g.add(a);
+      caption(
+        g,
+        "ℓ = " + Math.hypot(...lever).toFixed(3) + " m",
+        antenna.map((v, i) => (v + origin[i]) / 2 + (i === 1 ? 0.23 : 0)),
+        "#f1db9e",
+        0.3,
+      );
+      for (let i = 0; i < 3; i++) {
+        const v = [0, 0, 0];
+        v[i] = i === 0 ? 1 : -1;
+        const body = rotateBody(v, attitude),
+          sensor = rotateBody(rotateBody(v, boresight), attitude);
+        const bt = body.map((v, j) => v * 1.15 + (j === 2 ? h : 0)),
+          st = sensor.map((v, j) => v * 0.8 + origin[j]);
+        trace(g, [[0, 0, h], bt], [0xcf8f7b, 0x99b784, 0x9eb3d0][i], 0.95);
+        if (lessonStage !== "lever" && lessonStage !== "attitude")
+          trace(g, [origin, st], 0x47b9be, 0.95);
+        caption(g, ["Xb", "Yb", "Zb"][i], bt, "#f5dec9", 0.28);
+        if (lessonStage !== "lever" && lessonStage !== "attitude")
+          caption(g, ["Xs", "Ys", "Zs"][i], st, "#a9eeee", 0.28);
+        if (lessonStage === "attitude") {
+          const world = [0, 0, h];
+          world[i] += (i === 0 ? 1 : -1) * 1.65;
+          trace(g, [[0, 0, h], world], 0xb8bdba, 0.7);
+          caption(g, ["N", "E", "Down"][i], world, "#edf0e8", 0.28);
+        }
+      }
+      const nominal = new THREE.Vector3(
+          ...scannerDirection(attitude, [0, 0, 0], scanAngle),
+        ),
+        actual = new THREE.Vector3(
+          ...scannerDirection(attitude, boresight, scanAngle),
+        ),
+        angle = nominal.angleTo(actual),
+        axis = new THREE.Vector3().crossVectors(nominal, actual).normalize();
+      trace(
+        g,
+        [
+          origin,
+          nominal
+            .clone()
+            .multiplyScalar(1.6)
+            .add(new THREE.Vector3(...origin))
+            .toArray(),
+        ],
+        0xaab8be,
+        0.8,
+      );
+      trace(
+        g,
+        [
+          origin,
+          actual
+            .clone()
+            .multiplyScalar(1.6)
+            .add(new THREE.Vector3(...origin))
+            .toArray(),
+        ],
+        0xf1c083,
+        0.95,
+      );
+      if (angle > 1e-7) {
+        const arc = Array.from({ length: 33 }, (_, i) =>
+          nominal
+            .clone()
+            .applyAxisAngle(axis, (angle * i) / 32)
+            .multiplyScalar(1.05)
+            .add(new THREE.Vector3(...origin))
+            .toArray(),
+        );
+        trace(g, arc, 0xffdb8e, 1);
+      }
+      caption(
+        g,
+        "βbeam = " + ((angle * 180) / Math.PI).toFixed(2) + "°",
+        actual
+          .clone()
+          .multiplyScalar(1.25)
+          .add(new THREE.Vector3(...origin))
+          .toArray(),
+        "#ffe0a4",
+        0.32,
+      );
+    }
     if (inspection && showGhost) {
       for (const [v, color] of [
         [[1, 0, 0], 0xd59882],
@@ -121,6 +243,8 @@ export default function SurveyFlightView({
     showLaser,
     showGhost,
     slope,
+    teaching,
+    lessonStage,
   ]);
   const views = useMemo(
     () =>
@@ -141,7 +265,7 @@ export default function SurveyFlightView({
         : [
             {
               name: "Payload",
-              position: [4.6, -5.3, h + 2],
+              position: teaching ? [4.3, -5.3, h + 1.9] : [4.6, -5.3, h + 2],
               target: [0, 0, h - 0.1],
             },
             {
@@ -155,7 +279,7 @@ export default function SurveyFlightView({
               target: shot?.actual || [0, 0, 0],
             },
           ],
-    [h, inspection, shot],
+    [h, inspection, shot, teaching],
   );
   return (
     <>
@@ -163,7 +287,9 @@ export default function SurveyFlightView({
         <span className="field-caption">
           {inspection
             ? "Representative survey UAS · GNSS radome / IMU / laser payload"
-            : "Direct georeferencing · physical aircraft and ground dimensions"}
+            : teaching
+              ? "Labelled sensor frames · same observation as the ground map"
+              : "Direct georeferencing · physical aircraft and ground dimensions"}
         </span>
         <label>
           <input
@@ -171,10 +297,15 @@ export default function SurveyFlightView({
             checked={guides}
             onChange={(e) => setGuides(e.target.checked)}
           />
-          {inspection ? "Mount vector" : "Measured & reconstructed rays"}
+          {inspection
+            ? "Mount vector"
+            : teaching
+              ? "Full-range ray overlays"
+              : "Measured & reconstructed rays"}
         </label>
       </div>
       <SurveyViewport
+        fitAspect={teaching ? 1.3 : 0}
         world={world}
         overlay={overlay}
         views={views}

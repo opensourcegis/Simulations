@@ -38,6 +38,7 @@ export function directGeoreference({
   rangeBias = 0,
   useLever = true,
   useBore = true,
+  useAttitude = true,
 } = {}) {
   const imu = [position[0], position[1], height],
     antenna = add(imu, rotateBody(antennaArm, attitude)),
@@ -53,7 +54,9 @@ export function directGeoreference({
       direction.map((x) => x * range),
     ),
     dt = latencyMs / 1000;
-  const usedAttitude = attitude.map((x, i) => x + angularRate[i] * dt);
+  const usedAttitude = attitude.map((x, i) =>
+    useAttitude ? x + angularRate[i] * dt : 0,
+  );
   const velocity = rotateBody([speed, 0, 0], attitude),
     usedAntenna = add(
       antenna,
@@ -101,6 +104,7 @@ export function errorContributions(settings) {
     rangeBias: 0,
     useLever: true,
     useBore: true,
+    useAttitude: true,
   };
   return [
     [
@@ -119,6 +123,9 @@ export function errorContributions(settings) {
         useBore: settings.useBore,
       }),
     ],
+    ...(settings.useAttitude === false
+      ? [["Attitude", directGeoreference({ ...zero, useAttitude: false })]]
+      : []),
     [
       "Timestamp",
       directGeoreference({ ...zero, latencyMs: settings.latencyMs }),

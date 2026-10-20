@@ -17,6 +17,7 @@ export default function SurveyViewport({
   onSelect,
   onFrame,
   variant = "field",
+  fitAspect = 0,
 }) {
   const host = useRef(null),
     context = useRef(null),
@@ -24,6 +25,9 @@ export default function SurveyViewport({
     frame = useRef(onFrame),
     viewRef = useRef(views),
     previousTarget = useRef(null);
+  const fitRef = useRef(fitAspect),
+    fitFactor = useRef(1);
+  fitRef.current = fitAspect;
   const [error, setError] = useState(false),
     [active, setActive] = useState(0);
   select.current = onSelect;
@@ -35,6 +39,11 @@ export default function SurveyViewport({
     if (!c || !v) return;
     c.camera.position.set(...v.position);
     c.controls.target.set(...v.target);
+    fitFactor.current = Math.max(1, fitRef.current / c.camera.aspect);
+    c.camera.position
+      .sub(c.controls.target)
+      .multiplyScalar(fitFactor.current)
+      .add(c.controls.target);
     previousTarget.current = v.target;
     c.controls.update();
     setActive(i);
@@ -123,8 +132,15 @@ export default function SurveyViewport({
     const resize = new ResizeObserver(() => {
       const w = el.clientWidth,
         h = el.clientHeight;
+      if (w <= 0 || h <= 0) return;
       renderer.setSize(w, h, false);
       camera.aspect = w / Math.max(1, h);
+      const factor = Math.max(1, fitRef.current / camera.aspect);
+      camera.position
+        .sub(controls.target)
+        .multiplyScalar(factor / fitFactor.current)
+        .add(controls.target);
+      fitFactor.current = factor;
       camera.updateProjectionMatrix();
     });
     resize.observe(el);

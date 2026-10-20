@@ -491,6 +491,7 @@ export function computeAdaptiveTINHistory(
   options = {},
 ) {
   if (points.length < 3) return [];
+  const pointsById = new Map(points.map((p) => [p.id, p]));
   const excludedSet =
     options.removeLow === false ? new Set() : isolatedLowPoints(points);
   const usable = points.filter((p) => !excludedSet.has(p.id));
@@ -503,6 +504,7 @@ export function computeAdaptiveTINHistory(
   const rowCount = Math.max(1, Math.floor((maxY - minY) / gridSize));
 
   const seedPointIds = new Set();
+  const seedCells = [];
   const cellWidth = (maxX - minX) / colCount;
   const cellHeight = (maxY - minY) / rowCount;
 
@@ -527,6 +529,15 @@ export function computeAdaptiveTINHistory(
       });
 
       if (minPt) seedPointIds.add(minPt.id);
+      seedCells.push({
+        row: r,
+        col: c,
+        x0: cx0,
+        x1: cx1,
+        y0: cy0,
+        y1: cy1,
+        seedId: minPt?.id ?? null,
+      });
     }
   }
 
@@ -577,6 +588,8 @@ export function computeAdaptiveTINHistory(
     gridSize,
     colCount,
     rowCount,
+    seedCells,
+    insertionEvents: [],
   });
 
   let iterations = 1;
@@ -627,12 +640,14 @@ export function computeAdaptiveTINHistory(
 
       candidateEvaluations.push({
         id: p.id,
-        d: Number(d.toFixed(2)),
-        angle: Number(maxAngle.toFixed(1)),
+        d,
+        angle: maxAngle,
         passesDist,
         passesAngle,
         accepted,
-        zPlane: Number(zPlane.toFixed(2)),
+        zPlane,
+        facetIds: [v0.id, v1.id, v2.id],
+        projection: evaluation.projection,
         distanceLimit: limits.distanceLimit,
       });
 
@@ -657,6 +672,28 @@ export function computeAdaptiveTINHistory(
     const batchToAdd = qualifiedCandidates.slice(0, batchSize);
 
     const inserted = [];
+    const insertionEvents = [];
+    // One failed prior-facet test is retained as an explicit deferral example.
+    const failed = candidateEvaluations.find((e) => !e.accepted);
+    if (failed)
+      insertionEvents.push({
+        id: failed.id,
+        test: failed,
+        inserted: false,
+        beforeGroundIds: [...currentGroundIds],
+        afterGroundIds: [...currentGroundIds],
+        beforeTriangles: triangles
+          .map((t) => t.map((i) => groundPts[i].id))
+          .filter(
+            (ids) =>
+              tinFacetLimits(
+                ids.map((id) => pointsById.get(id)),
+                maxDist,
+                options,
+              ).supported,
+          ),
+        afterTriangles: null,
+      });
     for (const candidate of batchToAdd) {
       const p = usable.find((p) => p.id === candidate.id),
         current = usable.filter((p) => currentGroundIds.has(p.id));
@@ -673,10 +710,51 @@ export function computeAdaptiveTINHistory(
           limits.distanceLimit,
           maxAngleDeg,
         );
-      if (limits.supported && evaluation?.accepted) {
+      if (!evaluation) continue;
+      const beforeTriangles = delaunay2D(current)
+        .map((t) => t.map((i) => current[i].id))
+        .filter(
+          (ids) =>
+            tinFacetLimits(
+              ids.map((id) => pointsById.get(id)),
+              maxDist,
+              options,
+            ).supported,
+        );
+      const beforeGroundIds = [...currentGroundIds];
+      const didInsert = limits.supported && evaluation.accepted;
+      if (didInsert) {
         currentGroundIds.add(p.id);
         inserted.push(p.id);
       }
+      const after = usable.filter((q) => currentGroundIds.has(q.id));
+      const afterTriangles = didInsert
+        ? delaunay2D(after)
+            .map((t) => t.map((i) => after[i].id))
+            .filter(
+              (ids) =>
+                tinFacetLimits(
+                  ids.map((id) => pointsById.get(id)),
+                  maxDist,
+                  options,
+                ).supported,
+            )
+        : beforeTriangles;
+      insertionEvents.push({
+        id: p.id,
+        test: {
+          id: p.id,
+          ...evaluation,
+          facetIds: facet.map((q) => q.id),
+          distanceLimit: limits.distanceLimit,
+          supported: limits.supported,
+        },
+        inserted: didInsert,
+        beforeGroundIds,
+        afterGroundIds: [...currentGroundIds],
+        beforeTriangles,
+        afterTriangles,
+      });
     }
     if (!inserted.length) {
       converged = true;
@@ -705,6 +783,8 @@ export function computeAdaptiveTINHistory(
         .map((t) => t.map((index) => updatedGroundPts[index].id)),
       candidateEvaluations,
       newlyAdded: inserted,
+      seedCells,
+      insertionEvents,
       accuracy: calcAcc(currentGroundIds),
       gridSize,
       colCount,

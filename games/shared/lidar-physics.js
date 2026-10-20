@@ -47,7 +47,8 @@ export function evaluateTinCandidate(point, vertices, maxDistance, maxAngleDeg) 
   const passesDist = d <= maxDistance;
   const passesAngle = angle <= maxAngleDeg;
   const zPlane = a.z - (n[0] * (point.x - a.x) + n[1] * (point.y - a.y)) / n[2];
-  return { d, signedDistance, angle, zPlane, passesDist, passesAngle, accepted: passesDist && passesAngle };
+  const projection = [point.x, point.y, point.z].map((v,i)=>v-signedDistance*normal[i]);
+  return { d, signedDistance, normal, projection, angle, zPlane, passesDist, passesAngle, accepted: passesDist && passesAngle };
 }
 
 export function eulerAxes(roll, pitch, yaw) {
@@ -89,7 +90,7 @@ const addScaled = (origin, direction, length) => origin.map((x, i) => x + length
 export function boresightComparison(height, scannerArm, attitude, boresight, scanAngleDeg = 0) {
   const attitudeAxes = eulerAxes(...attitude);
   const rotate = sceneVector => toScene(transform(attitudeAxes, toScene(sceneVector)));
-  const scanVector = [Math.sin(scanAngleDeg * RAD), 0, Math.cos(scanAngleDeg * RAD)];
+  const scanVector = [0, Math.sin(scanAngleDeg * RAD), Math.cos(scanAngleDeg * RAD)];
   const actualDirection = toScene(transform(attitudeAxes, transform(eulerAxes(...boresight), scanVector)));
   const nominalDirection = toScene(transform(attitudeAxes, scanVector));
   const origin = rotate(scannerArm);
