@@ -4,19 +4,34 @@
 
 Route: `?simulation=block-adjustment`.
 
-This lab replaces heuristic observation counts, fixed “minimum GCP” rules and an invented exponential convergence curve with a small real nonlinear least-squares problem.
+Six cameras form two aerial strips over procedural rolling terrain, a road and two buildings. The 43 candidate ground/roof details are tested against image bounds and 64-sample terrain/building visibility; only tracks observed at least twice enter the image network. The nominal 1600 × 1200 image has f = 1500 px (24 mm on a 25.6 mm-wide sensor); at 120 m datum height, GSD is 8 cm/px. Forward/side overlap are labelled flat-datum planning approximations, not guaranteed terrain coverage. Camera stations, footprint, sparse ties, control, ray bundles and synthetic perspective images share the same geometry.
 
-- Six synthetic cameras observe a 5 × 5 ground network with relief. The image is 1600 × 1200 px; the reference focal length is 1500 px. Image bounds determine visibility. Baselines, strip separation, Gaussian image noise and gross image errors are controllable.
-- Each adjustable camera has three centre coordinates and three orientation angles. Tie points have three unknown coordinates. Exact GCP XYZ are excluded from the unknowns. Optional self-calibration estimates **one shared focal length**, not a full distortion model.
-- Projection uses a right-handed world with Z up and a nadir base camera with X right, Y down and Z forward. World-to-camera coordinates are `Rᵀ [X−Xc, −(Y−Yc), Zc−Z]`; pixel projection is `[800 + f qx/qz, 600 + f qy/qz]`.
-- Finite-difference Jacobians form damped normal equations. Levenberg–Marquardt trial steps are accepted only when the selected objective decreases. Huber weighting uses each image residual pair's radial norm. Reported image RMS is unweighted and per coordinate; robust fitting may improve object coordinates without minimising that RMS.
-- Three distributed non-collinear GCPs anchor a similarity datum in the demonstrated connected block, but their number does not guarantee good conditioning or full observability. Three **collinear** GCPs leave rotation about the control line unobservable. Without GCPs, the initial first camera pose and one baseline coordinate fix a seven-parameter **relative** datum. Absolute error metrics are not displayed for either defective absolute datum.
-- Three checkpoints have their image observations excluded from adjustment. After each iteration, ray intersection using the estimated cameras estimates checkpoint XYZ; these are compared with known synthetic reference positions. Checkpoint images may also contain injected errors. Tie-point reference error is a separate synthetic-truth metric, not an independent accuracy certificate.
-- Parallel nadir views can leave focal length and flying height strongly correlated. The optional focal estimate can be biased while residuals remain small. The UI warns about this rather than reporting a universal solvability rule.
+Projection uses `q = Rᵀ [X−Xc, −(Y−Yc), Zc−Z]` and normalized radial distortion `[xd,yd] = [qx/qz,qy/qz](1+k₁r²)`. Backprojection iteratively undistorts the pixel. Six pose parameters per camera and three coordinates per fitted point are jointly adjustable. Optional self-calibration estimates shared f and k₁; principal point and other Brown terms remain fixed.
 
-The orbitable 3D view shows actual estimated cameras and points. Its rays, image residual vectors and iteration graph derive from the same current solution. Residual vectors can be magnified for inspection; the magnification is labelled. A run is capped at 25 iterations, not declared converged solely because the cap was reached.
+Ground control is now **measured with uncertainty**, not fixed at synthetic truth. A selected horizontal GCP sigma and 1.5× vertical sigma govern noisy XYZ observations. Camera position priors can be off, standard GNSS (1.5/1.5/2.5 m), or illustrative RTK (4/4/7 cm). No attitude priors are supplied. Image residuals stay in pixels; survey constraints are scaled by `max(image noise sigma, 0.25 px) / survey sigma`, equivalent to a common-normalized weighted objective. Huber loss applies only to image-vector norms; GCP/GNSS constraints are Gaussian. Finite-difference Jacobians and damped dense normal equations produce genuine accept/reject LM steps. The graph plots actual raw per-coordinate pixel RMS, not a synthetic convergence curve.
 
-Deliberate limits: exact correspondences and control, no occlusion, no GNSS/IMU priors, no distortion or GCP covariance, no sparse Schur-complement solver, no covariance/condition-number certificate. These are teaching data, not a survey deliverable.
+Four purple checkpoints have both image measurements and XYZ excluded from adjustment unknowns/objective. Their coordinates are independently intersected after each step; X/Y/Z RMSE is evaluated against synthetic survey truth. Invalid/low-coverage intersections are not reported as valid checkpoints. Tie truth RMSE is a separate in-sample evaluation and excludes unsupported points. The selected track shows actual maximum ray angle and closest-ray intersection RMS; low parallax can undermine height even with small pixel residuals.
+
+Without control or position priors, one estimated camera pose and another baseline coordinate remove seven arbitrary similarity freedoms. They are not fixed at true camera poses. Collinear-only control without navigation leaves a defective absolute datum; absolute metrics are suppressed. Camera priors can supply datum constraints even when GCPs are absent. Neither equation surplus nor a small residual certifies rank or accuracy. The 25-step run limit is not a convergence certificate. Terrain is synthetic context, not a surface reconstructed by this sparse adjustment.
+
+## Aerial triangulation
+
+Route: `?simulation=aerial-triangulation`; the old `games/aerial-triangulation/` URL redirects here. The catalogue now uses this native route.
+
+The flight-block, image-measurement, adjustment and QA stages share the weighted aerial solver above. GCP/check image measurements are premeasured. Learners select a physical track and click its location in multiple images: the actual clicked pixels enter the adjustment, not the nearest generated feature's location. One-image ties remain excluded until a second observation exists. A keyboard-accessible “measure selected detected track” fills the generated noisy centroids; “populate synthetic tracks” fills all correspondences. Those are explicit teaching shortcuts, not actual feature descriptor extraction. Editing measurements or survey settings invalidates the fit.
+
+## Structure from motion
+
+Route: `?simulation=sfm`.
+
+The former perfect-reference-camera/near-truth-pose initialization is no longer used. Reconstruction functions take only pixel correspondences and known interior calibration, never synthetic camera positions, terrain coordinates, GCPs or checkpoint truth. Features/correspondence IDs are procedurally generated; this is not SIFT/ORB or descriptor matching on real photographs.
+
+1. Undistort/normalize image coordinates; estimate an essential matrix using 160 seeded eight-point RANSAC trials and a 2 px Sampson gate. Hartley normalization improves conditioning. A symmetric eigensolver and 3 × 3 singular-vector construction impose equal nonzero singular values and rank two. A consensus refit is retained only if it does not reduce the inlier count.
+2. Test four relative-pose decompositions. Keep positive-depth ray intersections with at least 0.5° parallax. Insufficient consensus or degenerate seed pairs report failure; there is no truth-pose fallback. This is not a minimal five-point implementation or a complete homography/essential model-selection pipeline.
+3. Register an additional camera from six or more 2D–3D correspondences using calibrated DLT followed by robust nonlinear pose refinement and a 4 px inlier check. This is **not RANSAC PnP**. Triangulate more supported tracks, reject invalid depth/low parallax, and refine the joint registered image network.
+4. Bundle refinement fixes one recovered pose plus another baseline coordinate to remove the relative gauge. The seed baseline scale is arbitrary, not measured metres. The UI reports image RMS and sparse structure only, never a fabricated dense mesh or absolute map accuracy.
+
+Low parallax, near-planarity, mismatches and noise can block camera registration. Production sparse solving, dense stereo, meshing, full calibration, image radiometry, rolling shutter and covariance propagation are outside scope. These are inspectable numerical teaching models, not survey deliverables. The earlier small exact-control fixture remains in `createBundle` for numerical backwards-regression tests; the active aerial UI uses `createAerialSurvey`.
 
 ## How a camera works — 3D
 
@@ -46,8 +61,10 @@ Further study: Hecht, *Optics*; Hartley & Zisserman, *Multiple View Geometry*; S
 
 ## Verification
 
-`npm run test:photo` checks projection/back-ray consistency, seeded observations, exact control, held-out checkpoints, real noiseless/noisy adjustment convergence, robust fitting, the relative datum, visibility-driven counts, thin-lens focus and pupil-ray intersections, defocus/diffraction trade-offs, exposure gain, independent motion/readout effects and radial distortion. `npm run test:lidar` covers existing LiDAR models; `npm run build` checks integration.
+`npm run test:photo` includes the legacy optics/bundle regressions plus aerial tests for distorted backprojection, visibility/occlusion, weighted control, independent checkpoints, robust adjustment, focal/radial recovery, gauge constraints, essential geometry, and noiseless/noisy incremental SfM. SfM tests verify recovery up to its unobservable similarity gauge and successful registration without oracle outlier flags. `npm run test:lidar` covers existing LiDAR models; `npm run build` checks integration.
 
 Production browser checks exercise both routes, real solver steps, datum warnings, component selection, focus/refocus, calibration, capture/readout and the new catalogue card. Both labs are checked at 320, 390, 768, 1024, 1440 and 1920 px widths. WebGL must render successfully; a readable fallback preserves controls and explanations when 3D is unavailable.
+
+`npm run test:aerial:browser` additionally exercises bundle, SfM and aerial triangulation at those six widths. It verifies actual weighted RMS/checkpoint improvement, all six image-estimated SfM camera registrations, state invalidation, one-ray tie exclusion/two-ray activation, centroid measurement, full synthetic-track adjustment and the legacy AT URL redirect. It saves inspection screenshots in `/tmp`. The same `PHOTO_BASE_URL` and `PHOTO_CDP_URL` overrides apply.
 
 To repeat the browser checks, build and serve with `npm run preview` on port 4173, start a WebGL-capable Chromium with local remote debugging on port 9222, then run `npm run test:photo:browser`. `PHOTO_BASE_URL` and `PHOTO_CDP_URL` override those defaults. The script opens its own test tab and saves inspection screenshots under `/tmp`.

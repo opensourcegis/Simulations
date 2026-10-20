@@ -67,6 +67,7 @@ export default function PhotoLabScene({
   onSelect,
   onFrame,
   closeup,
+  maxDistance = 130,
 }) {
   const host = useRef(null),
     context = useRef(null),
@@ -101,7 +102,7 @@ export default function PhotoLabScene({
     controls.target.set(...targetRef.current);
     controls.enableDamping = true;
     controls.minDistance = 0.4;
-    controls.maxDistance = 130;
+    controls.maxDistance = maxDistance;
     let group = new THREE.Group();
     scene.add(group);
     context.current = { scene, camera, controls, renderer, group };

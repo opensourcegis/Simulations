@@ -1,61 +1,112 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as THREE from "three";
-import PhotoLabScene, { caption, marker, segment } from "./PhotoLabScene.jsx";
-import { PhotoLab, Panel, Slider, Metric } from "./PhotoLabUI.jsx";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import PhotoLabScene from "./PhotoLabScene.jsx";
+import { PhotoLab, Panel, Slider, Metric, MethodTabs } from "./PhotoLabUI.jsx";
 import {
-  createBundle,
   bundleStep,
   bundleMetrics,
-  bundleResiduals,
-  project,
-  cameraRay,
+  bundleObjective,
 } from "./photogrammetry-model.js";
+import {
+  createAerialSurvey,
+  surveyDiagnostics,
+  intersectObservations,
+} from "./aerial-survey.js";
+import { buildSurveyScene } from "./AerialScene.jsx";
+import SurveyPhoto from "./SurveyPhoto.jsx";
+import "./aerial-lab.css";
 
-const fresh = (data) => ({
+const fresh = (data, robust) => ({
   state: data.initial,
   lambda: 0.01,
   history: [
     {
       ...bundleMetrics(data, data.initial),
-      cost: bundleResiduals(data, data.initial).reduce(
-        (s, x) => s + (x * x) / 2,
-        0,
-      ),
+      cost: bundleObjective(data, data.initial, robust),
     },
   ],
 });
-export default function BlockAdjustment() {
-  const [baseline, setBaseline] = useState(7),
-    [stripSpacing, setStripSpacing] = useState(7),
+const fmt = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : "—");
+export default function BlockAdjustment({ triangulation = false }) {
+  const [baseline, setBaseline] = useState(32),
+    [stripSpacing, setStripSpacing] = useState(38),
+    [altitude, setAltitude] = useState(120),
     [noise, setNoise] = useState(0.5),
-    [control, setControl] = useState("distributed");
+    [control, setControl] = useState("distributed"),
+    [controlSigma, setControlSigma] = useState(0.03),
+    [navigation, setNavigation] = useState("standard");
   const [outliers, setOutliers] = useState(false),
     [calibrate, setCalibrate] = useState(false),
-    [robust, setRobust] = useState(true);
-  const [camera, setCamera] = useState(0),
-    [point, setPoint] = useState(12),
+    [robust, setRobust] = useState(true),
+    [camera, setCamera] = useState(0),
+    [point, setPoint] = useState(14),
     [rays, setRays] = useState(true),
-    [reference, setReference] = useState(true),
+    [reference, setReference] = useState(false),
     [residualScale, setResidualScale] = useState(10),
-    [running, setRunning] = useState(false);
-  const data = useMemo(
+    [running, setRunning] = useState(false),
+    [stage, setStage] = useState("plan"),
+    [measurements, setMeasurements] = useState({}),
+    [allMeasured, setAllMeasured] = useState(!triangulation);
+  const source = useMemo(
     () =>
-      createBundle({
+      createAerialSurvey({
         baseline,
         stripSpacing,
+        altitude,
         noise,
         control,
+        controlSigma,
+        navigation,
         outliers,
         calibrate,
       }),
-    [baseline, stripSpacing, noise, control, outliers, calibrate],
+    [
+      baseline,
+      stripSpacing,
+      altitude,
+      noise,
+      control,
+      controlSigma,
+      navigation,
+      outliers,
+      calibrate,
+    ],
   );
-  const [solution, setSolution] = useState(() => fresh(data));
-  const photo = useRef(null);
+  const data = useMemo(() => {
+    if (allMeasured) return source;
+    const preliminary = source.observations
+      .filter(
+        (o) =>
+          o.checkpoint ||
+          source.gcps.includes(o.pi) ||
+          measurements[`${o.ci}-${o.pi}`],
+      )
+      .map((o) => ({ ...o, ...measurements[`${o.ci}-${o.pi}`] }));
+    const active = new Set(
+      preliminary
+        .filter(
+          (o) =>
+            !o.checkpoint &&
+            preliminary.filter((p) => p.pi === o.pi).length >= 2,
+        )
+        .map((o) => o.pi),
+    );
+    return {
+      ...source,
+      observations: preliminary.filter((o) => o.checkpoint || active.has(o.pi)),
+      parameters: source.parameters.filter(
+        (p) => p.type !== "p" || active.has(p.i),
+      ),
+    };
+  }, [source, measurements, allMeasured]);
+  const [solution, setSolution] = useState(() => fresh(data, robust));
   useEffect(() => {
-    setSolution(fresh(data));
+    setSolution(fresh(data, robust));
     setRunning(false);
   }, [data, robust]);
+  useEffect(() => {
+    setMeasurements({});
+    setAllMeasured(!triangulation);
+  }, [source, triangulation]);
   const step = useCallback(
     () =>
       setSolution((previous) => {
@@ -84,236 +135,274 @@ export default function BlockAdjustment() {
       setRunning(false);
       return;
     }
-    const timer = setTimeout(step, 180);
+    const timer = setTimeout(step, 140);
     return () => clearTimeout(timer);
   }, [running, solution.history.length, step]);
-  const metrics = bundleMetrics(data, solution.state),
-    iteration = solution.history.length - 1;
-  const build = useCallback(() => {
-    const group = new THREE.Group(),
-      grid = new THREE.GridHelper(32, 16, 0x3d5864, 0x243d48);
-    grid.rotation.x = Math.PI / 2;
-    grid.position.z = -0.7;
-    group.add(grid);
-    data.truth.points.forEach((p, i) => {
-      if (reference) marker(group, p, 0x516c77, 0.09);
-      const q = solution.state.points[i],
-        gcp = data.gcps.includes(i),
-        check = data.checkpoints.includes(i);
-      if (check) {
-        marker(group, p, 0xc192ff, 0.19);
-        return;
-      }
-      marker(
-        group,
-        q,
-        gcp ? 0x62d99d : i === point ? 0xffd665 : 0x5ad1ff,
-        i === point ? 0.25 : 0.13,
-      );
-      if (gcp)
-        caption(
-          group,
-          "GCP " + (i + 1),
-          [...q.slice(0, 2), q[2] + 0.55],
-          "#7ee0ad",
-          1.4,
-        );
-    });
-    solution.state.cameras.forEach((cam, ci) => {
-      marker(group, cam.c, ci === camera ? 0xffd665 : 0xff9d63, 0.24);
-      const corners = [
-        [0, 0],
-        [1600, 0],
-        [1600, 1200],
-        [0, 1200],
-      ].map(([u, v]) => {
-        const d = cameraRay(cam, u, v, solution.state.f);
-        return cam.c.map((x, j) => x + d[j] * 4);
-      });
-      segment(
-        group,
-        [...corners, corners[0]],
-        ci === camera ? 0xffd665 : 0xc98864,
-        0.8,
-      );
-      corners.forEach((p) => segment(group, [cam.c, p], 0xc98864, 0.7));
-      caption(
-        group,
-        "C" + (ci + 1),
-        [cam.c[0], cam.c[1], cam.c[2] + 1],
-        "#ffd0a5",
-        1.6,
-      );
-      if (rays)
-        data.observations
-          .filter(
-            (o) =>
-              o.ci === ci && !o.checkpoint && (o.pi === point || ci === camera),
-          )
-          .forEach((o) =>
-            segment(
-              group,
-              [cam.c, solution.state.points[o.pi]],
-              o.pi === point ? 0xffd665 : 0x4e94a7,
-              o.pi === point ? 0.8 : 0.18,
-            ),
-          );
-    });
-    caption(group, "WORLD · metres · Z up", [0, -12, -0.5], "#88a5b2", 1.4);
-    return group;
-  }, [data, solution.state, point, camera, rays, reference]);
-  useEffect(() => {
-    const canvas = photo.current,
-      ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#101e29";
-    ctx.fillRect(0, 0, 400, 300);
-    ctx.strokeStyle = "#253c4a";
-    for (let x = 0; x <= 400; x += 50) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, 300);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= 300; y += 50) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(400, y);
-      ctx.stroke();
-    }
-    data.observations
-      .filter((o) => o.ci === camera)
-      .forEach((o) => {
-        const x = o.u / 4,
-          y = o.v / 4,
-          q = project(
-            solution.state.cameras[camera],
-            solution.state.points[o.pi],
-            solution.state.f,
-          );
-        ctx.fillStyle = o.checkpoint
-          ? "#c192ff"
-          : data.gcps.includes(o.pi)
-            ? "#62d99d"
-            : "#5ad1ff";
-        ctx.beginPath();
-        ctx.arc(x, y, o.pi === point ? 5 : 3, 0, Math.PI * 2);
-        ctx.fill();
-        if (!o.checkpoint && q) {
-          ctx.strokeStyle = o.bad ? "#ff7b6b" : "#ffcb62";
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(
-            x + ((q[0] - o.u) / 4) * residualScale,
-            y + ((q[1] - o.v) / 4) * residualScale,
-          );
-          ctx.stroke();
-        }
-        if (o.pi === point) {
-          ctx.fillStyle = "#f5d477";
-          ctx.font = "12px monospace";
-          ctx.fillText("P" + (o.pi + 1), x + 7, y - 6);
-        }
-      });
-  }, [data, solution.state, camera, point, residualScale]);
-  const choosePoint = (e) => {
-    const r = e.currentTarget.getBoundingClientRect(),
-      x = ((e.clientX - r.left) / r.width) * 1600,
-      y = ((e.clientY - r.top) / r.height) * 1200;
-    const nearest = data.observations
-      .filter((o) => o.ci === camera)
-      .sort(
-        (a, b) => Math.hypot(a.u - x, a.v - y) - Math.hypot(b.u - x, b.v - y),
-      )[0];
-    if (nearest) setPoint(nearest.pi);
-  };
-  const georeferenced = control === "distributed" || control === "five";
+  const state = solution.state,
+    metrics = bundleMetrics(data, state),
+    diagnostics = surveyDiagnostics(data, state),
+    iteration = solution.history.length - 1,
+    absolute =
+      control === "distributed" || control === "five" || navigation !== "off";
+  const selectedHit = intersectObservations(
+    state,
+    data.observations.filter((o) => o.pi === point),
+  );
+  const build = useCallback(
+    () =>
+      buildSurveyScene({
+        data,
+        state,
+        camera,
+        point,
+        rays,
+        reference,
+        connections: triangulation && stage === "plan",
+      }),
+    [data, state, camera, point, rays, reference, triangulation, stage],
+  );
   const graph = solution.history
     .map(
       (h, i) =>
-        `${18 + (i / Math.max(1, solution.history.length - 1)) * 364},${145 - (Math.log1p(h.rms) / Math.log1p(solution.history[0].rms)) * 125}`,
+        `${18 + (i / Math.max(1, iteration)) * 364},${145 - (Math.log1p(h.rms) / Math.max(0.001, Math.log1p(solution.history[0].rms))) * 125}`,
     )
     .join(" ");
+  const addMeasurement = (ci, uv) => {
+    if (
+      !source.observations.some((o) => o.ci === ci && o.pi === point) ||
+      source.gcps.includes(point) ||
+      source.checkpoints.includes(point)
+    )
+      return;
+    setAllMeasured(false);
+    setMeasurements((previous) => ({ ...previous, [`${ci}-${point}`]: uv }));
+  };
+  const addDetected = () => {
+    setAllMeasured(false);
+    setMeasurements((previous) => {
+      const next = { ...previous };
+      source.observations
+        .filter((o) => o.pi === point && !o.checkpoint)
+        .forEach((o) => {
+          next[`${o.ci}-${o.pi}`] = { u: o.u, v: o.v };
+        });
+      return next;
+    });
+  };
   return (
     <PhotoLab
-      name="Bundle block adjustment"
-      title="Many images. One consistent world."
-      intro="Adjust six camera poses and a network of 3D points against actual noisy image observations. Inspect the rays, residuals and independent checkpoint evidence."
+      name={triangulation ? "Aerial triangulation" : "Bundle block adjustment"}
+      title={
+        triangulation
+          ? "Connect the strips. Intersect the rays."
+          : "An aerial block, adjusted from evidence."
+      }
+      intro="Six overlapping aerial images over rolling terrain and buildings. Solve camera exterior orientation and 3D ties, weight survey uncertainty, and evaluate held-out checkpoints—not just pixel fit."
       notebook={
         <>
-          <h3>What is being solved?</h3>
+          <h3>Photographic and survey evidence</h3>
           <p>
-            For each observation: q = Rᵀ · [X−Xc, −(Y−Yc), Zc−Z], u = 800 + f
-            qx/qz, v = 600 + f qy/qz. Angles are radians; the image is 1600 ×
-            1200 pixels; f is pixels. The base camera looks down world Z, with
-            image Y downward. A 3D point and a camera must predict the same
-            measured image location.
+            The 1600 × 1200 synthetic images use collinearity with radial
+            distortion k₁. Nominal f = 1500 px corresponds to 24 mm on a 25.6
+            mm-wide sensor. At 120 m above the datum, GSD is 8 cm/pixel. Relief
+            changes local GSD and overlap; quoted overlap is a flat-datum
+            planning approximation. Visibility includes field of view and
+            64-sample terrain/building occlusion tests.
           </p>
           <p>
-            The solver jointly updates 6 exterior orientation parameters per
-            camera and 3 coordinates per tie point. Optionally it estimates one
-            shared focal length; principal point and distortion stay fixed.
-            Finite-difference Jacobians, damped normal equations and
-            accept/reject Levenberg–Marquardt steps minimise actual residuals.
-            Huber fitting downweights large radial residuals. Raw RMS is per
-            image coordinate and can be higher with robust fitting even when 3D
-            error improves.
+            GCP XYZ are Gaussian weighted observations, not exact coordinates.
+            Their selected horizontal sigma and 1.5× vertical sigma determine
+            their weight. Camera-position priors have 1.5/1.5/2.5 m sigmas for
+            standard GNSS or 4/4/7 cm for illustrative RTK. No attitude priors
+            are used. Huber loss downweights image-vector outliers only; survey
+            constraints remain Gaussian. Prior weights use a 0.25 px noise floor
+            when selected image noise is smaller.
           </p>
-          <h3>Control, datum and independent checks</h3>
+          <h3>Actual joint adjustment</h3>
           <p>
-            GCP XYZ are held exact, not noisy weighted observations. Distributed
-            non-collinear control constrains the similarity datum but does not
-            guarantee good geometry or calibration. Collinear control leaves
-            rotation about its line unobservable. Without GCPs, the first
-            estimated camera pose and one baseline coordinate are fixed (seven
-            datum parameters): the result is relative, not an absolute map.
-            Equation surplus does not prove full rank.
+            Finite-difference Jacobians and damped normal equations jointly
+            estimate camera poses and tie coordinates. Accepted
+            Levenberg–Marquardt steps decrease the weighted objective. Optional
+            self-calibration estimates shared f and k₁. Navigation-based initial
+            estimates are not an SfM initialization. This small dense solver
+            does not implement a production sparse Schur-complement solver.
+          </p>
+          <h3>Independent checks, geometry and datum</h3>
+          <p>
+            Purple checkpoint images and XYZ never enter the fitting residuals
+            or unknowns. Their coordinates are intersected after adjustment,
+            then axis-wise errors are compared with independent synthetic survey
+            truth. Ray angle reveals depth weakness; pixel agreement alone is
+            not height accuracy. Missing overlap can make checks unavailable.
           </p>
           <p>
-            The three purple checkpoints have image measurements withheld from
-            adjustment. After each iteration their coordinates are intersected
-            using estimated cameras and compared with synthetic reference XYZ.
-            Their images can contain injected outliers. Tie-point reference RMSE
-            uses synthetic truth, not independent survey checks. Absolute
-            metrics are suppressed for a defective absolute datum.
+            Without control and navigation, one estimated camera pose and one
+            additional baseline coordinate fix seven arbitrary gauge freedoms.
+            This is a relative model, not a georeferenced map. Collinear-only
+            control leaves rotation around its line unobservable. Navigation
+            priors may supply additional datum information. Equation surplus is
+            not a rank test.
           </p>
-          <h3>Try three controlled comparisons</h3>
-          <ol>
-            <li>
-              Run the clean block. Inspect camera corrections and shrinking
-              residuals.
-            </li>
-            <li>
-              Enable gross errors. Compare robust fitting on and off: the lowest
-              raw RMS need not give the best ground coordinates.
-            </li>
-            <li>
-              Compare distributed, collinear and no control. Good pixel
-              agreement alone cannot certify georeferencing.
-            </li>
-          </ol>
-          <h3>Scope and references</h3>
+          {triangulation && (
+            <>
+              <h3>Manual measurement</h3>
+              <p>
+                Select a track, then click the same physical detail in each
+                synthetic image. Actual clicked pixels enter the fit; the
+                nearest feature is not silently substituted. “Measure selected
+                detected track” uses generated noisy centroids as an accessible
+                alternative. “Populate synthetic tracks” fills all synthetic
+                correspondences. GCP/check images remain premeasured. A tie
+                needs two or more observations. Feature descriptors on real
+                photographs are not implemented.
+              </p>
+            </>
+          )}
+          <h3>Limitations and references</h3>
           <p>
-            Small synthetic 2 × 3 block, exact correspondences, no occlusion,
-            distortion fixed to zero, Gaussian image-coordinate noise, sparse
-            gross errors, no GNSS/IMU priors or GCP covariance. Near-parallel
-            nadir imagery can weakly constrain focal length and height. This
-            dense demonstration is not a production sparse bundle solver.
-            Further reading: Triggs et al., “Bundle Adjustment — A Modern
-            Synthesis” (2000); Hartley &amp; Zisserman, Multiple View Geometry.
+            No rolling shutter, full Brown distortion, refraction, covariance
+            propagation, detector saturation or certified mapping-grade
+            accuracy. Nadir self-calibration can couple f, radial distortion and
+            flying height. Further reading: Triggs et al. (2000), “Bundle
+            Adjustment — A Modern Synthesis”; Hartley &amp; Zisserman, Multiple
+            View Geometry.
           </p>
         </>
       }
     >
+      {triangulation && (
+        <MethodTabs
+          value={stage}
+          onChange={setStage}
+          tabs={[
+            ["plan", "Flight block"],
+            ["measure", "Image measurements"],
+            ["adjust", "Joint adjustment"],
+            ["qa", "Independent QA"],
+          ]}
+        />
+      )}
+      <div className="aerial-summary">
+        <span>
+          <b>{fmt(diagnostics.gsd * 100, 1)} cm/px</b>nominal datum GSD
+        </span>
+        <span>
+          <b>
+            {fmt(diagnostics.forwardOverlap * 100, 0)} /{" "}
+            {fmt(diagnostics.sideOverlap * 100, 0)}%
+          </b>
+          forward / side overlap
+        </span>
+        <span>
+          <b>{diagnostics.tracks.length} tracks</b>seen in two or more images
+        </span>
+        <span>
+          <b>
+            {data.observations.filter((o) => !o.checkpoint).length} observations
+          </b>
+          two image equations each
+        </span>
+      </div>
+      {triangulation && stage === "measure" && (
+        <Panel
+          tag="MEASURE THE BLOCK"
+          title="Follow the same physical feature across the photographs"
+        >
+          <div className="photo-inline">
+            <label>
+              Active track
+              <select
+                id="at-track"
+                value={point}
+                onChange={(e) => setPoint(+e.target.value)}
+              >
+                {source.truth.points.map((_, i) => (
+                  <option key={i} value={i}>
+                    P{i + 1}
+                    {source.gcps.includes(i)
+                      ? " · GCP"
+                      : source.checkpoints.includes(i)
+                        ? " · check"
+                        : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button id="at-detected" onClick={addDetected}>
+              Measure selected detected track
+            </button>
+            <button id="at-populate" onClick={() => setAllMeasured(true)}>
+              Populate synthetic tracks
+            </button>
+            <button
+              id="at-clear"
+              onClick={() => {
+                setMeasurements({});
+                setAllMeasured(false);
+              }}
+            >
+              Clear manual ties
+            </button>
+          </div>
+          <p className="photo-note">
+            Green rings are measured tracks. The selected track receives your
+            actual click coordinates. GCPs/checks are premeasured; incomplete
+            one-image ties are excluded from adjustment.
+          </p>
+          <div className="aerial-gallery">
+            {source.truth.cameras.map((_, ci) => (
+              <div key={ci}>
+                <h3>
+                  C{ci + 1} · strip {ci < 3 ? "A" : "B"}
+                  <small>
+                    {
+                      data.observations.filter(
+                        (o) => o.ci === ci && !o.checkpoint,
+                      ).length
+                    }{" "}
+                    fitted tracks
+                  </small>
+                </h3>
+                <SurveyPhoto
+                  data={source}
+                  camera={ci}
+                  point={point}
+                  selected={
+                    allMeasured
+                      ? source.observations
+                          .filter((o) => o.ci === ci)
+                          .map((o) => o.pi)
+                      : Object.keys(measurements)
+                          .filter((k) => k.startsWith(ci + "-"))
+                          .map((k) => +k.split("-")[1])
+                  }
+                  onSelect={(_, uv) => addMeasurement(ci, uv)}
+                />
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
       <div className="photo-workspace">
         <aside className="photo-controls">
-          <Panel tag="01 / DESIGN THE BLOCK" title="Geometry & observations">
+          <Panel tag="01 / FLIGHT GEOMETRY" title="Survey & camera network">
+            <Slider
+              id="ba-altitude"
+              label="Height above local datum"
+              value={altitude}
+              display={altitude + " m"}
+              min={90}
+              max={180}
+              step={5}
+              onChange={setAltitude}
+            />
             <Slider
               id="ba-baseline"
               label="Along-strip baseline"
               value={baseline}
               display={baseline + " m"}
-              min={3}
-              max={12}
+              min={12}
+              max={65}
               onChange={setBaseline}
             />
             <Slider
@@ -321,8 +410,8 @@ export default function BlockAdjustment() {
               label="Strip separation"
               value={stripSpacing}
               display={stripSpacing + " m"}
-              min={4}
-              max={14}
+              min={16}
+              max={70}
               onChange={setStripSpacing}
             />
             <Slider
@@ -335,7 +424,7 @@ export default function BlockAdjustment() {
               step={0.1}
               onChange={setNoise}
             />
-            <label className="photo-select" htmlFor="ba-control">
+            <label className="photo-select">
               Ground control
               <select
                 id="ba-control"
@@ -345,7 +434,29 @@ export default function BlockAdjustment() {
                 <option value="distributed">3 distributed GCPs</option>
                 <option value="five">5 distributed GCPs</option>
                 <option value="collinear">3 collinear GCPs</option>
-                <option value="none">No GCPs · relative datum</option>
+                <option value="none">No ground control</option>
+              </select>
+            </label>
+            <Slider
+              id="ba-control-sigma"
+              label="GCP horizontal sigma"
+              value={controlSigma}
+              display={fmt(controlSigma * 100, 1) + " cm"}
+              min={0.01}
+              max={0.3}
+              step={0.01}
+              onChange={setControlSigma}
+            />
+            <label className="photo-select">
+              Position observations
+              <select
+                id="ba-navigation"
+                value={navigation}
+                onChange={(e) => setNavigation(e.target.value)}
+              >
+                <option value="standard">Standard GNSS · metre level</option>
+                <option value="rtk">RTK positions · centimetre level</option>
+                <option value="off">No camera position priors</option>
               </select>
             </label>
             <label className="photo-check">
@@ -359,11 +470,12 @@ export default function BlockAdjustment() {
             </label>
             <label className="photo-check">
               <input
+                id="ba-calibrate"
                 type="checkbox"
                 checked={calibrate}
                 onChange={(e) => setCalibrate(e.target.checked)}
               />
-              Estimate shared focal length
+              Estimate shared focal length &amp; k₁
             </label>
             <label className="photo-check">
               <input
@@ -372,22 +484,21 @@ export default function BlockAdjustment() {
                 checked={robust}
                 onChange={(e) => setRobust(e.target.checked)}
               />
-              Huber robust fitting
+              Huber robust image fitting
             </label>
             {calibrate && (
               <p className="photo-alert warning">
-                Parallel nadir views weakly constrain focal length versus flying
-                height. A low image RMS can coexist with a biased focal
-                estimate.
+                Nadir imagery couples focal length, height and distortion. Low
+                pixel RMS alone does not prove calibration.
               </p>
             )}
           </Panel>
-          <Panel tag="02 / ADJUST" title="Solve the real residuals">
+          <Panel tag="02 / ADJUST" title="Joint pose & point estimation">
             <div className="photo-actions">
               <button
                 id="ba-run"
-                disabled={iteration >= 25}
                 className="photo-primary"
+                disabled={iteration >= 25}
                 onClick={() => setRunning(!running)}
               >
                 {running ? "Pause adjustment" : "Run adjustment"}
@@ -396,48 +507,49 @@ export default function BlockAdjustment() {
                 One iteration
               </button>
               <button
+                id="ba-reset"
                 onClick={() => {
                   setRunning(false);
-                  setSolution(fresh(data));
+                  setSolution(fresh(data, robust));
                 }}
               >
                 Reset estimates
               </button>
             </div>
-            {iteration >= 25 && (
-              <p className="photo-alert" role="status">
-                25-iteration run limit reached. This is not a convergence
-                certificate; reset estimates to start again, or inspect
-                individual steps.
-              </p>
-            )}
             <p className="photo-note">
-              Changing geometry, noise or loss resets the same seeded
-              experiment. No synthetic convergence curve is used.
+              {iteration >= 25
+                ? "25-iteration limit—not a convergence certificate."
+                : "Actual solver steps. Changing geometry, measurements or fitting method resets the experiment."}
             </p>
           </Panel>
         </aside>
         <div className="photo-instruments">
           <Panel
-            tag="LIVE 3D BLOCK"
-            title="Camera bundles & ground network"
+            tag="LIVE 3D AERIAL BLOCK"
+            title="Flight strips, terrain & ray bundles"
             className="photo-stage"
           >
             <PhotoLabScene
               build={build}
-              label="Six camera frustums, estimated tie points, exact ground control and withheld checkpoints in an orbitable 3D block."
+              initial={[145, -175, 160]}
+              target={[0, 0, 48]}
+              maxDistance={600}
+              label="Six aerial camera stations, terrain, buildings, selected footprint and observation rays in a survey grid."
+              onSelect={(part) => {
+                if (part.startsWith("camera-")) setCamera(+part.slice(7));
+              }}
             />
             <div className="photo-stage-key">
-              <span>● cyan: adjusted ties</span>
-              <span>● green: exact GCP</span>
-              <span>● purple: withheld check</span>
-              <span>● gold: selection</span>
+              <span>cyan: ties</span>
+              <span>green: weighted GCP</span>
+              <span>purple: independent check</span>
+              <span>gold: selection / footprint</span>
             </div>
           </Panel>
           <div className="photo-instrument-pair">
             <Panel
-              tag="IMAGE OBSERVATIONS"
-              title="Measured points & residual vectors"
+              tag="SYNTHETIC IMAGE / ACTUAL OBSERVATIONS"
+              title="Measured pixels & residual vectors"
             >
               <div className="photo-inline">
                 <label>
@@ -447,9 +559,9 @@ export default function BlockAdjustment() {
                     value={camera}
                     onChange={(e) => setCamera(+e.target.value)}
                   >
-                    {data.truth.cameras.map((_, i) => (
+                    {source.truth.cameras.map((_, i) => (
                       <option key={i} value={i}>
-                        Camera {i + 1}
+                        C{i + 1} · strip {i < 3 ? "A" : "B"}
                       </option>
                     ))}
                   </select>
@@ -457,33 +569,29 @@ export default function BlockAdjustment() {
                 <label>
                   Point
                   <select
+                    id="ba-point"
                     value={point}
                     onChange={(e) => setPoint(+e.target.value)}
                   >
                     {data.truth.points.map((_, i) => (
                       <option key={i} value={i}>
                         P{i + 1}
-                        {data.gcps.includes(i)
-                          ? " · GCP"
-                          : data.checkpoints.includes(i)
-                            ? " · check"
-                            : ""}
                       </option>
                     ))}
                   </select>
                 </label>
               </div>
-              <canvas
-                ref={photo}
-                width="400"
-                height="300"
-                onClick={choosePoint}
-                role="img"
-                aria-label="Measured dots and magnified reprojection vectors. Use the point selector for keyboard selection."
+              <SurveyPhoto
+                data={data}
+                camera={camera}
+                state={state}
+                point={point}
+                residualScale={residualScale}
+                onSelect={setPoint}
               />
               <Slider
                 id="ba-residual-scale"
-                label="Vector display magnification"
+                label="Vector magnification"
                 value={residualScale}
                 display={residualScale + "×"}
                 min={1}
@@ -491,16 +599,19 @@ export default function BlockAdjustment() {
                 onChange={setResidualScale}
               />
               <p className="photo-note">
-                Dots are measurements, arrows point toward projections. Purple
-                checkpoints never enter the fit. Click a dot or use the
-                selector.
+                Dots are measured pixels; vectors point toward current
+                projections. Purple checks never enter the fit. Procedural
+                terrain imagery is synthetic, not an input aerial photograph.
               </p>
             </Panel>
-            <Panel tag="ACTUAL ITERATION HISTORY" title="Image-coordinate RMS">
+            <Panel
+              tag="ACTUAL ITERATION HISTORY"
+              title="Fit & intersection geometry"
+            >
               <svg
                 viewBox="0 0 400 180"
                 role="img"
-                aria-label="Actual image-coordinate RMS after each iteration, logarithmic vertical scale."
+                aria-label="Actual image-coordinate RMS after each iteration, logarithmic scale."
               >
                 <path d="M18 18V145H382" stroke="#66838b" fill="none" />
                 <polyline
@@ -510,20 +621,46 @@ export default function BlockAdjustment() {
                   strokeWidth="3"
                 />
                 <text x="20" y="172" fill="#aac0cb" fontSize="11">
-                  Iteration 0 → {iteration} · log(1 + RMS in px)
+                  Iteration 0 → {iteration} · log(1 + RMS px)
                 </text>
               </svg>
-              <p className="photo-note">
-                Accepted steps reduce the selected objective, not necessarily
-                raw RMS. A low pixel residual does not prove map accuracy.
-              </p>
+              <dl>
+                <Metric
+                  label="Selected track observations"
+                  value={data.observations.filter((o) => o.pi === point).length}
+                />
+                <Metric
+                  label="Maximum ray angle"
+                  value={selectedHit ? fmt(selectedHit.angle, 1) : "—"}
+                  unit="°"
+                />
+                <Metric
+                  label="Closest-ray RMS"
+                  value={selectedHit ? fmt(selectedHit.rayRms) : "—"}
+                  unit="m"
+                />
+                <Metric
+                  label="Weighted objective"
+                  value={fmt(solution.history.at(-1).cost, 2)}
+                />
+                <Metric
+                  label="Last step"
+                  value={
+                    iteration
+                      ? solution.history.at(-1).accepted
+                        ? "accepted"
+                        : "rejected / stationary"
+                      : "not run"
+                  }
+                />
+              </dl>
               <label className="photo-check">
                 <input
                   type="checkbox"
                   checked={rays}
                   onChange={(e) => setRays(e.target.checked)}
                 />
-                Show observation bundles
+                Show observation rays
               </label>
               <label className="photo-check">
                 <input
@@ -531,75 +668,100 @@ export default function BlockAdjustment() {
                   checked={reference}
                   onChange={(e) => setReference(e.target.checked)}
                 />
-                Show reference points
+                Show tie-to-truth error links (evaluation only)
               </label>
             </Panel>
           </div>
         </div>
         <aside className="photo-diagnostics">
-          <Panel tag="03 / EVALUATE" title="Adjustment evidence">
+          <Panel tag="03 / INDEPENDENT QA" title="Fit is not map accuracy">
             <div id="ba-rms" className="photo-result">
-              {metrics.rms.toFixed(3)}
+              {fmt(metrics.rms)}
               <small>px</small>
             </div>
-            <p className="photo-note">Raw RMS per measured image coordinate</p>
+            <p className="photo-note">RMS per fitted image coordinate</p>
             <dl>
-              <Metric label="Iterations completed" value={iteration} />
+              <Metric label="Iterations" value={iteration} />
+              <Metric label="Image equations" value={metrics.observations} />
               <Metric
-                label="Image-coordinate equations"
-                value={metrics.observations}
+                label="Survey / position equations"
+                value={diagnostics.constraintEquations}
               />
               <Metric label="Active unknowns" value={metrics.unknowns} />
               <Metric
                 label="Equation surplus (not rank)"
-                value={metrics.observations - metrics.unknowns}
+                value={
+                  metrics.observations +
+                  diagnostics.constraintEquations -
+                  metrics.unknowns
+                }
               />
               <Metric
-                label="Estimated focal length"
-                value={solution.state.f.toFixed(2)}
+                label="Focal length estimate"
+                value={fmt(state.f, 2)}
                 unit="px"
               />
+              <Metric label="Radial k₁ estimate" value={fmt(state.k1, 5)} />
               <Metric
-                label="Tie XYZ reference RMSE"
+                label="Tie XYZ truth RMSE"
                 value={
-                  georeferenced
-                    ? metrics.pointRmse.toFixed(3)
-                    : "relative / non-unique"
+                  absolute ? fmt(metrics.pointRmse) : "relative / non-unique"
                 }
-                unit={georeferenced ? "m" : ""}
+                unit={absolute ? "m" : ""}
               />
               <Metric
-                label="Withheld checkpoint RMSE"
+                label="Independent check X / Y RMSE"
                 value={
-                  georeferenced
-                    ? metrics.checkpointRmse.toFixed(3)
+                  absolute
+                    ? `${fmt(diagnostics.rmseX)} / ${fmt(diagnostics.rmseY)}`
                     : "datum not absolute"
                 }
-                unit={georeferenced ? "m" : ""}
+                unit={absolute ? "m" : ""}
+              />
+              <Metric
+                label="Independent check Z RMSE"
+                value={absolute ? fmt(diagnostics.rmseZ) : "datum not absolute"}
+                unit={absolute ? "m" : ""}
               />
             </dl>
           </Panel>
           <Panel
-            tag="DATUM & OBSERVABILITY"
+            tag="DATUM & NETWORK"
             title={
-              georeferenced
-                ? "Distributed ground control"
-                : control === "none"
-                  ? "Relative model only"
-                  : "Collinear control warning"
+              absolute
+                ? "Survey-weighted georeferencing"
+                : control === "collinear"
+                  ? "Collinear control warning"
+                  : "Relative model only"
             }
           >
-            <p className={"photo-alert " + (!georeferenced ? "warning" : "")}>
-              {georeferenced
-                ? "Control anchors the block; geometry, noise and calibration still govern the result."
-                : control === "none"
-                  ? "Seven datum parameters are fixed to the initial camera network. Absolute position, attitude and scale are not independently recovered."
-                  : "A line of control points cannot fix rotation about that line. Damping is not evidence of a unique solution."}
+            <p className={"photo-alert " + (!absolute ? "warning" : "")}>
+              {control === "none" && navigation === "off"
+                ? "Relative model only: seven arbitrary gauge coordinates are fixed. There is no absolute map frame."
+                : control === "collinear" && navigation === "off"
+                  ? "Collinear control warning: rotation about the survey line is unobservable."
+                  : control === "none"
+                    ? "Position observations supply the datum. Accuracy depends on their uncertainty and geometry."
+                    : "Ground control is measured with uncertainty and adjusted—not held at truth. Checkpoints never improve the fit."}
             </p>
             <p className="photo-note">
-              Only visible points contribute equations. More overlap can add
-              rays, but a smaller baseline can weaken depth intersection.
+              {diagnostics.connections.length} connected camera pairs. More
+              equations do not guarantee a well-conditioned network.
             </p>
+            <div className="aerial-checks" id="ba-checkpoints">
+              {diagnostics.checks.map((c) => (
+                <div key={c.pi}>
+                  <b>CP {c.pi + 1}</b>
+                  <span>
+                    {!c.valid
+                      ? "not intersectable"
+                      : !absolute
+                        ? "relative frame"
+                        : `ΔZ ${fmt(c.delta[2])} m · ${fmt(c.angle, 1)}°`}
+                  </span>
+                </div>
+              ))}
+            </div>
           </Panel>
         </aside>
       </div>

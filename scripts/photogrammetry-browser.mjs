@@ -72,7 +72,7 @@ assert(bundle.fitted < bundle.initial / 10);
 console.log("Bundle real iterations:", bundle);
 await screenshot("/tmp/bundle-redesign.png");
 const datum = await evaluate(
-  `(async()=>{photoTest.set('ba-control','none');await photoTest.wait(80);const relative=document.body.textContent.includes('Relative model only');photoTest.set('ba-control','collinear');await photoTest.wait(80);const collinear=document.body.textContent.includes('Collinear control warning');photoTest.set('ba-control','distributed');await photoTest.wait(80);document.getElementById('ba-outliers').click();await photoTest.wait(80);document.getElementById('ba-robust').click();await photoTest.wait(80);return {relative,collinear};})()`,
+  `(async()=>{photoTest.set('ba-navigation','off');photoTest.set('ba-control','none');await photoTest.wait(80);const relative=document.body.textContent.includes('Relative model only');photoTest.set('ba-control','collinear');await photoTest.wait(80);const collinear=document.body.textContent.includes('Collinear control warning');photoTest.set('ba-control','distributed');await photoTest.wait(80);document.getElementById('ba-outliers').click();await photoTest.wait(80);document.getElementById('ba-robust').click();await photoTest.wait(80);return {relative,collinear};})()`,
 );
 assert(datum.relative && datum.collinear);
 for (const width of [1920, 1440, 1024, 768, 390, 320]) {

@@ -1,0 +1,156 @@
+.aerial-summary {
+  max-width: 1740px;
+  margin: 0 auto 20px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--photo-border);
+  border-radius: 9px;
+  background: #e9ece3;
+  overflow: hidden;
+}
+.aerial-summary > span {
+  padding: 16px 20px;
+  border-right: 1px solid var(--photo-border);
+  color: var(--photo-muted);
+  font-size: 10px;
+}
+.aerial-summary b {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--photo-ink);
+  font:
+    500 19px/1.5 ui-monospace,
+    monospace;
+}
+.photo-lab > .photo-panel {
+  max-width: 1740px;
+  margin: 0 auto 20px;
+}
+.aerial-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.aerial-gallery > div {
+  min-width: 0;
+  border: 1px solid var(--photo-border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: #13232d;
+}
+.aerial-gallery h3 {
+  margin: 0;
+  padding: 9px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  color: #d9e5e9;
+  font:
+    12px ui-monospace,
+    monospace;
+}
+.aerial-gallery h3 small {
+  font-size: 9px;
+  color: #9cbbc4;
+}
+.aerial-gallery canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
+}
+.aerial-checks > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--photo-border);
+  font:
+    10px/1.7 ui-monospace,
+    monospace;
+}
+.aerial-checks span {
+  color: var(--photo-muted);
+}
+.sfm-pipeline {
+  max-width: 1740px;
+  margin: 0 auto 20px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.sfm-pipeline button {
+  padding: 15px;
+  text-align: left;
+  border: 1px solid var(--photo-border);
+  border-radius: 7px;
+  background: var(--photo-paper);
+  color: var(--photo-ink);
+  font:
+    600 12px system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.sfm-pipeline button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sfm-pipeline button span {
+  display: block;
+  margin-bottom: 7px;
+  font:
+    9px ui-monospace,
+    monospace;
+  color: var(--photo-accent);
+  letter-spacing: 1px;
+}
+.sfm-pipeline button.active {
+  background: #dcece5;
+  border-color: #86aa98;
+}
+.aerial-log {
+  padding: 0;
+  list-style: none;
+  color: var(--photo-muted);
+  font:
+    10px/1.8 ui-monospace,
+    monospace;
+  max-height: 260px;
+  overflow: auto;
+}
+.aerial-log li {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--photo-border);
+}
+@media (max-width: 850px) {
+  .aerial-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .aerial-summary b {
+    font-size: 16px;
+  }
+  .aerial-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sfm-pipeline {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .aerial-summary > span {
+    padding: 12px;
+  }
+  .aerial-gallery {
+    grid-template-columns: 1fr;
+  }
+  .aerial-summary b {
+    font-size: 14px;
+  }
+  .sfm-pipeline button {
+    font-size: 11px;
+    padding: 12px;
+  }
+}

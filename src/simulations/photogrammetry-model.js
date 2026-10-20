@@ -22,18 +22,30 @@ export function cameraVector(camera, point) {
     r = rotation(camera.a);
   return [0, 1, 2].map((i) => r[0][i] * q[0] + r[1][i] * q[1] + r[2][i] * q[2]);
 }
-export function cameraRay(camera, u, v, f) {
+export function cameraRay(camera, u, v, f, k1 = 0) {
+  const xd = (u - 800) / f,
+    yd = (v - 600) / f;
+  let xu = xd,
+    yu = yd;
+  for (let i = 0; i < 12 && k1; i++) {
+    const factor = 1 + k1 * (xu * xu + yu * yu);
+    xu = xd / factor;
+    yu = yd / factor;
+  }
   const r = rotation(camera.a),
-    q = [(u - 800) / f, (v - 600) / f, 1];
+    q = [xu, yu, 1];
   const d = r.map((row) => row.reduce((sum, x, i) => sum + x * q[i], 0));
   const world = [d[0], -d[1], -d[2]],
     n = Math.hypot(...world);
   return world.map((x) => x / n);
 }
-export function project(camera, point, f = 1500) {
+export function project(camera, point, f = 1500, k1 = 0) {
   const q = cameraVector(camera, point);
   if (q[2] <= 0.01) return null;
-  return [800 + (f * q[0]) / q[2], 600 + (f * q[1]) / q[2]];
+  const x = q[0] / q[2],
+    y = q[1] / q[2],
+    radial = 1 + k1 * (x * x + y * y);
+  return [800 + f * x * radial, 600 + f * y * radial];
 }
 function randomGenerator(seed) {
   let s = seed >>> 0;
@@ -155,11 +167,13 @@ export function createBundle({
 }
 const copyState = (s) => ({
   f: s.f,
+  ...(s.k1 !== undefined ? { k1: s.k1 } : {}),
   cameras: s.cameras.map((c) => ({ c: [...c.c], a: [...c.a] })),
   points: s.points.map((p) => [...p]),
 });
 function change(s, p, delta) {
   if (p.type === "f") s.f += delta;
+  else if (p.type === "k1") s.k1 += delta;
   else if (p.type === "p") s.points[p.i][p.j] += delta;
   else s.cameras[p.i][p.type][p.j] += delta;
 }
@@ -167,22 +181,54 @@ export function bundleResiduals(data, state) {
   return data.observations
     .filter((o) => !o.checkpoint)
     .flatMap((o) => {
-      const q = project(state.cameras[o.ci], state.points[o.pi], state.f);
+      const q = project(
+        state.cameras[o.ci],
+        state.points[o.pi],
+        state.f,
+        state.k1,
+      );
       return q ? [q[0] - o.u, q[1] - o.v] : [1e5, 1e5];
     });
+}
+export function bundleConstraints(data, state) {
+  const imageSigma = Math.max(data.noise, 0.25);
+  return [
+    ...(data.controlObservations ?? []).flatMap((o) =>
+      o.xyz.map(
+        (v, j) => ((state.points[o.pi][j] - v) / o.sigma[j]) * imageSigma,
+      ),
+    ),
+    ...(data.cameraPriors ?? []).flatMap((o) =>
+      o.xyz.map(
+        (v, j) => ((state.cameras[o.ci].c[j] - v) / o.sigma[j]) * imageSigma,
+      ),
+    ),
+  ];
+}
+export function bundleObjective(data, state, robust = true) {
+  const threshold = robust ? Math.max(1.5, 3 * data.noise) : Infinity;
+  return (
+    objective(bundleResiduals(data, state), threshold) +
+    bundleConstraints(data, state).reduce((s, x) => s + (x * x) / 2, 0)
+  );
 }
 export function bundleMetrics(data, state) {
   const r = bundleResiduals(data, state);
   const points = data.truth.points
     .map((p, i) => Math.hypot(...p.map((x, j) => x - state.points[i][j])))
-    .filter((_, i) => !data.checkpoints.includes(i) && !data.gcps.includes(i));
+    .filter(
+      (_, i) =>
+        !data.checkpoints.includes(i) &&
+        !data.gcps.includes(i) &&
+        data.observations.filter((o) => o.pi === i).length >= 2,
+    );
   const checkpointErrors = data.checkpoints.map((pi) => {
     const obs = data.observations.filter((o) => o.pi === pi),
       n = Array.from({ length: 3 }, () => [0, 0, 0]),
       b = [0, 0, 0];
     for (const o of obs) {
       const cam = state.cameras[o.ci],
-        d = cameraRay(cam, o.u, o.v, state.f);
+        d = cameraRay(cam, o.u, o.v, state.f, state.k1);
       for (let i = 0; i < 3; i++)
         for (let j = 0; j < 3; j++) {
           const p = (i === j ? 1 : 0) - d[i] * d[j];
@@ -214,14 +260,18 @@ function objective(r, threshold) {
   return cost;
 }
 export function bundleStep(data, state, { robust = true, lambda = 0.01 } = {}) {
-  const r = bundleResiduals(data, state),
+  const imageResiduals = bundleResiduals(data, state),
+    r = [...imageResiduals, ...bundleConstraints(data, state)],
     n = data.parameters.length,
     threshold = robust ? Math.max(1.5, 3 * data.noise) : Infinity;
   const columns = data.parameters.map((p) => {
     const shifted = copyState(state),
       h = 1e-4;
     change(shifted, p, h * p.scale);
-    const rr = bundleResiduals(data, shifted);
+    const rr = [
+      ...bundleResiduals(data, shifted),
+      ...bundleConstraints(data, shifted),
+    ];
     return rr.map((x, i) => (x - r[i]) / h);
   });
   const normal = Array.from({ length: n }, () => Array(n).fill(0)),
@@ -229,7 +279,8 @@ export function bundleStep(data, state, { robust = true, lambda = 0.01 } = {}) {
   for (let k = 0; k < r.length; k++) {
     const pair = k - (k % 2),
       mag = Math.hypot(r[pair], r[pair + 1]),
-      weight = Math.min(1, threshold / (mag || 1));
+      weight =
+        k < imageResiduals.length ? Math.min(1, threshold / (mag || 1)) : 1;
     for (let i = 0; i < n; i++) {
       rhs[i] -= weight * columns[i][k] * r[k];
       for (let j = 0; j <= i; j++)
@@ -238,7 +289,7 @@ export function bundleStep(data, state, { robust = true, lambda = 0.01 } = {}) {
   }
   for (let i = 0; i < n; i++)
     for (let j = 0; j < i; j++) normal[j][i] = normal[i][j];
-  const before = objective(r, threshold);
+  const before = bundleObjective(data, state, robust);
   for (let trial = 0; trial < 8; trial++) {
     const damped = normal.map((row, i) =>
       row.map(
@@ -252,8 +303,8 @@ export function bundleStep(data, state, { robust = true, lambda = 0.01 } = {}) {
     delta.forEach((x, i) =>
       change(next, data.parameters[i], x * data.parameters[i].scale),
     );
-    const cost = objective(bundleResiduals(data, next), threshold);
-    if (next.f > 200 && cost < before)
+    const cost = bundleObjective(data, next, robust);
+    if (next.f > 200 && Math.abs(next.k1 ?? 0) < 0.5 && cost < before)
       return {
         state: next,
         lambda: Math.max(lambda / 3, 1e-9),
