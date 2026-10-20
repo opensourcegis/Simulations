@@ -71,6 +71,33 @@ try {
   ]) {
     await resize(1440);
     await goto(route, selector);
+    assert.equal(
+      await evaluate(`document.querySelectorAll('.field-webgl canvas').length`),
+      route === "boresight" ? 2 : 1,
+      route + " uses perspective field renderers",
+    );
+    assert.equal(
+      await evaluate(`document.querySelectorAll('.field-error').length`),
+      0,
+      route + " WebGL initialized",
+    );
+    const presets = await evaluate(
+      `document.querySelector('.field-view-controls>div').children.length`,
+    );
+    for (let i = 0; i < presets; i++) {
+      await evaluate(
+        `document.querySelectorAll('.field-view-controls>div button')[${i}].click()`,
+      );
+      assert.equal(
+        await evaluate(
+          `document.querySelectorAll('.field-view-controls>div button')[${i}].getAttribute('aria-pressed')`,
+        ),
+        "true",
+      );
+    }
+    await evaluate(
+      `document.querySelector('.field-view-controls button').click()`,
+    );
     for (const width of [1920, 1440, 1024, 768, 390, 320]) {
       await resize(width);
       await pause(100);
@@ -83,6 +110,36 @@ try {
   }
   await resize(1440);
   await goto("adaptive-tin", "#tin-final");
+  for (const name of [
+    "Measured returns",
+    "Recovered terrain",
+    "Survey context",
+  ]) {
+    await evaluate(
+      `[...document.querySelectorAll('.field-modebar button')].find(b=>b.textContent==='${name}').click()`,
+    );
+    assert.equal(
+      await evaluate(
+        `[...document.querySelectorAll('.field-modebar button')].find(b=>b.textContent==='${name}').getAttribute('aria-pressed')`,
+      ),
+      "true",
+    );
+  }
+  await evaluate(
+    `[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Switch to 2D Plan')).click()`,
+  );
+  assert.equal(
+    await evaluate(`document.querySelectorAll('canvas#tin-plan').length`),
+    1,
+  );
+  await evaluate(
+    `[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Switch to 3D View')).click()`,
+  );
+  assert.equal(
+    await evaluate(`document.querySelectorAll('.field-webgl canvas').length`),
+    1,
+    "returning to 3D recreates the renderer",
+  );
   await evaluate(`document.querySelectorAll('.scenario-card')[3].click()`);
   await until(
     `parseInt(document.getElementById('tin-screened').textContent)>0`,
@@ -106,8 +163,15 @@ try {
     `(async()=>{document.getElementById('tin-remove-low').click();await surveyTest.wait(400);document.getElementById('tin-final').click();document.getElementById('tin-point').value='0';document.getElementById('tin-point').dispatchEvent(new Event('change',{bubbles:true}));})()`,
   );
   await screenshot("/tmp/tin-realism.png");
-  await evaluate(`(async()=>{surveyTest.set('tin-distance',.8);await surveyTest.wait(300);})()`);
-  assert((await evaluate(`document.querySelector('.tin-step-progress').textContent`)).includes('Iteration 0 /'),'changing classification settings resets history playback');
+  await evaluate(
+    `(async()=>{surveyTest.set('tin-distance',.8);await surveyTest.wait(300);})()`,
+  );
+  assert(
+    (
+      await evaluate(`document.querySelector('.tin-step-progress').textContent`)
+    ).includes("Iteration 0 /"),
+    "changing classification settings resets history playback",
+  );
   console.log("TIN support and low-outlier experiment:", {
     screened,
     contaminated,
@@ -150,7 +214,7 @@ try {
 
   await goto("gsd", "#gsd-captured");
   assert.equal(
-    await evaluate(`document.querySelectorAll('.photo-webgl canvas').length`),
+    await evaluate(`document.querySelectorAll('.field-webgl canvas').length`),
     1,
   );
   await evaluate(`document.getElementById('gsd-nadir').click()`);

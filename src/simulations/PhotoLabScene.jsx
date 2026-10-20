@@ -49,12 +49,26 @@ export function caption(group, text, position, color = "#d4e4ed", size = 1) {
   return sprite;
 }
 export function disposeGroup(group) {
+  const disposed = new Set();
   group.traverse((o) => {
-    if (!o.isSprite) o.geometry?.dispose();
+    if (o.isInstancedMesh) o.dispose();
+    if (!o.isSprite && o.geometry && !disposed.has(o.geometry)) {
+      o.geometry.dispose();
+      disposed.add(o.geometry);
+    }
     const materials = Array.isArray(o.material) ? o.material : [o.material];
     materials.forEach((m) => {
-      m?.map?.dispose();
-      m?.dispose();
+      if (!m || disposed.has(m)) return;
+      Object.values(m)
+        .filter((v) => v?.isTexture)
+        .forEach((t) => {
+          if (!disposed.has(t)) {
+            t.dispose();
+            disposed.add(t);
+          }
+        });
+      m.dispose();
+      disposed.add(m);
     });
   });
 }

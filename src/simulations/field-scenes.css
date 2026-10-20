@@ -1,0 +1,212 @@
+.field-viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #b9cbd0;
+  color: #eef3ef;
+  border: 1px solid #a4b1ad;
+}
+.field-webgl {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  touch-action: none;
+}
+.field-webgl canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.field-hud {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+  font:
+    9px/1.6 ui-monospace,
+    monospace;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 5px #0008;
+  background: #18362bd9;
+  border-radius: 4px;
+  padding: 6px 9px;
+}
+.field-hud > span:last-child {
+  margin-left: auto;
+  letter-spacing: 0;
+  font-size: 9px;
+}
+.field-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #e2e9dc;
+}
+.field-view-controls {
+  position: absolute;
+  bottom: 15px;
+  left: 15px;
+  right: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid #ffffff35;
+  border-radius: 7px;
+  background: #172d2bd9;
+  backdrop-filter: blur(10px);
+}
+.field-view-controls > span {
+  font:
+    9px ui-monospace,
+    monospace;
+  color: #c7d5cf;
+}
+.field-view-controls > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.field-viewport .field-view-controls button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #ffffff25;
+  background: #ffffff09;
+  border-radius: 4px;
+  color: #e2ebe5;
+  font:
+    11px system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.field-viewport .field-view-controls button[aria-pressed="true"] {
+  background: #e4e9dc;
+  color: #22332e;
+  border-color: #e4e9dc;
+}
+.field-error {
+  padding: 50px 24px;
+  color: #18352b;
+}
+.field-modebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+.field-modebar > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.field-modebar button {
+  padding: 8px 12px;
+  border: 1px solid #cbd6cb;
+  border-radius: 5px;
+  background: #f4f5ef;
+  color: #4a5c52;
+  font:
+    11px system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.field-modebar button[aria-pressed="true"] {
+  background: #25483d;
+  color: #f3f6ed;
+  border-color: #25483d;
+}
+.field-modebar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font:
+    10px system-ui,
+    sans-serif;
+  color: #627269;
+}
+.field-caption {
+  margin: 10px 0 0;
+  color: #63756a;
+  font:
+    10px/1.8 system-ui,
+    sans-serif;
+}
+.field-detail-note {
+  padding: 13px 15px;
+  background: #edf0e7;
+  border: 1px solid #dce2d5;
+  border-radius: 6px;
+  font:
+    11px/1.8 system-ui,
+    sans-serif;
+  color: #52675b;
+}
+.field-detail-note strong {
+  color: #2a4637;
+}
+.field-analysis {
+  margin-top: 15px;
+}
+.field-analysis summary {
+  cursor: pointer;
+  font:
+    11px system-ui,
+    sans-serif;
+  color: #3c6554;
+  padding: 10px 0;
+}
+.realism-experiment .field-webgl {
+  height: 500px;
+}
+.photo-stage .field-viewport {
+  border: 0;
+  border-radius: 0;
+}
+.photo-stage .field-webgl {
+  height: 570px;
+}
+.photo-stage .field-modebar {
+  padding: 0 20px;
+}
+.photo-stage .field-caption,
+.photo-stage .field-modebar label {
+  color: #bacac3;
+}
+.photo-stage > .field-caption {
+  margin: 0;
+  padding: 12px 20px 20px;
+}
+@media (max-width: 700px) {
+  .field-webgl,
+  .photo-stage .field-webgl,
+  .realism-experiment .field-webgl {
+    height: 420px;
+  }
+  .field-hud > span:last-child {
+    display: none;
+  }
+  .field-view-controls {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .field-hud {
+    font-size: 8px;
+  }
+  .field-view-controls button {
+    font-size: 9px;
+    padding: 6px 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-viewport * {
+    scroll-behavior: auto;
+  }
+}

@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as THREE from "three";
-import PhotoLabScene, { caption, marker, segment } from "./PhotoLabScene.jsx";
+import { useEffect, useMemo, useRef, useState } from "react";
+import GsdFieldView from "./GsdFieldView.jsx";
 import { PhotoLab, Panel, Slider, Metric } from "./PhotoLabUI.jsx";
 import {
   CAMERA_SENSORS,
   gsdCamera,
-  groundPixelRay,
   localGsd,
   imageFootprint,
   imageBlur,
@@ -100,139 +98,6 @@ export default function Gsd() {
         tc.fillRect(x, y, 1, 1);
       }
   }, [captured, pattern]);
-  const build = useCallback(() => {
-    const group = new THREE.Group(),
-      gradient = Math.tan((camera.slope * Math.PI) / 180),
-      groundSize = 260;
-    const positions = [
-      -groundSize,
-      -groundSize,
-      camera.elevation - gradient * groundSize,
-      groundSize,
-      -groundSize,
-      camera.elevation + gradient * groundSize,
-      groundSize,
-      groundSize,
-      camera.elevation + gradient * groundSize,
-      -groundSize,
-      groundSize,
-      camera.elevation - gradient * groundSize,
-    ];
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(positions, 3),
-    );
-    geometry.setIndex([0, 1, 2, 0, 2, 3]);
-    geometry.computeVertexNormals();
-    group.add(
-      new THREE.Mesh(
-        geometry,
-        new THREE.MeshStandardMaterial({
-          color: 0x697d59,
-          side: THREE.DoubleSide,
-          roughness: 1,
-        }),
-      ),
-    );
-    for (let a = -250; a <= 250; a += 25) {
-      segment(
-        group,
-        [
-          [-250, a, camera.elevation - 250 * gradient + 0.05],
-          [250, a, camera.elevation + 250 * gradient + 0.05],
-        ],
-        0xb0bc87,
-        0.3,
-      );
-      segment(
-        group,
-        [
-          [a, -250, camera.elevation + a * gradient + 0.05],
-          [a, 250, camera.elevation + a * gradient + 0.05],
-        ],
-        0xb0bc87,
-        0.3,
-      );
-    }
-    const origin = [0, 0, camera.height];
-    marker(group, origin, 0xe4e8de, 1.8);
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 5, 2),
-      new THREE.MeshStandardMaterial({ color: 0x617783 }),
-    );
-    body.position.set(...origin);
-    body.rotation.y = (-camera.tilt * Math.PI) / 180;
-    group.add(body);
-    for (let row = 0; row <= 7; row++)
-      for (let col = 0; col <= 9; col++) {
-        if (row !== 0 && row !== 7 && col !== 0 && col !== 9) continue;
-        const p = groundPixelRay(
-          camera,
-          (col / 9) * camera.width,
-          (row / 7) * camera.imageHeight,
-        );
-        if (p && Math.hypot(...p) < 1500)
-          segment(group, [origin, p], 0x9cc9d5, 0.15);
-      }
-    for (let row = 0; row < 7; row++)
-      for (let col = 0; col < 9; col++) {
-        const corners = [
-          [col, row],
-          [col + 1, row],
-          [col + 1, row + 1],
-          [col, row + 1],
-        ].map(([x, y]) =>
-          groundPixelRay(
-            camera,
-            (x / 9) * camera.width,
-            (y / 7) * camera.imageHeight,
-          ),
-        );
-        if (corners.every((p) => p && Math.hypot(...p) < 1500))
-          segment(
-            group,
-            [...corners, corners[0]].map((p) => [p[0], p[1], p[2] + 0.1]),
-            col === cell[0] && row === cell[1] ? 0xffd36a : 0xabc5bc,
-            col === cell[0] && row === cell[1] ? 0.95 : 0.35,
-          );
-      }
-    if (footprint && footprint.range < 1500) {
-      segment(group, [origin, footprint.center], 0xffd36a, 0.9);
-      marker(group, footprint.center, 0xffd36a, 0.5);
-      const enlarged = footprint.corners.map((p) =>
-        p.map(
-          (x, j) =>
-            footprint.center[j] +
-            80 * (x - footprint.center[j]) +
-            (j === 2 ? 0.25 : 0),
-        ),
-      );
-      segment(group, [...enlarged, enlarged[0]], 0xffd36a);
-      caption(
-        group,
-        "Native pixel outline ×80",
-        [footprint.center[0], footprint.center[1], footprint.center[2] + 5],
-        "#ffe0a4",
-        4,
-      );
-    }
-    caption(
-      group,
-      `${camera.width} × ${camera.imageHeight} photosites`,
-      [0, 0, camera.height + 8],
-      "#c2d7e2",
-      5,
-    );
-    caption(
-      group,
-      "25 m surface grid · actual ray-plane intersections",
-      [-80, -95, camera.elevation - 80 * gradient + 2],
-      "#d2ddc7",
-      4,
-    );
-    return group;
-  }, [camera, cell, footprint]);
   return (
     <PhotoLab
       name="Ground sampling distance"
@@ -255,10 +120,10 @@ export default function Gsd() {
             anisotropic and variable. A ray parallel to or above the plane has
             no forward ground hit. No horizon is silently clamped to a finite
             footprint. The 9 × 7 display regions group many native pixels and
-            are not sensor photosites. The selected native-pixel outline is
-            enlarged 80×; camera housing is enlarged for visibility. The ground
-            viewport is finite; distant intersections may be outside its
-            drawing.
+            are not sensor photosites. The camera housing and target have
+            physical dimensions. Sampling guides are optional and the site is
+            synthetic context. The ground viewport is finite; distant
+            intersections may be outside its drawing.
           </p>
           <h3>Sampling is not resolving</h3>
           <p>
@@ -438,20 +303,16 @@ export default function Gsd() {
         <div className="photo-instruments">
           <Panel
             tag="ACTUAL PROJECTION GEOMETRY"
-            title="Oblique image footprint on the terrain"
+            title="Survey camera & ground footprint"
             className="photo-stage"
           >
-            <PhotoLabScene
-              build={build}
-              initial={[130, -155, 145]}
-              target={[40, 0, 40]}
-              maxDistance={2000}
-              label="Aerial camera, oblique ground footprint and selected pixel ray on a sloping terrain plane."
+            <GsdFieldView
+              camera={camera}
+              footprint={footprint}
+              targetSize={targetSize}
+              pattern={pattern}
+              phase={phase}
             />
-            <div className="photo-stage-key">
-              <span>9 × 7 grouped image regions—not individual pixels</span>
-              <span>gold native pixel outline ×80</span>
-            </div>
           </Panel>
           <Panel
             tag="INSPECT IMAGE POSITION"

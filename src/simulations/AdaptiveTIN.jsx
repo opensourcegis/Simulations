@@ -5,6 +5,7 @@ import './simulation.css';
 import './native.css';
 import './tin.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
+import TinFieldView from './TinFieldView.jsx';
 import { tinProfileSegment } from '../../games/shared/lidar-physics.js';
 import { generateSceneData, computeAdaptiveTINHistory, tinTerrainQuality } from './tin-model.js';
 
@@ -838,8 +839,8 @@ export default function AdaptiveTIN() {
               setCurrentStep(0);
             }}
           >
-            <strong>🌾 Gentle Rolling Terrain &amp; Trees</strong>
-            <span>Realistic, near-flat undulating ground with vegetation clusters &amp; residential house</span>
+            <strong>Rolling terrain &amp; trees</strong>
+            <span>Undulating ground with vegetation clusters and a building</span>
           </button>
           <button
             className={`scenario-card ${preset === 'steep' ? 'active' : ''}`}
@@ -858,8 +859,8 @@ export default function AdaptiveTIN() {
               setCurrentStep(0);
             }}
           >
-            <strong>🏙️ Urban City Block</strong>
-            <span>Flat ground with multi-story office towers, vehicles &amp; street trees</span>
+            <strong>Urban block</strong>
+            <span>Near-flat terrain with multi-storey buildings and trees</span>
           </button>
           <button
             className={`scenario-card ${preset === 'noise' ? 'active' : ''}`}
@@ -886,19 +887,19 @@ export default function AdaptiveTIN() {
                   style={{ padding: '3px 9px', fontSize: 11 }}
                   onClick={() => setShow3DObjects(!show3DObjects)}
                 >
-                  {show3DObjects ? '🌲 Hide 3D Objects' : '🌲 Show 3D Objects'}
+                  {show3DObjects ? 'Hide site objects' : 'Show site objects'}
                 </button>
                 <button
                   className="tin-btn secondary"
                   style={{ padding: '3px 9px', fontSize: 11 }}
                   onClick={() => setView3D(!view3D)}
                 >
-                  {view3D ? '📷 Switch to 2D Plan' : '🧊 Switch to 3D View'}
+                  {view3D ? 'Switch to 2D Plan' : 'Switch to 3D View'}
                 </button>
               </small>
             </h2>
 
-            <canvas
+            {view3D ? <TinFieldView points={points} physicalObjects={physicalObjects} preset={preset} snapshot={currentSnapshot} selectedId={hoveredPointId} onSelect={setHoveredPointId} showObjects={show3DObjects} maxEdge={maxEdge}/> : <canvas id="tin-plan" aria-label="Plan analysis of measured returns and the current ground triangulation"
               ref={mainCanvasRef}
               className="tin-canvas"
               width={700}
@@ -911,55 +912,7 @@ export default function AdaptiveTIN() {
                 setHoveredPointId(null);
               }}
               style={{ cursor: isDragging ? 'grabbing' : view3D ? 'grab' : 'crosshair' }}
-            />
-
-            {/* 3D Camera Controls Bar */}
-            {view3D && (
-              <div className="tin-camera-controls">
-                <label htmlFor="tin-orbit">Rotate (Orbit):</label>
-                <input
-                  id="tin-orbit"
-                  type="range"
-                  min="0"
-                  max="360"
-                  value={yawAngle}
-                  onChange={(e) => setYawAngle(Number(e.target.value))}
-                  style={{ width: 80, accentColor: '#0f8a4d' }}
-                />
-                <label htmlFor="tin-pitch">Tilt (Pitch):</label>
-                <input
-                  id="tin-pitch"
-                  type="range"
-                  min="10"
-                  max="85"
-                  value={pitchAngle}
-                  onChange={(e) => setPitchAngle(Number(e.target.value))}
-                  style={{ width: 80, accentColor: '#0f8a4d' }}
-                />
-                <label htmlFor="tin-zoom">Zoom:</label>
-                <input
-                  id="tin-zoom"
-                  type="range"
-                  min="0.6"
-                  max="2.2"
-                  step="0.1"
-                  value={zoomScale}
-                  onChange={(e) => setZoomScale(Number(e.target.value))}
-                  style={{ width: 80, accentColor: '#0f8a4d' }}
-                />
-                <button
-                  className="tin-btn secondary"
-                  style={{ padding: '2px 8px', fontSize: 11, marginLeft: 'auto' }}
-                  onClick={() => {
-                    setYawAngle(45);
-                    setPitchAngle(35);
-                    setZoomScale(1.0);
-                  }}
-                >
-                  🎯 Reset Cam
-                </button>
-              </div>
-            )}
+            />}
 
             {/* View Rotation Control & Toolbar */}
             <div className="tin-toolbar">

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SurveyFlightView from "./SurveyFlightView.jsx";
 import {
   directGeoreference,
   errorContributions,
@@ -101,6 +102,14 @@ export default function GeoreferencingExperiment({
         </div>
         <span>Truth and reconstruction use the same pulse</span>
       </div>
+      <SurveyFlightView
+        arms={arms}
+        attitude={attitude}
+        boresight={boresight}
+        height={height}
+        slope={slope}
+        shot={shot}
+      />
       <div className="realism-workspace">
         <div>
           <div className="control-grid realism-controls">
@@ -157,47 +166,55 @@ export default function GeoreferencingExperiment({
           </div>
         </div>
         <div>
-          <svg
-            className="realism-map"
-            viewBox="0 0 700 400"
-            role="img"
-            aria-label="Opposing flight-strip ground points. True positions are hollow, erroneous positions filled; error vectors are exaggerated ten times for inspection."
-          >
-            <rect width="700" height="400" fill="#0d1c27" />
-            {[-2, -1, 0, 1, 2].map((i) => (
-              <g key={i} stroke="#25414c">
-                <path d={`M${350 + i * 100} 25V375M35 ${200 + i * 65}H665`} />
-              </g>
-            ))}
-            <text x="30" y="25" fill="#b4cbd2" fontSize="12">
-              LOCAL GROUND PLAN · N ↑ / W →
-            </text>
-            {swaths.map((s, i) => {
-              const [n, w] = s.actual,
-                dx = s.error[0] * exaggeration,
-                dy = s.error[1] * exaggeration,
-                color = s.heading === 0 ? "#79d9d4" : "#ffbd76";
-              return (
-                <g key={i}>
-                  <circle
-                    cx={X(w)}
-                    cy={Y(n)}
-                    r="4"
-                    fill="none"
-                    stroke={color}
-                  />
-                  <path
-                    d={`M${X(w)} ${Y(n)}L${X(w + dy)} ${Y(n + dx)}`}
-                    stroke={color}
-                  />
-                  <circle cx={X(w + dy)} cy={Y(n + dx)} r="2.4" fill={color} />
+          <details className="field-analysis">
+            <summary>Inspect opposing-strip residuals · vectors ×10</summary>
+            <svg
+              className="realism-map"
+              viewBox="0 0 700 400"
+              role="img"
+              aria-label="Opposing flight-strip ground points. True positions are hollow, erroneous positions filled; error vectors are exaggerated ten times for inspection."
+            >
+              <rect width="700" height="400" fill="#0d1c27" />
+              {[-2, -1, 0, 1, 2].map((i) => (
+                <g key={i} stroke="#25414c">
+                  <path d={`M${350 + i * 100} 25V375M35 ${200 + i * 65}H665`} />
                 </g>
-              );
-            })}
-            <text x="30" y="377" fill="#b4cbd2" fontSize="11">
-              Cyan: heading 0° · orange: heading 180° · residual vectors ×10
-            </text>
-          </svg>
+              ))}
+              <text x="30" y="25" fill="#b4cbd2" fontSize="12">
+                LOCAL GROUND PLAN · N ↑ / W →
+              </text>
+              {swaths.map((s, i) => {
+                const [n, w] = s.actual,
+                  dx = s.error[0] * exaggeration,
+                  dy = s.error[1] * exaggeration,
+                  color = s.heading === 0 ? "#79d9d4" : "#ffbd76";
+                return (
+                  <g key={i}>
+                    <circle
+                      cx={X(w)}
+                      cy={Y(n)}
+                      r="4"
+                      fill="none"
+                      stroke={color}
+                    />
+                    <path
+                      d={`M${X(w)} ${Y(n)}L${X(w + dy)} ${Y(n + dx)}`}
+                      stroke={color}
+                    />
+                    <circle
+                      cx={X(w + dy)}
+                      cy={Y(n + dx)}
+                      r="2.4"
+                      fill={color}
+                    />
+                  </g>
+                );
+              })}
+              <text x="30" y="377" fill="#b4cbd2" fontSize="11">
+                Cyan: heading 0° · orange: heading 180° · residual vectors ×10
+              </text>
+            </svg>
+          </details>
           <div className="readouts realism-readouts">
             <div>
               <span>Combined horizontal error</span>
@@ -241,8 +258,8 @@ export default function GeoreferencingExperiment({
         numerical result.
       </p>
       <p className="realism-note">
-        The small assembly below uses deliberately exaggerated angles and
-        dimensions for anatomy; this panel uses survey-scale ranges and
+        The detailed assembly uses physical mounting dimensions and deliberately
+        large instructional angles; this panel uses survey-scale ranges and
         calibration residuals. Opposing swaths reset heading to 0°/180° while
         retaining roll/pitch; they are diagnostic synthetic shots, not a
         trajectory-estimation or calibration solver. Earth curvature, GNSS

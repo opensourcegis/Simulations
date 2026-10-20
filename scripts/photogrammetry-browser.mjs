@@ -42,7 +42,16 @@ await cdp("Runtime.enable");
 await cdp("Page.enable");
 const goto = async (path) => {
   await cdp("Page.navigate", { url: siteBase + path });
-  await pause(1000);
+  const ready = path.includes("camera-working")
+    ? "!!document.getElementById('camera-blur') && !!document.querySelector('.photo-webgl canvas')"
+    : path.includes("block-adjustment")
+      ? "!!document.getElementById('ba-rms') && !!document.querySelector('.photo-webgl canvas')"
+      : "!!document.querySelector('a[href*=camera-working]')";
+  for (let attempt = 0; attempt < 150; attempt++) {
+    if (await evaluate(ready)) break;
+    await pause(100);
+  }
+  assert(await evaluate(ready), "route finished loading: " + path);
   await evaluate(
     `window.photoTest={wait:ms=>new Promise(r=>setTimeout(r,ms)),set:(id,value)=>{const el=document.getElementById(id);Object.getOwnPropertyDescriptor(el.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(el,String(value));el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}));}}`,
   );
