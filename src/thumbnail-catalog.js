@@ -32,4 +32,5 @@ export const THUMBNAILS = {
   beam: "LiDAR instrument with a diverging off-nadir ray bundle and elliptical ground footprint",
   imu: "IMU circuit-board cutaway with a suspended accelerometer proof mass and paired vibrating gyro masses",
   sbet: "Survey drone following unaided, Kalman-filtered and smoothed GNSS/IMU trajectories over terrain",
+  adjustment: "Survey level and graduated staffs connected as a benchmark network beside its computed normal-equation matrix",
 };

@@ -13,7 +13,7 @@ try {
     mobile: false,
   });
   await page.send("Page.navigate", { url: base });
-  await page.until("document.querySelectorAll('.card').length===23");
+  await page.until("document.querySelectorAll('.card').length===24");
   await page.evaluate(
     "Promise.all([...document.querySelectorAll('.simulation-thumbnail')].map(image=>{image.loading='eager';return image.decode()}))",
   );
@@ -87,7 +87,7 @@ try {
   await page.evaluate(
     "[...document.querySelectorAll('.filter')].find(b=>b.textContent==='All').click()",
   );
-  await page.until("document.querySelectorAll('.card').length===23");
+  await page.until("document.querySelectorAll('.card').length===24");
   await page.evaluate(
     "(()=>{const e=document.querySelector('input[aria-label=\"Search simulators\"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'camera works');e.dispatchEvent(new Event('input',{bubbles:true}))})()",
   );
@@ -107,7 +107,7 @@ try {
   );
   assert.equal(page.errors.length, 0, JSON.stringify(page.errors));
   console.log(
-    "Catalogue: all 23 cards, 44 decoded WebP sizes, six layouts, filtering/search, reduced motion and no runtime errors passed.",
+    "Catalogue: all 24 cards, 46 decoded WebP sizes, six layouts, filtering/search, reduced motion and no runtime errors passed.",
   );
 } finally {
   await page.close();

@@ -45,3 +45,7 @@ Every card uses a locally hosted 3D-rendered WebP preview with responsive sizes 
 ## Inertial navigation and LiDAR trajectories
 
 **Inside an IMU — 3D** (`?simulation=imu`) demonstrates specific force, vibrating gyro operation, attitude integration, gravity aiding, bias and stationary calibration. **SBET Trajectory & Kalman Filter** (`?simulation=sbet-trajectory`) adds a 15-state GNSS/IMU error-state filter, covariance/innovation inspection, GNSS outages, outlier rejection, backward RTS smoothing, time-tagged LiDAR endpoints and a clearly labelled teaching CSV export. See [models, conventions and checks](docs/INERTIAL_NAVIGATION_LABS.md). Run `npm run test:navigation` and `npm run test:navigation:browser`.
+
+## Least-squares adjustment
+
+**Least-Squares Adjustment** (`?simulation=least-squares`) is a worked numerical lab for weighted means, levelling networks, correlated GNSS baselines and iterative code positioning. Edit observations and inspect numeric substitutions, A/w/Σ/P, row-by-row normal-equation products, corrections, residuals, datum rank, covariance and quality tests. See [mathematics, scope and verification](docs/LEAST_SQUARES_LAB.md). Run `npm run test:adjustment` and `npm run test:adjustment:browser`.

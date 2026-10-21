@@ -12,6 +12,8 @@
     "test:catalogue:browser": "node scripts/catalogue-browser.mjs",
     "test:navigation": "node --test scripts/navigation.test.js",
     "test:navigation:browser": "node scripts/navigation-browser.mjs",
+    "test:adjustment": "node --test scripts/least-squares.test.js",
+    "test:adjustment:browser": "node scripts/least-squares-browser.mjs",
     "test:lidar": "node --test scripts/lidar-physics.test.js scripts/survey-realism.test.js scripts/survey-teaching.test.js scripts/scanning.test.js",
     "test:scanning:browser": "node scripts/scanning-browser.mjs",
     "test:survey:browser": "node scripts/survey-realism-browser.mjs",

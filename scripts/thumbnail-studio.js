@@ -20,6 +20,10 @@ import {
 import earthUrl from "../src/assets/earth.jpg";
 import { buildImuBench } from "../src/simulations/imu-scene.js";
 import { makeTrajectory } from "../src/simulations/trajectory-model.js";
+import {
+  makeLeastSquaresExample,
+  solveLeastSquaresExample,
+} from "../src/simulations/least-squares-model.js";
 
 const W = 960,
   H = 540;
@@ -1117,6 +1121,73 @@ function sbet(g) {
   for (const y of [-1, 0, 1])
     line(g, [p, [p[0], p[1] + y, 0.05]], colors.cyan, 0.6);
 }
+function adjustment(g) {
+  platform(g, 12, 7, mat(0x73836d));
+  const stations = [
+    [-4, -1.8],
+    [-1, 1.4],
+    [3, 1.6],
+    [3.7, -1.8],
+  ];
+  for (const [x, y] of stations) {
+    cylinder(g, 0.3, 0.1, [x, y, 0.08], metal);
+    box(g, [0.16, 0.12, 2.2], [x, y, 1.2], mat(0xe7e4d7), 0.015);
+    for (let i = 0; i < 11; i++)
+      box(
+        g,
+        [0.17, 0.025, 0.075],
+        [x, y - 0.07, 0.2 + i * 0.18],
+        i % 2 ? dark : mat(0xb56f46),
+        0.005,
+      );
+  }
+  for (const [a, b] of [
+    [0, 1],
+    [0, 2],
+    [1, 2],
+    [1, 3],
+    [2, 3],
+    [0, 3],
+  ])
+    line(
+      g,
+      [
+        [...stations[a], 0.1],
+        [...stations[b], 0.1],
+      ],
+      colors.gold,
+      0.65,
+    );
+  for (const a of [0, 2.1, 4.2])
+    rod(
+      g,
+      [0, -1, 1.5],
+      [Math.cos(a) * 0.7, -1 + Math.sin(a) * 0.7, 0.04],
+      0.045,
+      gold,
+    );
+  cylinder(g, 0.4, 0.15, [0, -1, 1.5], dark);
+  box(g, [0.9, 0.42, 0.4], [0, -1, 1.8], metal);
+  rod(g, [-0.65, -1, 1.8], [0.65, -1, 1.8], 0.16, dark);
+  const result = solveLeastSquaresExample(makeLeastSquaresExample("level"));
+  const texture = canvasTexture((c, w, h) => {
+    c.fillStyle = "#102e38";
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = "#a8ccbf";
+    c.font = "38px monospace";
+    c.fillText("N delta = u", 60, 75);
+    c.font = "32px monospace";
+    result.final.fit.N.forEach((r, i) => {
+      r.forEach((v, j) =>
+        c.fillText((v / 1000).toFixed(1), 60 + j * 220, 170 + i * 85),
+      );
+      c.fillStyle = "#e7bd77";
+      c.fillText(result.final.fit.u[i].toFixed(2), 760, 170 + i * 85);
+      c.fillStyle = "#a8ccbf";
+    });
+  });
+  imagePlane(g, [0, 2.6, 3.2], 5.8, 2.2, texture).rotation.x = Math.PI / 2;
+}
 const scenes = {
   ranging,
   scanning,
@@ -1140,6 +1211,7 @@ const scenes = {
   beam,
   imu,
   sbet,
+  adjustment,
 };
 window.thumbnailKinds = Object.keys(scenes);
 window.renderThumbnail = async (kind, width = W) => {
