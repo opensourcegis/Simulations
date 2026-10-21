@@ -37,3 +37,7 @@ The six LiDAR lessons include working principles, guided experiments, live calcu
 Bundle Block Adjustment now solves actual noisy image observations with a small Levenberg–Marquardt bundle, robust fitting, datum warnings and withheld checkpoints. **How a Camera Works — 3D** adds an orbitable cutaway covering lens focus, aperture, shutter, sensor, exposure/readout and calibration. See [models and verification](docs/PHOTOGRAMMETRY_LABS.md) and run `npm run test:photo` for numerical checks.
 
 Run numerical regression checks with `npm run test:lidar` and `npm run test:photo`, and verify production integration with `npm run build`.
+
+## Catalogue thumbnails
+
+Every card uses a locally hosted 3D-rendered WebP preview with responsive sizes and descriptive alternative text. See [preview artwork and regeneration](docs/CATALOGUE_THUMBNAILS.md). Run `npm run test:thumbnails` and `npm run test:catalogue:browser` to check assets and catalogue behavior; no thumbnail rendering step is needed for deployment.
