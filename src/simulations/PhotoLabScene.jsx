@@ -98,6 +98,7 @@ export default function PhotoLabScene({
   onSelect,
   onFrame,
   closeup,
+  closeupLabel = "Optics close-up",
   maxDistance = 130,
   fitToContent = false,
 }) {
@@ -244,13 +245,14 @@ export default function PhotoLabScene({
             onClick={() => {
               const c = context.current;
               if (c) {
+                closeup.onActivate?.();
                 c.controls.target.set(...closeup.target);
                 c.camera.position.set(...closeup.position);
                 c.controls.update();
               }
             }}
           >
-            Optics close-up
+            {closeupLabel}
           </button>
         )}
       </div>

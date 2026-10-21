@@ -1,6 +1,6 @@
 # Catalogue previews
 
-All 21 simulation cards use locally hosted, responsive WebP previews (20 subjects; the original and React ortho labs share their subject). The old inline SVG sketches have been removed. Every image has a descriptive alternative, explicit 16:9 dimensions, lazy loading, and 480/960-pixel sources. Hover enlargement respects reduced-motion preferences. No 3D renderer or third-party image host is needed on the catalogue page.
+All 23 simulation cards use locally hosted, responsive WebP previews (22 subjects; the original and React ortho labs share their subject). The old inline SVG sketches have been removed. Every image has a descriptive alternative, explicit 16:9 dimensions, lazy loading, and 480/960-pixel sources. Hover enlargement respects reduced-motion preferences. No 3D renderer or third-party image host is needed on the catalogue page.
 
 ## Artwork
 

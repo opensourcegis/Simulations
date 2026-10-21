@@ -1,12 +1,21 @@
 import "./photo-lab.css";
-export function PhotoLab({ name, title, intro, children, notebook }) {
+export function PhotoLab({
+  name,
+  title,
+  intro,
+  children,
+  notebook,
+  discipline = "PHOTOGRAMMETRY",
+}) {
   return (
     <div className="photo-lab">
       <header className="photo-header">
         <a href={import.meta.env.BASE_URL}>
           <span aria-hidden="true">⌁</span> GEOSIM / All laboratories
         </a>
-        <span>PHOTOGRAMMETRY · {name.toUpperCase()}</span>
+        <span>
+          {discipline} · {name.toUpperCase()}
+        </span>
       </header>
       <section className="photo-intro">
         <p className="photo-eyebrow">{name}</p>

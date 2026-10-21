@@ -30,4 +30,6 @@ export const THUMBNAILS = {
   sar: "Side-looking radar satellite illuminating a ground swath beside its flight path",
   iot: "Factory machines with connected sensors and a digital telemetry display",
   beam: "LiDAR instrument with a diverging off-nadir ray bundle and elliptical ground footprint",
+  imu: "IMU circuit-board cutaway with a suspended accelerometer proof mass and paired vibrating gyro masses",
+  sbet: "Survey drone following unaided, Kalman-filtered and smoothed GNSS/IMU trajectories over terrain",
 };

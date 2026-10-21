@@ -41,3 +41,7 @@ Run numerical regression checks with `npm run test:lidar` and `npm run test:phot
 ## Catalogue thumbnails
 
 Every card uses a locally hosted 3D-rendered WebP preview with responsive sizes and descriptive alternative text. See [preview artwork and regeneration](docs/CATALOGUE_THUMBNAILS.md). Run `npm run test:thumbnails` and `npm run test:catalogue:browser` to check assets and catalogue behavior; no thumbnail rendering step is needed for deployment.
+
+## Inertial navigation and LiDAR trajectories
+
+**Inside an IMU — 3D** (`?simulation=imu`) demonstrates specific force, vibrating gyro operation, attitude integration, gravity aiding, bias and stationary calibration. **SBET Trajectory & Kalman Filter** (`?simulation=sbet-trajectory`) adds a 15-state GNSS/IMU error-state filter, covariance/innovation inspection, GNSS outages, outlier rejection, backward RTS smoothing, time-tagged LiDAR endpoints and a clearly labelled teaching CSV export. See [models, conventions and checks](docs/INERTIAL_NAVIGATION_LABS.md). Run `npm run test:navigation` and `npm run test:navigation:browser`.

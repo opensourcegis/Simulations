@@ -18,6 +18,8 @@ import {
   refineSfm,
 } from "../src/simulations/sfm-reconstruction.js";
 import earthUrl from "../src/assets/earth.jpg";
+import { buildImuBench } from "../src/simulations/imu-scene.js";
+import { makeTrajectory } from "../src/simulations/trajectory-model.js";
 
 const W = 960,
   H = 540;
@@ -1074,6 +1076,47 @@ function beam(g) {
   );
 }
 
+function imu(g) {
+  const bench = buildImuBench(),
+    board = bench.getObjectByName("imu-body");
+  board.removeFromParent();
+  board.position.z = 0.25;
+  board.scale.setScalar(1.6);
+  g.add(board);
+  platform(g, 9, 6, mat(0x49605f));
+}
+function sbet(g) {
+  platform(g, 14, 7, mat(0x607b70));
+  const result = makeTrajectory(),
+    center = result.records.at(-1).truth.p[0] / 2;
+  const transform = (p) => [
+    (p[0] - center) * 0.025,
+    p[1] * 0.025,
+    p[2] * 0.025,
+  ];
+  for (const [key, color] of [
+    ["raw", colors.gold],
+    ["filtered", colors.cyan],
+    ["smoothed", 0x94d7ac],
+  ])
+    line(
+      g,
+      result.records
+        .filter((_, i) => i % 10 === 0)
+        .map((r) => transform(r[key].p)),
+      color,
+      0.95,
+    );
+  const row = result.records[1500],
+    p = transform(row.smoothed.p);
+  drone(g, p, 0.36);
+  for (const r of result.records.filter(
+    (r) => r.gnss?.accepted && Math.round(r.t) % 4 === 0,
+  ))
+    dot(g, transform(r.filtered.p), 0.07, colors.cyan);
+  for (const y of [-1, 0, 1])
+    line(g, [p, [p[0], p[1] + y, 0.05]], colors.cyan, 0.6);
+}
 const scenes = {
   ranging,
   scanning,
@@ -1095,6 +1138,8 @@ const scenes = {
   sar,
   iot,
   beam,
+  imu,
+  sbet,
 };
 window.thumbnailKinds = Object.keys(scenes);
 window.renderThumbnail = async (kind, width = W) => {

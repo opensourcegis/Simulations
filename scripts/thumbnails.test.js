@@ -10,7 +10,7 @@ test("every catalogue card has a described, locally hosted thumbnail", async () 
     "utf8",
   );
   const kinds = [...app.matchAll(/kind: '([^']+)'/g)].map((m) => m[1]);
-  assert.equal(kinds.length, 21);
+  assert.equal(kinds.length, 23);
   assert.deepEqual([...new Set(kinds)].sort(), Object.keys(THUMBNAILS).sort());
   for (const kind of kinds) assert(THUMBNAILS[kind].length > 35, kind);
   assert(!app.includes("function Grid("), "flat sketch renderer is retired");
