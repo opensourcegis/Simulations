@@ -47,7 +47,6 @@ export default function RangingHardware({
   budget,
   aperture,
   distance,
-  onFire,
 }) {
   const [selected, setSelected] = useState("collimator");
   const id = useId().replace(/:/g, "");
@@ -121,9 +120,7 @@ export default function RangingHardware({
         <div className="rng-hardware-toolbar">
           <span className="rng-hardware-badge">905 nm · R = {distance} m</span>
           {mode === "pulsed" && (
-            <button id="rng-hardware-fire" onClick={onFire}>
-              Fire &amp; follow the pulse →
-            </button>
+            <a href="#rng-shot-console">Back to pulse controls ↑</a>
           )}
         </div>
       </div>

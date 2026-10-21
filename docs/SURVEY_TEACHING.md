@@ -37,7 +37,9 @@ The primary view shows native pixel pitch, the nadir reference calculation, actu
 
 ## Laser ranging: measurement before instrument anatomy
 
-The receiver/propagation experiment opens with a compact equation strip, distinguishing configured propagation prediction from captured timestamps and measured range. The large optical cutaway is below the experiment in a closed “Instrument anatomy” disclosure. All seven component explanations remain available; capture gating, delay calibration and timing uncertainty are unchanged.
+Pulse timing opens with an action-first console: target distance, pulse width, one prominent Fire pulse button, Stop, and the measured range. It precedes the plots in both visual and keyboard order. On small screens the same Fire/Stop controls stay fixed at the bottom, with safe-area spacing and a padded page end. Receiver settings are separate, and PRF ambiguity is an optional disclosure rather than an apparent playback setting. The equation strip follows the receiver trace, distinguishing configured propagation prediction from captured timestamps and measured range.
+
+Stop discards an in-flight shot and disables repeat. If repeat has completed a shot, its trace, timestamp and result are retained together; otherwise there is still no measurement. Starting a new pulse or changing a physical setting clears the old result. Repeat uses fresh shot seeds. The large optical cutaway remains below the experiment in a closed “Instrument anatomy” disclosure, with a link back to the primary controls instead of a second Fire button. All seven component explanations remain available; capture gating, delay calibration and timing uncertainty are unchanged.
 
 ## Regression evidence
 

@@ -61,7 +61,7 @@ try {
   for (const width of [1920, 1440, 1024, 768, 390, 320]) {
     await cdp("Emulation.setDeviceMetricsOverride", {
       width,
-      height: 1100,
+      height: width < 500 ? 700 : 800,
       deviceScaleFactor: 1,
       mobile: width < 500,
     });
@@ -72,6 +72,30 @@ try {
       assert(!layout.overflow, `${width}/${mode} page overflow`);
       assert(layout.canvases >= 2);
       assert.equal(layout.components, 7);
+      if (mode === "pulsed") {
+        const action = await evaluate(
+          `(()=>{const b=document.getElementById('rng-fire'),r=b.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {visible:r.top>=0&&r.bottom<=innerHeight,height:r.height,uncovered:b===hit||b.contains(hit),first:document.querySelector('main button').id,count:document.querySelectorAll('#rng-fire').length};})()`,
+        );
+        assert(
+          action.visible && action.uncovered,
+          `${width}px: Fire pulse must be visible and unobscured without scrolling`,
+        );
+        assert(action.height >= 44);
+        assert.equal(action.first, "rng-fire");
+        assert.equal(action.count, 1);
+        if (width < 800) {
+          await evaluate(
+            `document.getElementById('rng-aperture').scrollIntoView({block:'center'})`,
+          );
+          assert(
+            await evaluate(
+              `(()=>{const b=document.getElementById('rng-fire'),r=b.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.top>=0&&r.bottom<=innerHeight&&(b===hit||b.contains(hit));})()`,
+            ),
+            "Fire remains accessible beside scrolled receiver settings",
+          );
+          await evaluate(`window.scrollTo(0,0)`);
+        }
+      }
     }
     console.log(`${width}px: all three modes and cutaway layout passed`);
   }
@@ -85,7 +109,7 @@ try {
   );
   assert(
     await evaluate(
-      `document.querySelector('.rng-mathline').getBoundingClientRect().top < document.querySelector('main').getBoundingClientRect().top`,
+      `document.querySelector('.rng-shot-console').getBoundingClientRect().top < document.querySelector('.rng-stage').getBoundingClientRect().top && document.querySelector('.rng-mathline').getBoundingClientRect().top > document.querySelector('.rng-trace').getBoundingClientRect().top`,
     ),
   );
   await evaluate(`document.getElementById('rng-anatomy').open=true`);
@@ -99,7 +123,22 @@ try {
   console.log("All seven inspectable component explanations passed.");
 
   const fire = async () => {
-    await evaluate(`document.getElementById('rng-hardware-fire').click()`);
+    const point = await evaluate(
+      `(()=>{const r=document.getElementById('rng-fire').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`,
+    );
+    await cdp("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      ...point,
+      button: "left",
+      clickCount: 1,
+    });
+    await cdp("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      ...point,
+      button: "left",
+      clickCount: 1,
+    });
+    assert(await evaluate(`document.getElementById('rng-fire').disabled`));
     assert(
       (
         await evaluate(`document.getElementById('rng-result').textContent`)
@@ -121,6 +160,7 @@ try {
   const valid = await fire();
   assert(valid.status.includes("valid return"));
   assert(Math.abs(parseFloat(valid.value) - 120) < 0.5);
+  assert(await evaluate(`document.getElementById('rng-stop').disabled`));
   const trace = await evaluate(
     `document.querySelector('.rng-trace canvas').toDataURL()`,
   );
@@ -135,6 +175,59 @@ try {
     await evaluate(`document.querySelector('.rng-trace canvas').toDataURL()`),
     trace,
     "a new shot must change the noise",
+  );
+  await evaluate(`document.getElementById('rng-fire').click()`);
+  await pause(50);
+  await evaluate(`document.getElementById('rng-stop').click()`);
+  await pause(800);
+  assert.equal(
+    await evaluate(`document.getElementById('rng-shot-console').dataset.state`),
+    "idle",
+    "stopping a shot must not later publish its result",
+  );
+  assert(
+    await evaluate(
+      `document.getElementById('rng-result').textContent.includes('—')`,
+    ),
+  );
+  assert(await evaluate(`!document.getElementById('rng-fire').disabled`));
+  await evaluate(
+    `document.getElementById('rng-repeat').click();document.getElementById('rng-fire').click()`,
+  );
+  let firstSeed;
+  for (let n = 0; n < 50; n++) {
+    firstSeed = await evaluate(
+      `document.getElementById('rng-shot-console').dataset.captureSeed`,
+    );
+    if (firstSeed) break;
+    await pause(100);
+  }
+  assert(firstSeed, "repeated capture produces a first result");
+  let nextSeed = firstSeed;
+  for (let n = 0; n < 50; n++) {
+    nextSeed = await evaluate(
+      `document.getElementById('rng-shot-console').dataset.captureSeed`,
+    );
+    if (nextSeed !== firstSeed) break;
+    await pause(100);
+  }
+  assert.notEqual(nextSeed, firstSeed, "repeat uses fresh captures");
+  await evaluate(`document.getElementById('rng-stop').click()`);
+  await pause(800);
+  assert(
+    await evaluate(
+      `!document.getElementById('rng-repeat').checked && !document.getElementById('rng-fire').disabled && document.getElementById('rng-shot-console').dataset.state==='valid'`,
+    ),
+  );
+  assert.equal(
+    await evaluate(
+      `document.getElementById('rng-shot-console').dataset.captureSeed`,
+    ),
+    nextSeed,
+    "Stop retains the last completed capture without publishing the discarded in-flight shot",
+  );
+  console.log(
+    "Primary action placement, repeat capture and immediate stop passed.",
   );
 
   await evaluate(
@@ -192,7 +285,7 @@ try {
     mobile: false,
   });
   await pause(100);
-  await screenshot("/tmp/ranging-components-desktop.png");
+  await screenshot("/tmp/ranging-console-desktop.png");
   await cdp("Emulation.setDeviceMetricsOverride", {
     width: 390,
     height: 1100,
@@ -200,7 +293,7 @@ try {
     mobile: true,
   });
   await pause(100);
-  await screenshot("/tmp/ranging-components-mobile.png");
+  await screenshot("/tmp/ranging-console-mobile.png");
   assert.equal(errors.length, 0, JSON.stringify(errors));
   console.log("Ranging browser checks passed with no runtime exceptions.");
 } finally {

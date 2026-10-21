@@ -68,6 +68,8 @@ The ranging lesson uses the same instrument-lab design language with scoped CSS:
 
 ## Rangefinder components and receiver model
 
+The pulse layout groups the target/pulse controls, measured result and a single primary Fire pulse action above the plots. Fire and Stop remain visible at the bottom on narrow screens; receiver and periodic-PRF settings are separate. Stop cancels in-flight acquisition and repeat, preserving any last completed shot consistently across the result, waveform and delay calculation. Browser checks use real pointer events to fire, verify the action is visible and unobscured at six widths, and exercise cancellation and repeat with fresh seeds. The optional optical cutaway links back to this console rather than duplicating its trigger.
+
 The interactive optical cutaway shows a fixed dual-aperture head: electrical pulse driver, 905 nm laser diode, collimating optics, optical reference tap/photodiode, receiver objective, spectral filter, focusing lens, silicon photodiode, transimpedance amplifier, digitiser and timing/range processor. Each component has a keyboard-accessible inspection button and a working-principle explanation. Cyan and orange distinguish outbound and collected return intensity; green denotes electrical/timing connections. Near-infrared light is not actually visible. Baseline, propagation, ray slopes and pulse widths are enlarged/schematic. The near-coaxial far-field approximation neglects the small physical aperture separation in the 10–300 m range equation. The instrument does not rotate.
 
 Pulse timing now uses a declared illustrative 100 nJ instrument rather than returning the exact input range on every shot. For a large, normal-incidence Lambertian target that intercepts the full beam:
