@@ -16,11 +16,87 @@ import {
   gsdCamera,
   localGsd,
   groundPixelRay,
+  groundRayDetails,
   imageFootprint,
   imageBlur,
   sampleGroundTarget,
 } from "../src/simulations/gsd-model.js";
+import {
+  SIMPLE_TIN_DEFAULTS,
+  tinSimpleLesson,
+} from "../src/simulations/tin-simple-model.js";
 const close = (a, b, t = 1e-8) => assert(Math.abs(a - b) < t, `${a} ≠ ${b}`);
+test("displayed GSD ray substitution uses the actual unnormalized ray and terrain plane", () => {
+  for (const tilt of [0, 20, 65, 100])
+    for (const slope of [-25, 0, 25]) {
+      const c = gsdCamera({ tilt, slope, height: 120, elevation: 10 });
+      for (const fraction of [0.1, 0.5, 0.9]) {
+        const u = c.width * fraction,
+          v = c.imageHeight * 0.3,
+          ray = groundRayDetails(c, u, v);
+        assert.deepEqual(ray.hit, groundPixelRay(c, u, v));
+        if (!ray.hit) {
+          assert.equal(ray.t, null);
+          continue;
+        }
+        close(ray.t, (c.elevation - c.height) / ray.denominator);
+        close(ray.hit[2], c.elevation + ray.gradient * ray.hit[0]);
+        for (let i = 0; i < 3; i++)
+          close(ray.hit[i], ray.origin[i] + ray.t * ray.direction[i]);
+        close(
+          Math.hypot(...ray.hit.map((p, i) => p - ray.origin[i])),
+          ray.t * Math.hypot(...ray.direction),
+        );
+      }
+    }
+});
+test("simple TIN lesson tests real initial facets and changes the mesh only on acceptance", () => {
+  const s = SIMPLE_TIN_DEFAULTS,
+    { points } = generateSceneData(s.preset, s.density, s),
+    lesson = tinSimpleLesson(points, s);
+  assert.equal(lesson.candidates.length, 2);
+  assert(lesson.candidates[0].test.accepted);
+  assert(!lesson.candidates[1].test.accepted);
+  for (const { test: t, after } of lesson.candidates) {
+    assert(
+      lesson.initial.triangles.some(
+        (ids) => ids.join(",") === t.facetIds.join(","),
+      ),
+    );
+    assert.equal(
+      after.groundSet.size,
+      lesson.initial.groundSet.size + Number(t.accepted),
+    );
+    assert.equal(after.groundSet.has(t.id), t.accepted);
+    if (!t.accepted)
+      assert.deepEqual(after.triangles, lesson.initial.triangles);
+    else assert(after.triangles.some((ids) => ids.includes(t.id)));
+  }
+  const full = computeAdaptiveTINHistory(
+    points,
+    s.gridSize,
+    s.maxAngle,
+    s.maxDist,
+    s,
+  ).at(-1);
+  assert.deepEqual(lesson.result.triangles, full.triangles);
+  const relabelled = tinSimpleLesson(
+    points.map((p) => ({
+      ...p,
+      isTrueGround: !p.isTrueGround,
+      trueZ: -999,
+      objectType: "unknown",
+    })),
+    s,
+  );
+  const decisions = (l) =>
+    l.candidates.map(({ test, after }) => ({
+      test,
+      groundSet: after.groundSet,
+      triangles: after.triangles,
+    }));
+  assert.deepEqual(decisions(relabelled), decisions(lesson));
+});
 test("TIN acquisition is seeded and includes detected first/last returns on different XY", () => {
   const a = generateSceneData("hills", 320);
   assert.deepEqual(a, generateSceneData("hills", 320));

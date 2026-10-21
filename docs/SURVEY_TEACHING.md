@@ -12,7 +12,9 @@ The labelled payload view shows antenna, IMU, laser origin, lever arrow, body/sc
 
 ## Progressive TIN densification
 
-The opening view is the construction lesson, not the synthetic reference landscape. A shared timeline drives the main viewport, XY plan, counters, profile, selection and explanation:
+The default is a compact five-step overview: choose measured seed minima, connect the initial TIN, test one point, show the actual retriangulation or unchanged mesh, then run the full filter. Its equal-scale XY plan is explicitly not an elevation plot. The two distance/angle controls use fixed distance bounds by default. Near/far examples are selected by distance to the initial surface, never reference labels. This one-point exercise is not presented as a replay of the full queued algorithm; its final step reruns that algorithm from the seeds.
+
+“Open full inspector” preserves the settings and exposes the complete construction lesson. Returning to the overview also preserves changes, including any adaptive-bound option. In the inspector a shared timeline drives the main viewport, XY plan, counters, profile, selection and explanation:
 
 1. Unclassified returns, with no recovered facets.
 2. XY seed cells.
@@ -27,7 +29,17 @@ The numerical classifier still queues display batches and re-tests every propose
 
 The global distance slider is a cap. The actual local bound may tighten with edge spacing/noise; the decision panel displays it. The profile's dashed global envelope is labelled accordingly. The dark backdrop is a graphical analysis platform, not a recovered DTM; point-symbol sizes are not beam-footprint diameters. Unsupported facets and hull margins remain gaps. Seed contamination, ground omission, object inclusion and incomplete coverage remain possible.
 
+## GSD: calculation before equipment
+
+The primary view shows native pixel pitch, the nadir reference calculation, actual four-corner ray intersections and local sampling across the image. The XZ section uses equal axis scale. The native-pixel footprint is enlarged separately in equal-scale terrain-tangent coordinates; neither a grouped image region nor an exaggerated aircraft is used as quantitative evidence. An expandable substitution shows the same ray direction, denominator, intersection parameter and corner coordinates used by `localGsd`. The unnormalized parameter is explicitly not slant range. The native-pixel image experiment retains diffraction, exposure/motion and noise controls. The 3D context is optional and only mounts when opened.
+
+## Laser ranging: measurement before instrument anatomy
+
+The receiver/propagation experiment opens with a compact equation strip, distinguishing configured propagation prediction from captured timestamps and measured range. The large optical cutaway is below the experiment in a closed “Instrument anatomy” disclosure. All seven component explanations remain available; capture gating, delay calibration and timing uncertainty are unchanged.
+
 ## Regression evidence
+
+`npm run test:compact:browser` checks the new defaults, five-stage TIN interactions and inspector handoff, GSD live numeric changes, hidden optional hardware, and six responsive widths. `scripts/survey-realism.test.js` verifies the exposed ray substitution and geometry-only one-point TIN decisions against the full classifier.
 
 `scripts/survey-teaching.test.js` verifies preset isolation, correction invariance of true observations, translation/angular-error range scaling, legacy/native ray agreement, exact cell minima, event-facet/projection consistency, actual supported Delaunay meshes and timeline ordering/state coherence. Existing classifier/link-budget/GSD tests remain in the same suite.
 

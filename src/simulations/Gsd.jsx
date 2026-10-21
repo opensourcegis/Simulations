@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GsdFieldView from "./GsdFieldView.jsx";
+import GsdGeometry from "./GsdGeometry.jsx";
 import { PhotoLab, Panel, Slider, Metric } from "./PhotoLabUI.jsx";
 import {
   CAMERA_SENSORS,
@@ -13,6 +14,7 @@ import "./survey-realism.css";
 const cm = (x) => (Number.isFinite(x) ? (x * 100).toFixed(2) : "—");
 
 export default function Gsd() {
+  const [contextOpen, setContextOpen] = useState(false);
   const [f, setF] = useState(50),
     [height, setHeight] = useState(100),
     [elevation, setElevation] = useState(0),
@@ -101,8 +103,8 @@ export default function Gsd() {
   return (
     <PhotoLab
       name="Ground sampling distance"
-      title="A pixel is a footprint—not a resolution guarantee."
-      intro="Trace a native camera pixel onto tilted, elevated terrain. Compare near and far sampling, optical blur, motion and subpixel alignment using actual ray–plane intersections."
+      title="Calculate the ground covered by one pixel."
+      intro="Start with pixel pitch and similar triangles. Then intersect the real oblique corner rays, and compare sampling with diffraction, motion blur and native-pixel evidence."
       notebook={
         <>
           <h3>Sampling geometry</h3>
@@ -166,7 +168,7 @@ export default function Gsd() {
         </>
       }
     >
-      <div className="photo-workspace">
+      <div className="photo-workspace gsd-workspace">
         <aside className="photo-controls">
           <Panel tag="01 / CAMERA & SURFACE" title="Project the actual pixel">
             <Slider
@@ -302,16 +304,16 @@ export default function Gsd() {
         </aside>
         <div className="photo-instruments">
           <Panel
-            tag="ACTUAL PROJECTION GEOMETRY"
-            title="Survey camera & ground footprint"
-            className="photo-stage"
+            tag="LIVE GEOMETRY & CALCULATION"
+            title="From sensor pitch to an actual ground footprint"
           >
-            <GsdFieldView
+            <GsdGeometry
               camera={camera}
               footprint={footprint}
-              targetSize={targetSize}
-              pattern={pattern}
-              phase={phase}
+              u={u}
+              v={v}
+              cell={cell}
+              onSelect={setCell}
             />
           </Panel>
           <Panel
@@ -397,6 +399,22 @@ export default function Gsd() {
               crop is not rescaled to fit the marker.
             </p>
           </Panel>
+          <details
+            className="gsd-context"
+            id="gsd-context"
+            onToggle={(e) => setContextOpen(e.currentTarget.open)}
+          >
+            <summary>Optional 3D survey context</summary>
+            {contextOpen && (
+              <GsdFieldView
+                camera={camera}
+                footprint={footprint}
+                targetSize={targetSize}
+                pattern={pattern}
+                phase={phase}
+              />
+            )}
+          </details>
         </div>
         <aside className="photo-diagnostics">
           <Panel

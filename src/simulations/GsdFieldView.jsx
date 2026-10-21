@@ -103,14 +103,14 @@ export default function GsdFieldView({
       s = Math.max(targetSize * 2.4, 0.7);
     return [
       {
-        name: "Camera payload",
-        position: [4.7, -5.2, camera.height + 2.2],
-        target: [0, 0, camera.height + 0.5],
-      },
-      {
         name: "Survey context",
         position: [145, -165, camera.height + 65],
         target: [25, 0, camera.elevation + 28],
+      },
+      {
+        name: "Camera payload",
+        position: [4.7, -5.2, camera.height + 2.2],
+        target: [0, 0, camera.height + 0.5],
       },
       {
         name: "Lens",

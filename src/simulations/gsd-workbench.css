@@ -1,0 +1,240 @@
+.gsd-geometry {
+  color: #293c36;
+}
+.gsd-calculation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.gsd-calculation-grid article {
+  border: 1px solid #d8dfd1;
+  border-radius: 7px;
+  padding: 14px;
+  background: #f7f8f1;
+  min-width: 0;
+}
+.gsd-calculation-grid article > span {
+  font:
+    9px ui-monospace,
+    monospace;
+  letter-spacing: 0.7px;
+  color: #6c7b68;
+}
+.gsd-calculation-grid h3 {
+  font: 600 14px system-ui;
+  margin: 8px 0;
+}
+.gsd-calculation-grid code {
+  display: block;
+  font:
+    12px/1.8 ui-monospace,
+    monospace;
+  color: #40664d;
+}
+.gsd-calculation-grid strong {
+  display: block;
+  font:
+    600 12px/1.8 ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+}
+.gsd-geometry p {
+  font: 11px/1.8 system-ui;
+  color: #617267;
+  margin: 8px 0 0;
+}
+.gsd-projection-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.5fr) minmax(150px, 1fr);
+  margin: 16px 0;
+  border: 1px solid #d8dfd1;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.gsd-projection-grid figure {
+  margin: 0;
+  padding: 14px;
+  min-width: 0;
+}
+.gsd-projection-grid figcaption {
+  font: 600 11px/1.6 system-ui;
+  color: #48634d;
+}
+.gsd-ray-section svg,
+.gsd-native-footprint svg {
+  width: 100%;
+  display: block;
+}
+.gsd-native-footprint {
+  background: #f8f7ec;
+  border-left: 1px solid #d8dfd1;
+}
+.gsd-native-footprint svg {
+  max-height: 150px;
+}
+.gsd-native-footprint strong {
+  font:
+    600 12px ui-monospace,
+    monospace;
+  color: #8d642b;
+}
+.gsd-position-profile {
+  padding: 14px;
+  border: 1px solid #d8dfd1;
+  border-radius: 6px;
+}
+.gsd-position-profile > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  font: 11px system-ui;
+  color: #536d59;
+}
+.gsd-sampling-bars {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 12px;
+}
+.photo-lab .gsd-sampling-bars button {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: #f1f4e9;
+  border-radius: 3px;
+  padding: 6px 2px;
+  min-width: 0;
+  min-height: 76px;
+  cursor: pointer;
+}
+.gsd-sampling-bars button span {
+  width: 60%;
+  background: #9bb6a0;
+  border-radius: 2px 2px 0 0;
+}
+.gsd-sampling-bars button b {
+  font:
+    9px ui-monospace,
+    monospace;
+}
+.photo-lab .gsd-sampling-bars button[aria-pressed="true"] {
+  border-color: #a67c37;
+  background: #faf1d7;
+}
+.gsd-sampling-bars button[aria-pressed="true"] span {
+  background: #bc934e;
+}
+.gsd-ray-math {
+  margin-top: 14px;
+}
+.gsd-ray-math summary,
+.gsd-context > summary {
+  cursor: pointer;
+  font: 600 12px/1.8 system-ui;
+  color: #42634b;
+  padding: 10px 0;
+}
+.gsd-math-detail {
+  background: #f4f6ee;
+  padding: 14px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.gsd-math-detail code {
+  display: block;
+  white-space: normal;
+  font:
+    11px/2 ui-monospace,
+    monospace;
+  color: #3c654b;
+}
+.gsd-context {
+  margin-top: 16px;
+  padding: 0 18px;
+  background: #f7f8f1;
+  border: 1px solid #d8dfd1;
+  border-radius: 7px;
+}
+.gsd-context .field-webgl {
+  height: 330px;
+}
+.gsd-context .field-caption {
+  font-size: 10px;
+}
+.photo-lab .gsd-workspace {
+  grid-template-columns: 225px minmax(0, 1fr) 250px;
+  gap: 16px;
+}
+.gsd-workspace .photo-instruments {
+  min-width: 0;
+}
+.gsd-workspace .photo-panel {
+  padding: 18px;
+}
+.gsd-workspace .photo-intro {
+  max-width: none;
+}
+@media (max-width: 1300px) {
+  .photo-lab .gsd-workspace {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  .gsd-workspace .photo-diagnostics {
+    grid-column: 1/-1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .gsd-calculation-grid {
+    grid-template-columns: 1fr;
+  }
+  .gsd-calculation-grid article {
+    padding: 12px 14px;
+  }
+  .gsd-calculation-grid article p {
+    margin: 4px 0 0;
+  }
+}
+@media (max-width: 760px) {
+  .photo-lab .gsd-workspace {
+    display: flex;
+    flex-direction: column;
+  }
+  .gsd-workspace .photo-instruments {
+    order: 0;
+    width: 100%;
+  }
+  .gsd-workspace .photo-controls {
+    order: 1;
+    width: 100%;
+  }
+  .gsd-workspace .photo-diagnostics {
+    order: 2;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+  .gsd-projection-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gsd-native-footprint {
+    border-left: 0;
+    border-top: 1px solid #d8dfd1;
+  }
+  .gsd-native-footprint svg {
+    height: 145px;
+  }
+  .gsd-sampling-bars {
+    gap: 3px;
+  }
+  .gsd-sampling-bars button b {
+    font-size: 8px;
+  }
+  .gsd-workspace .photo-panel {
+    padding: 14px;
+  }
+}

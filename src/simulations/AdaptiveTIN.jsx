@@ -7,6 +7,8 @@ import './tin.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
 import TinFieldView from './TinFieldView.jsx';
 import TinTeachingPanel from './TinTeachingPanel.jsx';
+import TinEssentials from './TinEssentials.jsx';
+import { SIMPLE_TIN_DEFAULTS } from './tin-simple-model.js';
 import {tinTeachingTimeline} from './tin-teaching.js';
 import { tinProfileSegment } from '../../games/shared/lidar-physics.js';
 import { generateSceneData, computeAdaptiveTINHistory, tinTerrainQuality } from './tin-model.js';
@@ -71,12 +73,31 @@ function extractModelTriangles(model) {
 // Main Component
 // ---------------------------------------------------------------------------
 export default function AdaptiveTIN() {
-  const [preset, setPreset] = useState('hills');
-  const [gridSize, setGridSize] = useState(25);
-  const [maxAngle, setMaxAngle] = useState(12);
-  const [maxDist, setMaxDist] = useState(1.2);
-  const [density, setDensity] = useState(320);
-  const [noiseSigma,setNoiseSigma]=useState(.06),[penetration,setPenetration]=useState(.3),[removeLow,setRemoveLow]=useState(true),[adaptive,setAdaptive]=useState(true),[maxEdge,setMaxEdge]=useState(55);
+  const [settings, setSettings] = useState(SIMPLE_TIN_DEFAULTS);
+  const [advanced, setAdvanced] = useState(false);
+  return advanced ? (
+    <AdaptiveTINAdvanced initialSettings={settings} onSimple={values => {
+      setSettings(values);
+      setAdvanced(false);
+    }} />
+  ) : (
+    <TinEssentials settings={settings}
+      onChange={patch => setSettings(current => ({...current, ...patch}))}
+      onAdvanced={() => setAdvanced(true)} />
+  );
+}
+
+function AdaptiveTINAdvanced({initialSettings, onSimple}) {
+  const [preset, setPreset] = useState(initialSettings.preset);
+  const [gridSize, setGridSize] = useState(initialSettings.gridSize);
+  const [maxAngle, setMaxAngle] = useState(initialSettings.maxAngle);
+  const [maxDist, setMaxDist] = useState(initialSettings.maxDist);
+  const [density, setDensity] = useState(initialSettings.density);
+  const [noiseSigma, setNoiseSigma] = useState(initialSettings.noiseSigma);
+  const [penetration, setPenetration] = useState(initialSettings.penetration);
+  const [removeLow, setRemoveLow] = useState(initialSettings.removeLow);
+  const [adaptive, setAdaptive] = useState(initialSettings.adaptive);
+  const [maxEdge, setMaxEdge] = useState(initialSettings.maxEdge);
 
   const [frameIndex, setFrameIndex] = useState(0);
   const [view3D, setView3D] = useState(true);
@@ -814,6 +835,7 @@ export default function AdaptiveTIN() {
 
   return (
     <div className="sim-app">
+      <div className="tin-advanced-return"><button id="tin-return-simple" onClick={() => onSimple({preset, gridSize, maxAngle, maxDist, density, noiseSigma, penetration, removeLow, adaptive, maxEdge})}>← Back to five-step overview</button></div>
       <header className="sim-topbar">
         <a className="back-link" href={import.meta.env.BASE_URL}>
           &larr; All simulators

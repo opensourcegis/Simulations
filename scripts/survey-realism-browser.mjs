@@ -56,6 +56,37 @@ const goto = async (route, selector) => {
     `window.surveyTest={wait:ms=>new Promise(r=>setTimeout(r,ms)),set:(id,v)=>{const e=document.getElementById(id);Object.getOwnPropertyDescriptor(e.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(e,String(v));e.dispatchEvent(new Event(e.tagName==='SELECT'?'change':'input',{bubbles:true}));}}`,
   );
   await pause(200);
+  if (route === "adaptive-tin") {
+    assert.equal(
+      await evaluate(
+        `document.querySelectorAll('.tin-simple-stages button').length`,
+      ),
+      5,
+    );
+    assert.equal(
+      await evaluate(`document.querySelectorAll('.field-webgl canvas').length`),
+      0,
+    );
+    await evaluate(`document.getElementById('tin-open-advanced').click()`);
+    await until(`!!document.getElementById('tin-lesson-next')`);
+    await evaluate(
+      `if(!document.getElementById('tin-adaptive').checked)document.getElementById('tin-adaptive').click()`,
+    );
+    await pause(200);
+  }
+  if (route === "gsd") {
+    assert.equal(
+      await evaluate(`document.getElementById('gsd-context').open`),
+      false,
+    );
+    assert.equal(
+      await evaluate(`document.querySelectorAll('.field-webgl canvas').length`),
+      0,
+    );
+    assert(await evaluate(`!!document.getElementById('gsd-ray-substitution')`));
+    await evaluate(`document.getElementById('gsd-context').open=true`);
+    await until(`!!document.querySelector('.field-webgl canvas')`);
+  }
 };
 const screenshot = async (path) => {
   const r = await cdp("Page.captureScreenshot", { format: "png" });

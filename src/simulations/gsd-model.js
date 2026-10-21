@@ -36,7 +36,9 @@ export function gsdCamera({
     nominal: (pitchMm * (height - elevation)) / f,
   };
 }
-export function groundPixelRay(camera, u, v) {
+// Expose the same ray-plane calculation to the teaching UI. Direction is not
+// normalized: t is a ray parameter, not the measured slant range.
+export function groundRayDetails(camera, u, v) {
   const th = camera.tilt * RAD,
     x = ((u - camera.width / 2) * camera.pitchMm) / camera.f,
     y = ((v - camera.imageHeight / 2) * camera.pitchMm) / camera.f;
@@ -47,10 +49,18 @@ export function groundPixelRay(camera, u, v) {
     ],
     gradient = Math.tan(camera.slope * RAD),
     denominator = direction[2] - gradient * direction[0];
-  if (denominator >= -1e-10 || camera.height <= camera.elevation) return null;
+  const origin = [0, 0, camera.height];
+  if (denominator >= -1e-10 || camera.height <= camera.elevation)
+    return { origin, direction, gradient, denominator, t: null, hit: null };
   const t = (camera.elevation - camera.height) / denominator;
-  if (t <= 0) return null;
-  return [direction[0] * t, direction[1] * t, camera.height + direction[2] * t];
+  const hit =
+    t > 0
+      ? [direction[0] * t, direction[1] * t, camera.height + direction[2] * t]
+      : null;
+  return { origin, direction, gradient, denominator, t: hit ? t : null, hit };
+}
+export function groundPixelRay(camera, u, v) {
+  return groundRayDetails(camera, u, v).hit;
 }
 function triangleArea(a, b, c) {
   const u = b.map((x, i) => x - a[i]),

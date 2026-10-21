@@ -79,6 +79,16 @@ try {
   await evaluate(
     `(async()=>{document.getElementById('rng-tab-pulsed').click();await rangeTest.wait(60);rangeTest.set('rng-speed',4);})()`,
   );
+  assert.equal(
+    await evaluate(`document.getElementById('rng-anatomy').open`),
+    false,
+  );
+  assert(
+    await evaluate(
+      `document.querySelector('.rng-mathline').getBoundingClientRect().top < document.querySelector('main').getBoundingClientRect().top`,
+    ),
+  );
+  await evaluate(`document.getElementById('rng-anatomy').open=true`);
   const components = await evaluate(
     `(async()=>{const results=[];for(const b of document.querySelectorAll('.rng-part-buttons button')){b.click();await rangeTest.wait(30);results.push({selected:b.getAttribute('aria-pressed'),title:document.querySelector('.rng-part-explanation h3').textContent,button:b.textContent.slice(2)});}return results;})()`,
   );

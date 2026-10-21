@@ -4,6 +4,7 @@ import './native.css';
 import './ranging.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
 import RangingHardware from './RangingHardware.jsx';
+import RangingCalculation from './RangingCalculation.jsx';
 import { rangingBudget, simulateRangingShot, shotNormal, RANGING_INSTRUMENT } from './ranging-model.js';
 import { LIGHT_SPEED, roundTripNs, phaseMeasurement, pulseAmbiguity } from '../../games/shared/lidar-physics.js';
 
@@ -461,7 +462,7 @@ export default function LidarRanging() {
   return (
     <div className="rng-lab">
       <header className="rng-header"><a href={import.meta.env.BASE_URL}><span className="rng-brand" aria-hidden="true">⌁</span> GEOSIM <span>/</span> All laboratories</a><span className="rng-lab-id">REMOTE SENSING · LAB 01 / 06</span></header>
-      <div className="rng-intro"><div><p className="rng-eyebrow">THE RANGING LAB</p><h1>Light travels. Distance follows.</h1><p>Look inside the optics. Follow the electronics. Find out when a returning pulse can actually become a measurement.</p></div><div className="rng-constant">c = 299,792,458 m/s<small>PULSE MODE · v = c / n IN AIR</small></div></div>
+      <div className="rng-intro"><div><p className="rng-eyebrow">THE RANGING LAB</p><h1>Measure a return. Calculate a range.</h1><p>Trace the round trip, measure its delay and separate a valid range from a weak or ambiguous return.</p></div><div className="rng-constant">c = 299,792,458 m/s<small>PULSE MODE · v = c / n IN AIR</small></div></div>
       <div className="rng-modebar">
         <div className="rng-modes" role="tablist" aria-label="Ranging method" onKeyDown={event => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -475,7 +476,7 @@ export default function LidarRanging() {
         </div>
         <span className="rng-model-note">FIXED HEAD · NEAR-COAXIAL FAR-FIELD MODEL</span>
       </div>
-      <RangingHardware mode={mode} progress={playback.progress} active={playback.active} measured={measured} budget={budget} aperture={aperture} distance={distance} onFire={fire} />
+      <RangingCalculation mode={mode} budget={budget} measured={measured} lambda={lambda} phiDeg={phiDeg} unamb={unamb} Ncalc={Ncalc} distance={distance}/>
       <main id="rng-workspace" className="rng-workspace" role="tabpanel" aria-labelledby={'rng-tab-'+mode} key={mode}>
         <aside className="rng-controls" aria-label="Experiment configuration">
           <section className="rng-panel">
@@ -539,6 +540,9 @@ export default function LidarRanging() {
           </section>
         </aside>
       </main>
+      <details className="rng-anatomy" id="rng-anatomy"><summary>Instrument anatomy <span>Optional optical cutaway and seven component explanations</span></summary>
+      <RangingHardware mode={mode} progress={playback.progress} active={playback.active} measured={measured} budget={budget} aperture={aperture} distance={distance} onFire={fire} />
+      </details>
       <details className="rng-notebook"><summary><span><span className="rng-eyebrow">THE LAB NOTEBOOK</span>Understand the physics</span><span>Experiments, self-checks &amp; references ＋</span></summary>
         <LidarLearningPanel topic="ranging" workedExample={mode === 'multi'
         ? `${nTones} illustrative tones: the coarsest interval is ${tones[0].unamb.toFixed(0)} m, exceeding the ${DMAX} m scene; the finest interval is ${tones.at(-1).unamb.toFixed(3)} m. An assumed ±3° phase error maps to ±${(finePrecision / 2).toFixed(3)} m only after the correct cycle is identified.`
