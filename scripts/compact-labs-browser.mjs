@@ -78,6 +78,18 @@ try {
         false,
         route + " overflow " + width,
       );
+      if (route === "gsd") {
+        await click("#gsd-show-actual");
+        assert.equal(
+          await evaluate("document.documentElement.scrollWidth>innerWidth"),
+          false,
+          "actual projection overflow " + width,
+        );
+        assert(
+          await evaluate("!!document.querySelector('.gsd-native-footprint')"),
+        );
+        await click("#gsd-show-similar");
+      }
     }
     await resize(1440);
     await pause(100);
@@ -102,6 +114,25 @@ try {
     if (route === "gsd") {
       assert.equal(
         await evaluate(
+          "document.getElementById('gsd-show-similar').getAttribute('aria-pressed')",
+        ),
+        "true",
+      );
+      assert(await evaluate("!!document.getElementById('gsd-sensor-plane')"));
+      assert.match(
+        await evaluate(
+          "document.getElementById('gsd-reference-swath').textContent",
+        ),
+        /72.00 m/,
+      );
+      assert.match(
+        await evaluate(
+          "document.getElementById('gsd-similarity-result').textContent",
+        ),
+        /6.00 µm × 2000.0 = 1.20 cm\/px/,
+      );
+      assert.equal(
+        await evaluate(
           "document.querySelectorAll('.field-webgl canvas').length",
         ),
         0,
@@ -122,6 +153,12 @@ try {
       await set("gsd-height", 200);
       assert.match(
         await evaluate(
+          "document.getElementById('gsd-reference-swath').textContent",
+        ),
+        /144.00 m/,
+      );
+      assert.match(
+        await evaluate(
           "document.getElementById('gsd-actual-calculation').textContent",
         ),
         /2.40 × 2.40/,
@@ -140,6 +177,23 @@ try {
       await set("gsd-height", 100);
       await set("gsd-tilt", 20);
       await click(".gsd-sampling-bars button:nth-child(5)");
+      await set("gsd-focal", 16);
+      assert.match(
+        await evaluate(
+          "document.getElementById('gsd-reference-swath').textContent",
+        ),
+        /225.00 m/,
+      );
+      await set("gsd-focal", 50);
+      await evaluate(
+        "document.getElementById('gsd-similar-triangles').scrollIntoView({block:'center'})",
+      );
+      const detailShot = await cdp("Page.captureScreenshot", { format: "png" });
+      writeFileSync(
+        "/tmp/gsd-similar-triangles.png",
+        Buffer.from(detailShot.result.data, "base64"),
+      );
+      await evaluate("window.scrollTo(0,0)");
     }
     if (route === "adaptive-tin") {
       assert.equal(

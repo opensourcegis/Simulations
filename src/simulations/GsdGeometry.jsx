@@ -1,4 +1,6 @@
 import { groundPixelRay, groundRayDetails, localGsd } from "./gsd-model.js";
+import { useState } from "react";
+import GsdSimilarTriangles from "./GsdSimilarTriangles.jsx";
 import "./gsd-workbench.css";
 const cm = (v) => (Number.isFinite(v) ? (v * 100).toFixed(2) : "—");
 export default function GsdGeometry({
@@ -9,6 +11,7 @@ export default function GsdGeometry({
   cell,
   onSelect,
 }) {
+  const [projectionView, setProjectionView] = useState("similar");
   const H = camera.height - camera.elevation,
     ray = groundRayDetails(camera, u, v),
     gradient = ray.gradient;
@@ -109,140 +112,169 @@ export default function GsdGeometry({
           </p>
         </article>
       </div>
-      <div className="gsd-projection-grid">
-        <figure className="gsd-ray-section">
-          <figcaption>
-            Projection geometry · XZ view with equal axis scale
-          </figcaption>
-          <svg
-            viewBox="0 0 760 320"
-            role="img"
-            aria-label="True-scale XZ projection of camera and image-edge rays onto the selected sloping terrain plane"
-          >
-            <defs>
-              <clipPath id="gsd-projection-clip">
-                <rect x="30" y="25" width="700" height="260" />
-              </clipPath>
-            </defs>
-            <g clipPath="url(#gsd-projection-clip)">
-              <path
-                d={`M${X(xmin)} ${Z(camera.elevation + gradient * xmin)}L${X(xmax)} ${Z(camera.elevation + gradient * xmax)}L${X(xmax)} 300H${X(xmin)}Z`}
-                fill="#e5eadb"
-              />
-              <path
-                d={`M${X(xmin)} ${Z(camera.elevation + gradient * xmin)}L${X(xmax)} ${Z(camera.elevation + gradient * xmax)}`}
-                stroke="#5c7755"
-                strokeWidth="2"
-              />
-              {validEdge.map((p, i) => (
-                <path
-                  key={i}
-                  d={`M${sourceX} ${sourceZ}L${X(p[0])} ${Z(p[2])}`}
-                  stroke="#9eb9bc"
-                  strokeWidth="1.5"
-                  fill="none"
-                />
-              ))}
-              {ray.hit && (
-                <path
-                  d={`M${sourceX} ${sourceZ}L${X(ray.hit[0])} ${Z(ray.hit[2])}`}
-                  stroke="#b98437"
-                  strokeWidth="2.5"
-                />
-              )}
-              <path
-                d={`M${sourceX} ${sourceZ}V${Z(camera.elevation)}`}
-                stroke="#819291"
-                strokeDasharray="4 4"
-              />
-              <circle cx={sourceX} cy={sourceZ} r="5" fill="#2d5657" />
-              {ray.hit && (
-                <circle
-                  cx={X(ray.hit[0])}
-                  cy={Z(ray.hit[2])}
-                  r="4"
-                  fill="#b98437"
-                />
-              )}
-            </g>
-            <text x={sourceX + 12} y={sourceZ - 8} fontSize="12" fill="#2d5657">
-              Camera · {camera.tilt}° tilt
-            </text>
-            <text
-              x={sourceX - 10}
-              y={(sourceZ + Z(camera.elevation)) / 2}
-              textAnchor="end"
-              fontSize="11"
-              fill="#62726a"
+      <div
+        className="gsd-projection-switch"
+        role="group"
+        aria-label="Projection explanation"
+      >
+        <button
+          id="gsd-show-similar"
+          aria-pressed={projectionView === "similar"}
+          onClick={() => setProjectionView("similar")}
+        >
+          Similar triangles & sensor
+        </button>
+        <button
+          id="gsd-show-actual"
+          aria-pressed={projectionView === "actual"}
+          onClick={() => setProjectionView("actual")}
+        >
+          Actual tilt & slope
+        </button>
+      </div>
+      {projectionView === "similar" ? (
+        <GsdSimilarTriangles camera={camera} />
+      ) : (
+        <div className="gsd-projection-grid">
+          <figure className="gsd-ray-section">
+            <figcaption>
+              Projection geometry · XZ view with equal axis scale
+            </figcaption>
+            <svg
+              viewBox="0 0 760 320"
+              role="img"
+              aria-label="True-scale XZ projection of camera and image-edge rays onto the selected sloping terrain plane"
             >
-              H − E = {H.toFixed(1)} m
-            </text>
-            <text x="44" y="310" fontSize="11" fill="#62726a">
-              Ground: Z = {camera.elevation} + tan({camera.slope}°) X · X
-              horizontal, Z vertical
-            </text>
-            <text x="44" y="24" fontSize="10" fill="#7c897d">
-              Gold: selected ray · pale: image-width boundary rays
-            </text>
-          </svg>
-          <p>
-            Side projection only; the full footprint calculation retains Y.{" "}
-            {outside
-              ? "The selected hit is beyond the plotted extent; its numerical coordinates are not clamped."
-              : !ray.hit
-                ? "This ray has no forward plane intersection; no footprint is invented."
-                : "The pixel is too small to draw at survey scale—its true shape is shown separately."}
-          </p>
-        </figure>
-        <figure className="gsd-native-footprint">
-          <figcaption>One native pixel · surface-tangent view</figcaption>
-          <svg
-            viewBox="0 0 180 180"
-            role="img"
-            aria-label="Actual shape of one selected native pixel on the terrain tangent plane"
-          >
-            {corners ? (
-              <>
-                <polygon
-                  points={pixelPath}
-                  fill="#f0e2bd"
-                  stroke="#ac7b35"
+              <defs>
+                <clipPath id="gsd-projection-clip">
+                  <rect x="30" y="25" width="700" height="260" />
+                </clipPath>
+              </defs>
+              <g clipPath="url(#gsd-projection-clip)">
+                <path
+                  d={`M${X(xmin)} ${Z(camera.elevation + gradient * xmin)}L${X(xmax)} ${Z(camera.elevation + gradient * xmax)}L${X(xmax)} 300H${X(xmin)}Z`}
+                  fill="#e5eadb"
+                />
+                <path
+                  d={`M${X(xmin)} ${Z(camera.elevation + gradient * xmin)}L${X(xmax)} ${Z(camera.elevation + gradient * xmax)}`}
+                  stroke="#5c7755"
                   strokeWidth="2"
                 />
-                {corners.map((p, i) => (
-                  <text
+                {validEdge.map((p, i) => (
+                  <path
                     key={i}
-                    x={90 + (p[0] / pixelSpan) * 140 + 5}
-                    y={90 - (p[1] / pixelSpan) * 140 - 6}
-                    fontSize="11"
-                    fill="#8d642b"
-                  >
-                    {["A", "B", "C", "D"][i]}
-                  </text>
+                    d={`M${sourceX} ${sourceZ}L${X(p[0])} ${Z(p[2])}`}
+                    stroke="#9eb9bc"
+                    strokeWidth="1.5"
+                    fill="none"
+                  />
                 ))}
-              </>
-            ) : (
+                {ray.hit && (
+                  <path
+                    d={`M${sourceX} ${sourceZ}L${X(ray.hit[0])} ${Z(ray.hit[2])}`}
+                    stroke="#b98437"
+                    strokeWidth="2.5"
+                  />
+                )}
+                <path
+                  d={`M${sourceX} ${sourceZ}V${Z(camera.elevation)}`}
+                  stroke="#819291"
+                  strokeDasharray="4 4"
+                />
+                <circle cx={sourceX} cy={sourceZ} r="5" fill="#2d5657" />
+                {ray.hit && (
+                  <circle
+                    cx={X(ray.hit[0])}
+                    cy={Z(ray.hit[2])}
+                    r="4"
+                    fill="#b98437"
+                  />
+                )}
+              </g>
               <text
-                x="90"
-                y="90"
-                textAnchor="middle"
-                fontSize="11"
-                fill="#8d642b"
+                x={sourceX + 12}
+                y={sourceZ - 8}
+                fontSize="12"
+                fill="#2d5657"
               >
-                No footprint
+                Optical centre · {camera.tilt}° tilt
               </text>
-            )}
-          </svg>
-          <strong>
-            {cm(footprint?.gx)} × {cm(footprint?.gy)} cm
-          </strong>
-          <p>
-            Zoomed to fit, with equal tangent-axis scale. Area:{" "}
-            {footprint ? (footprint.area * 10000).toFixed(3) : "—"} cm². This is
-            not a grouped image region.
-          </p>
-        </figure>
-      </div>
+              <text
+                x={sourceX - 10}
+                y={(sourceZ + Z(camera.elevation)) / 2}
+                textAnchor="end"
+                fontSize="11"
+                fill="#62726a"
+              >
+                H − E = {H.toFixed(1)} m
+              </text>
+              <text x="44" y="310" fontSize="11" fill="#62726a">
+                Ground: Z = {camera.elevation} + tan({camera.slope}°) X · X
+                horizontal, Z vertical
+              </text>
+              <text x="44" y="24" fontSize="10" fill="#7c897d">
+                Gold: selected ray · pale: image-width boundary rays
+              </text>
+            </svg>
+            <p>
+              Side projection only; the full footprint calculation retains Y.{" "}
+              {outside
+                ? "The selected hit is beyond the plotted extent; its numerical coordinates are not clamped."
+                : !ray.hit
+                  ? "This ray has no forward plane intersection; no footprint is invented."
+                  : "The pixel is too small to draw at survey scale—its true shape is shown separately."}
+            </p>
+          </figure>
+          <figure className="gsd-native-footprint">
+            <figcaption>One native pixel · surface-tangent view</figcaption>
+            <svg
+              viewBox="0 0 180 180"
+              role="img"
+              aria-label="Actual shape of one selected native pixel on the terrain tangent plane"
+            >
+              {corners ? (
+                <>
+                  <polygon
+                    points={pixelPath}
+                    fill="#f0e2bd"
+                    stroke="#ac7b35"
+                    strokeWidth="2"
+                  />
+                  {corners.map((p, i) => (
+                    <text
+                      key={i}
+                      x={90 + (p[0] / pixelSpan) * 140 + 5}
+                      y={90 - (p[1] / pixelSpan) * 140 - 6}
+                      fontSize="11"
+                      fill="#8d642b"
+                    >
+                      {["A", "B", "C", "D"][i]}
+                    </text>
+                  ))}
+                </>
+              ) : (
+                <text
+                  x="90"
+                  y="90"
+                  textAnchor="middle"
+                  fontSize="11"
+                  fill="#8d642b"
+                >
+                  No footprint
+                </text>
+              )}
+            </svg>
+            <strong>
+              {cm(footprint?.gx)} × {cm(footprint?.gy)} cm
+            </strong>
+            <p>
+              Zoomed to fit, with equal tangent-axis scale. Area:{" "}
+              {footprint ? (footprint.area * 10000).toFixed(3) : "—"} cm². This
+              is not a grouped image region.
+            </p>
+          </figure>
+        </div>
+      )}
       <div className="gsd-position-profile">
         <div>
           <strong>Sampling changes across the image</strong>

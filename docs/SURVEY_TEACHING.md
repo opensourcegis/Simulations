@@ -31,6 +31,8 @@ The global distance slider is a cap. The actual local bound may tighten with edg
 
 ## GSD: calculation before equipment
 
+The default projection explanation shows both sensor-side and ground-side similar triangles, an equivalent-lens cutaway, inverted A/B correspondences and an enlarged representative CMOS photosite array. It derives the full-width ratio, then divides sensor and ground widths by the same native column count. Sensor-side and ground-side drawings use independent isotropic magnifications so their angles agree without suggesting millimetres and metres share a drawing scale. This construction is explicitly a level, nadir reference—even when the current camera is tilted. “Actual tilt & slope” retains the equal-scale XZ projection and actual native footprint. Principal distance is approximated by focal length at aerial object distances, not by a physical lens barrel length.
+
 The primary view shows native pixel pitch, the nadir reference calculation, actual four-corner ray intersections and local sampling across the image. The XZ section uses equal axis scale. The native-pixel footprint is enlarged separately in equal-scale terrain-tangent coordinates; neither a grouped image region nor an exaggerated aircraft is used as quantitative evidence. An expandable substitution shows the same ray direction, denominator, intersection parameter and corner coordinates used by `localGsd`. The unnormalized parameter is explicitly not slant range. The native-pixel image experiment retains diffraction, exposure/motion and noise controls. The 3D context is optional and only mounts when opened.
 
 ## Laser ranging: measurement before instrument anatomy

@@ -1,5 +1,16 @@
 const RAD = Math.PI / 180;
 const distance = (a, b) => Math.hypot(...a.map((x, i) => x - b[i]));
+// Reference construction only: horizontal terrain and a nadir camera. Oblique
+// image footprints must continue to use the corner-ray intersections below.
+export function nadirGsdReference(camera) {
+  const agl = camera.height - camera.elevation;
+  return {
+    agl,
+    halfAngle: Math.atan(camera.sensorW / (2 * camera.f)),
+    groundWidth: (agl * camera.sensorW) / camera.f,
+    gsd: (agl * camera.pitchMm) / camera.f,
+  };
+}
 export const CAMERA_SENSORS = [
   { name: "Full frame", width: 36, aspect: 1.5 },
   { name: "APS-C", width: 23.5, aspect: 1.5 },

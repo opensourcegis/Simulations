@@ -17,6 +17,7 @@ import {
   localGsd,
   groundPixelRay,
   groundRayDetails,
+  nadirGsdReference,
   imageFootprint,
   imageBlur,
   sampleGroundTarget,
@@ -26,6 +27,26 @@ import {
   tinSimpleLesson,
 } from "../src/simulations/tin-simple-model.js";
 const close = (a, b, t = 1e-8) => assert(Math.abs(a - b) < t, `${a} ≠ ${b}`);
+test("similar-triangle sensor and ground widths agree with actual nadir rays and native pitch", () => {
+  for (const sensor of [0, 1, 2, 3])
+    for (const f of [16, 50, 100]) {
+      const c = gsdCamera({ sensor, f, height: 130, elevation: 20 });
+      const ref = nadirGsdReference(c);
+      const a = groundPixelRay(c, 0, c.imageHeight / 2);
+      const b = groundPixelRay(c, c.width, c.imageHeight / 2);
+      close(ref.groundWidth, b[0] - a[0]);
+      close(ref.gsd, ref.groundWidth / c.width);
+      close(ref.gsd, localGsd(c).gx);
+      close(Math.tan(ref.halfAngle), ref.groundWidth / (2 * ref.agl));
+      close(Math.tan(ref.halfAngle), c.sensorW / (2 * c.f));
+      const oblique = nadirGsdReference({ ...c, tilt: 60, slope: 25 });
+      assert.deepEqual(
+        oblique,
+        ref,
+        "the labelled nadir reference must not silently become an oblique approximation",
+      );
+    }
+});
 test("displayed GSD ray substitution uses the actual unnormalized ray and terrain plane", () => {
   for (const tilt of [0, 20, 65, 100])
     for (const slope of [-25, 0, 25]) {
