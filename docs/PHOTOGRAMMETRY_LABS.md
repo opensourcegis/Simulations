@@ -24,6 +24,8 @@ The flight-block, image-measurement, adjustment and QA stages share the weighted
 
 Route: `?simulation=sfm`.
 
+Before a seed is solved, the main panel displays the two input images and an explicit "Reconstruct seed pair" action rather than an unexplained empty 3D viewport. This action prepares synthetic tracks and runs the same image-based seed solver as the staged controls. Only a successful solution opens the 3D reconstruction, which fits its view to the recovered geometry as cameras are registered. Resetting or changing inputs restores the image-evidence state; failed initialization shows its reason without substituting known scene coordinates.
+
 The former perfect-reference-camera/near-truth-pose initialization is no longer used. Reconstruction functions take only pixel correspondences and known interior calibration, never synthetic camera positions, terrain coordinates, GCPs or checkpoint truth. Features/correspondence IDs are procedurally generated; this is not SIFT/ORB or descriptor matching on real photographs.
 
 1. Undistort/normalize image coordinates; estimate an essential matrix using 160 seeded eight-point RANSAC trials and a 2 px Sampson gate. Hartley normalization improves conditioning. A symmetric eigensolver and 3 × 3 singular-vector construction impose equal nonzero singular values and rank two. A consensus refit is retained only if it does not reduce the inlier count.

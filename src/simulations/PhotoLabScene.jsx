@@ -73,6 +73,23 @@ export function disposeGroup(group) {
   });
 }
 
+function frameReconstruction(c, top = false) {
+  const bounds = new THREE.Box3().setFromObject(c.group);
+  if (bounds.isEmpty()) return;
+  const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+  if (!Number.isFinite(sphere.radius)) return;
+  const halfV = THREE.MathUtils.degToRad(c.camera.fov / 2);
+  const halfH = Math.atan(Math.tan(halfV) * c.camera.aspect);
+  const distance =
+    (Math.max(0.5, sphere.radius) / Math.sin(Math.min(halfV, halfH))) * 1.15;
+  const direction = new THREE.Vector3(
+    ...(top ? [0.001, 0.001, 1] : [1, -1, 1]),
+  ).normalize();
+  c.controls.target.copy(sphere.center);
+  c.camera.position.copy(sphere.center).addScaledVector(direction, distance);
+  c.controls.update();
+}
+
 export default function PhotoLabScene({
   build,
   label,
@@ -82,6 +99,7 @@ export default function PhotoLabScene({
   onFrame,
   closeup,
   maxDistance = 130,
+  fitToContent = false,
 }) {
   const host = useRef(null),
     context = useRef(null),
@@ -90,6 +108,9 @@ export default function PhotoLabScene({
     initialRef = useRef(initial),
     targetRef = useRef(target);
   const [error, setError] = useState(false);
+  const fitRef = useRef(fitToContent),
+    lastFrame = useRef(null);
+  fitRef.current = fitToContent;
   selectRef.current = onSelect;
   frameRef.current = onFrame;
   useEffect(() => {
@@ -123,9 +144,12 @@ export default function PhotoLabScene({
     const resize = new ResizeObserver(() => {
       const w = el.clientWidth,
         h = el.clientHeight;
+      if (w <= 0 || h <= 0) return;
       renderer.setSize(w, h, false);
       camera.aspect = w / Math.max(1, h);
       camera.updateProjectionMatrix();
+      if (fitRef.current && context.current)
+        frameReconstruction(context.current);
     });
     resize.observe(el);
     let start = [0, 0];
@@ -177,10 +201,18 @@ export default function PhotoLabScene({
     c.scene.remove(c.group);
     c.group = build();
     c.scene.add(c.group);
-  }, [build]);
+    if (fitToContent && lastFrame.current !== fitToContent) {
+      frameReconstruction(c);
+      lastFrame.current = fitToContent;
+    }
+  }, [build, fitToContent]);
   const view = (top) => {
     const c = context.current;
     if (!c) return;
+    if (fitRef.current) {
+      frameReconstruction(c, top);
+      return;
+    }
     c.controls.target.set(...targetRef.current);
     c.camera.position.set(
       ...(top

@@ -14,10 +14,9 @@ import {
   SCAN_BUILDINGS,
   SCAN_CANOPIES,
   SCAN_LINE,
-  scanOrigin,
-  scanDirections,
-  scanIntersection,
-  scanVisibleCount,
+  scanPlaybackFrame,
+  scanGlyphPosition,
+  writeScanPulseSegments,
 } from "./scanning-model.js";
 
 export default function ScanningFieldView({
@@ -26,6 +25,7 @@ export default function ScanningFieldView({
   clock,
   pointColor,
   showBeam,
+  highlightSweep = true,
 }) {
   const world = useCallback(() => {
     const g = new THREE.Group();
@@ -114,10 +114,7 @@ export default function ScanningFieldView({
     data.records.forEach((r, i) => {
       // Move only the glyph slightly toward the scanner so wall hits, as well
       // as roof/ground hits, remain visible without changing measured XYZ.
-      positions.set(
-        r.position.map((v, j) => v - 0.025 * r.direction[j]),
-        i * 3,
-      );
+      positions.set(scanGlyphPosition(r), i * 3);
       if (pointColor === "height")
         color.setHSL(0.58 - Math.min(1, r.position[2] / 18) * 0.52, 0.85, 0.53);
       else
@@ -135,10 +132,33 @@ export default function ScanningFieldView({
         size: 2.7,
         sizeAttenuation: false,
         depthTest: true,
+        transparent: true,
+        opacity: highlightSweep ? 0.22 : 1,
+        depthWrite: false,
       }),
     );
     points.name = "acquired-returns";
     g.add(points);
+    for (const [name, color, size] of [
+      ["recent-sweep", 0xf4b759, 5],
+      ["current-pulse-return", 0xffefb4, 9],
+    ]) {
+      const glyphGeometry = new THREE.BufferGeometry();
+      glyphGeometry.setAttribute("position", geometry.attributes.position);
+      glyphGeometry.setDrawRange(0, 0);
+      const glyphs = new THREE.Points(
+        glyphGeometry,
+        new THREE.PointsMaterial({
+          color,
+          size,
+          sizeAttenuation: false,
+          depthTest: true,
+          depthWrite: false,
+        }),
+      );
+      glyphs.name = name;
+      g.add(glyphs);
+    }
     const rayGeometry = new THREE.BufferGeometry();
     rayGeometry.setAttribute(
       "position",
@@ -166,15 +186,17 @@ export default function ScanningFieldView({
       0.55,
     );
     return g;
-  }, [data, settings.height, pointColor]);
+  }, [data, settings.height, pointColor, highlightSweep]);
   const onFrame = useCallback(
     (ctx) => {
       const t = clock.current.time,
         root = ctx.analytical,
         uas = root.getObjectByName("survey-aircraft"),
         points = root.getObjectByName("acquired-returns"),
-        rays = root.getObjectByName("sampled-ray-guides");
-      if (!uas || !points || !rays) return;
+        rays = root.getObjectByName("sampled-ray-guides"),
+        recent = root.getObjectByName("recent-sweep"),
+        current = root.getObjectByName("current-pulse-return");
+      if (!uas || !points || !rays || !recent || !current) return;
       const x = SCAN_LINE[0] + settings.speed * t,
         dx = x - uas.position.x;
       // Only the payload inspection view follows the moving aircraft.
@@ -191,22 +213,25 @@ export default function ScanningFieldView({
       uas.traverse((o) => {
         if (o.userData.rotor) o.rotation.z = t * 200;
       });
-      points.geometry.setDrawRange(0, scanVisibleCount(data.records, t));
+      const frame = scanPlaybackFrame(data, t);
+      points.geometry.setDrawRange(0, frame.count);
+      recent.geometry.setDrawRange(
+        frame.recentStart,
+        highlightSweep ? frame.count - frame.recentStart : 0,
+      );
+      current.geometry.setDrawRange(
+        frame.pulseStart,
+        frame.pulseEnd - frame.pulseStart,
+      );
       const positions = rays.geometry.attributes.position;
       let count = 0;
       if (showBeam && t > 0) {
-        const origin = scanOrigin(t, settings);
-        for (const direction of scanDirections(settings.mechanism, t)) {
-          const hit = scanIntersection(origin, direction, settings);
-          if (!hit) continue;
-          positions.setXYZ(count++, ...origin);
-          positions.setXYZ(count++, ...hit.position);
-        }
+        count = writeScanPulseSegments(data, frame, positions.array);
       }
       positions.needsUpdate = true;
       rays.geometry.setDrawRange(0, count);
     },
-    [clock, data, settings, showBeam],
+    [clock, data, settings, showBeam, highlightSweep],
   );
   const views = useMemo(
     () => [

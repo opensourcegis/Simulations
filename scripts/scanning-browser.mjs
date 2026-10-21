@@ -189,6 +189,26 @@ try {
   );
   await click("#scan-show-all");
   await set("scan-time", 2.5);
+  const acquisitionBeforeToggle = await evaluate(
+    "({time:document.getElementById('scan-flight-console').dataset.time,count:document.getElementById('scan-count').textContent})",
+  );
+  assert.equal(
+    await evaluate("document.getElementById('scan-highlight-sweep').checked"),
+    true,
+  );
+  await click("#scan-highlight-sweep");
+  assert.equal(
+    await evaluate("document.getElementById('scan-highlight-sweep').checked"),
+    false,
+  );
+  assert.deepEqual(
+    await evaluate(
+      "({time:document.getElementById('scan-flight-console').dataset.time,count:document.getElementById('scan-count').textContent})",
+    ),
+    acquisitionBeforeToggle,
+    "sweep highlighting cannot change acquired points or playback time",
+  );
+  await click("#scan-highlight-sweep");
   assert.equal(
     await evaluate(
       "document.getElementById('scan-flight-console').dataset.running",

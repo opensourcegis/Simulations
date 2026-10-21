@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PhotoLabScene from "./PhotoLabScene.jsx";
 import { PhotoLab, Panel, Slider, Metric } from "./PhotoLabUI.jsx";
 import { createAerialSurvey, intersectObservations } from "./aerial-survey.js";
@@ -45,11 +45,22 @@ export default function StructureFromMotion() {
     [noise, baseline, outliers],
   );
   const [model, setModel] = useState(() => empty(data.truth.points.length));
+  const revision = useRef(0),
+    pending = useRef(null);
   const pair = pairChoice.split(",").map(Number);
   useEffect(() => {
+    revision.current++;
+    clearTimeout(pending.current);
+    setBusy(false);
     setModel(empty(data.truth.points.length));
     setMatched(false);
-    setNotice("Inputs changed. Generate tracks and estimate a new seed pair.");
+    setNotice(
+      "No 3D model yet. Inspect the overlapping images, then reconstruct the seed pair.",
+    );
+    return () => {
+      revision.current++;
+      clearTimeout(pending.current);
+    };
   }, [data, pairChoice]);
   const correspondences = makePairMatches(
     data.observations,
@@ -58,8 +69,10 @@ export default function StructureFromMotion() {
     -0.06,
   );
   const run = (task) => {
+    const token = revision.current;
     setBusy(true);
-    setTimeout(() => {
+    pending.current = setTimeout(() => {
+      if (token !== revision.current) return;
       try {
         task();
       } catch (error) {
@@ -343,16 +356,80 @@ export default function StructureFromMotion() {
         </aside>
         <div className="photo-instruments">
           <Panel
-            tag="SPARSE RECONSTRUCTION / RELATIVE UNITS"
-            title="Only recovered cameras and points"
+            tag={
+              model.registered.length
+                ? "SPARSE RECONSTRUCTION / RELATIVE UNITS"
+                : "START WITH IMAGE EVIDENCE"
+            }
+            title={
+              model.registered.length
+                ? "Only recovered cameras and points"
+                : "Two images first. Estimated 3D next."
+            }
             className="photo-stage"
           >
-            <PhotoLabScene
-              build={build}
-              initial={[4, -6, 4]}
-              target={[1, 0, -3]}
-              label="Image-estimated cameras and sparse triangulated points in an arbitrary relative reference frame. Unsolved cameras are not displayed."
-            />
+            {model.registered.length ? (
+              <PhotoLabScene
+                build={build}
+                initial={[4, -6, 4]}
+                target={[1, 0, -3]}
+                fitToContent={model.registered.length}
+                label="Image-estimated cameras and sparse triangulated points in an arbitrary relative reference frame. Unsolved cameras are not displayed."
+              />
+            ) : (
+              <div className="sfm-start-state" id="sfm-empty-state">
+                <div className="sfm-start-heading">
+                  <h3>No camera poses or 3D points have been estimated yet.</h3>
+                  <p>
+                    This is the input, not a failed 3D render. The solver needs
+                    corresponding image measurements before it can recover
+                    geometry.
+                  </p>
+                </div>
+                <div className="sfm-seed-images">
+                  {pair.map((ci) => (
+                    <figure key={ci}>
+                      <figcaption>C{ci + 1} · pose unknown</figcaption>
+                      <SurveyPhoto
+                        data={data}
+                        camera={ci}
+                        point={point}
+                        onSelect={setPoint}
+                        selected={
+                          matched
+                            ? data.observations
+                                .filter((o) => o.ci === ci && !o.checkpoint)
+                                .map((o) => o.pi)
+                            : []
+                        }
+                      />
+                    </figure>
+                  ))}
+                </div>
+                <div className="sfm-start-action">
+                  <button
+                    id="sfm-start"
+                    disabled={busy}
+                    onClick={() => {
+                      setMatched(true);
+                      seed();
+                    }}
+                  >
+                    {busy
+                      ? "Estimating geometry…"
+                      : `Reconstruct seed pair C${pair[0] + 1} + C${pair[1] + 1} →`}
+                  </button>
+                  <p>
+                    Prepare the synthetic tracks, verify matches, estimate
+                    relative pose, then triangulate. No known camera poses or
+                    ground coordinates are supplied to the solver.
+                  </p>
+                </div>
+                <p id="sfm-start-status" role="status">
+                  {busy ? "Computing the image-based seed solution…" : notice}
+                </p>
+              </div>
+            )}
             <div className="photo-stage-key">
               <span>gold: recovered cameras</span>
               <span>cyan: reconstructed tracks</span>

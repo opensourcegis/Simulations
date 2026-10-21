@@ -222,7 +222,13 @@ export function buildScanLine(settings) {
       if (hit) records.push({ ...hit, t, origin, direction });
     }
   }
-  return { records, reference: ref };
+  return {
+    records,
+    reference: ref,
+    mechanism: m.id,
+    pulseRate: m.rate,
+    cycleSeconds: 1 / m.hz,
+  };
 }
 export function scanVisibleCount(records, t) {
   let a = 0,
@@ -233,4 +239,43 @@ export function scanVisibleCount(records, t) {
     else b = m;
   }
   return a;
+}
+
+// A displayed pulse is a recorded emission, not a new ray evaluated between
+// sensor ticks. During polygon blanking there is no pulse to draw.
+export function scanPlaybackFrame(data, time) {
+  const t = Math.max(0, Math.min(data.reference.duration, time));
+  const count = scanVisibleCount(data.records, t);
+  const recentStart = scanVisibleCount(data.records, t - data.cycleSeconds);
+  const tick = Math.floor(t * data.pulseRate + 1e-9);
+  let pulseStart = count;
+  if (
+    count &&
+    tick > 0 &&
+    Math.abs(data.records[count - 1].t * data.pulseRate - tick) < 1e-6
+  ) {
+    const stamp = data.records[count - 1].t;
+    while (pulseStart > 0 && data.records[pulseStart - 1].t === stamp)
+      pulseStart--;
+  }
+  return {
+    count,
+    recentStart,
+    pulseStart,
+    pulseEnd: count,
+    pulseTime: pulseStart < count ? data.records[pulseStart].t : null,
+  };
+}
+
+// Only a visibility offset for the rendered glyph, never a measured XYZ edit.
+export const scanGlyphPosition = (record) =>
+  record.position.map((v, i) => v - 0.025 * record.direction[i]);
+
+export function writeScanPulseSegments(data, frame, buffer) {
+  let vertices = 0;
+  for (let i = frame.pulseStart; i < frame.pulseEnd; i++) {
+    buffer.set(data.records[i].origin, vertices++ * 3);
+    buffer.set(scanGlyphPosition(data.records[i]), vertices++ * 3);
+  }
+  return vertices;
 }

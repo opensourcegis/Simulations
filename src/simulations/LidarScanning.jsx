@@ -15,7 +15,8 @@ export default function LidarScanning() {
     [objects, setObjects] = useState(true),
     [playbackRate, setRate] = useState(0.25),
     [pointColor, setPointColor] = useState("sequence"),
-    [showBeam, setBeam] = useState(true);
+    [showBeam, setBeam] = useState(true),
+    [highlightSweep, setHighlightSweep] = useState(true);
   const settings = useMemo(
     () => ({ mechanism, height, speed, objects }),
     [mechanism, height, speed, objects],
@@ -187,6 +188,7 @@ export default function LidarScanning() {
             clock={clock}
             pointColor={pointColor}
             showBeam={showBeam}
+            highlightSweep={highlightSweep}
           />
           <div className="scan-display-controls">
             <label>
@@ -212,7 +214,16 @@ export default function LidarScanning() {
                 checked={showBeam}
                 onChange={(e) => setBeam(e.target.checked)}
               />
-              Sampled ray guides
+              Last recorded pulse
+            </label>
+            <label>
+              <input
+                id="scan-highlight-sweep"
+                type="checkbox"
+                checked={highlightSweep}
+                onChange={(e) => setHighlightSweep(e.target.checked)}
+              />
+              Highlight latest scan cycle
             </label>
             <button id="scan-show-all" onClick={() => seek(ref.duration)}>
               Show complete line
@@ -222,11 +233,13 @@ export default function LidarScanning() {
             The aircraft is drawn at physical size, not enlarged to fill the
             flight view. Use Payload to inspect the mounted sensor, or Point
             pattern to read the acquired swath. Amber rays are analytical
-            near-infrared guides, not visible light; only current sightlines are
-            drawn, while every model pulse contributes to the point cloud. Point
-            symbols are fixed screen pixels, not footprint diameters; they are
-            shifted 2.5 cm toward the scanner only to avoid surface display
-            flicker.
+            near-infrared guides, not visible light. Each guide ends at its own
+            recorded return (bright cream); the latest scan cycle is gold and
+            older points are faint. A full accumulated swath can look like a
+            dense grid at this scale. Guides hold the last emitted pulse between
+            sensor ticks, and disappear during facet blanking. Point symbols are
+            fixed screen pixels, not footprint diameters; they are shifted 2.5
+            cm toward the scanner only to avoid surface display flicker.
           </p>
           <section className="scan-math">
             <h2>Connect the geometry to the sample pattern</h2>

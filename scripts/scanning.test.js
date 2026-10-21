@@ -10,6 +10,9 @@ import {
   scanReference,
   buildScanLine,
   scanVisibleCount,
+  scanPlaybackFrame,
+  scanGlyphPosition,
+  writeScanPulseSegments,
 } from "../src/simulations/scanning-model.js";
 import { SURVEY_MOUNTS } from "../src/simulations/survey-mounts.js";
 const close = (a, b, eps = 1e-8) =>
@@ -21,6 +24,74 @@ test("all six scan laws produce normalized downward sightlines", () => {
         close(Math.hypot(...d), 1);
         assert(d[2] < 0);
       }
+});
+test("displayed beams and bright return glyphs share a recorded pulse, including between sensor ticks", () => {
+  for (const m of SCAN_MECHANISMS) {
+    const data = buildScanLine({
+      mechanism: m.id,
+      height: 80,
+      speed: 20,
+      objects: true,
+    });
+    const cloud = new Float32Array(data.records.flatMap(scanGlyphPosition));
+    for (const t of [
+      0,
+      0.001,
+      0.0193,
+      0.14577,
+      0.8172,
+      2.0314,
+      data.reference.duration,
+    ]) {
+      const f = scanPlaybackFrame(data, t);
+      assert.equal(f.count, scanVisibleCount(data.records, t));
+      assert(f.recentStart <= f.count && f.pulseStart <= f.pulseEnd);
+      assert(f.pulseStart >= f.recentStart);
+      const lines = new Float32Array(48);
+      assert.equal(
+        writeScanPulseSegments(data, f, lines),
+        2 * (f.pulseEnd - f.pulseStart),
+      );
+      for (let i = f.pulseStart; i < f.pulseEnd; i++) {
+        const r = data.records[i];
+        assert.equal(r.t, f.pulseTime);
+        assert(r.t <= t);
+        assert.equal(
+          Math.round(r.t * data.pulseRate),
+          Math.floor(t * data.pulseRate + 1e-9),
+        );
+        const glyph = scanGlyphPosition(r),
+          lineIndex = (i - f.pulseStart) * 6;
+        assert.deepEqual(
+          lines.slice(lineIndex + 3, lineIndex + 6),
+          cloud.slice(i * 3, i * 3 + 3),
+          "actual rendered ray-buffer endpoint equals its own acquired point-buffer position",
+        );
+        assert.deepEqual(
+          lines.slice(lineIndex, lineIndex + 3),
+          new Float32Array(r.origin),
+        );
+        close(Math.hypot(...glyph.map((v, j) => v - r.position[j])), 0.025);
+      }
+      if (f.pulseTime != null)
+        assert.equal(f.pulseEnd - f.pulseStart, m.channels);
+    }
+  }
+});
+test("polygon blanking clears the beam instead of pointing at an earlier unrelated sample", () => {
+  const data = buildScanLine({
+    mechanism: "poly",
+    height: 80,
+    speed: 10,
+    objects: false,
+  });
+  const t = 0.96 / 11,
+    f = scanPlaybackFrame(data, t);
+  assert(f.count > 0);
+  assert.equal(f.pulseTime, null);
+  assert.equal(f.pulseStart, f.pulseEnd);
+  const next = scanPlaybackFrame(data, 1.05 / 11);
+  assert(next.pulseTime > t);
 });
 test("single-axis flat-plane swath and line advance follow H tan(theta) and v/f", () => {
   const c = { mechanism: "osc", height: 80, speed: 10 },

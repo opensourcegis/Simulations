@@ -73,8 +73,21 @@ try {
     await goto(route);
     assert.equal(
       await evaluate(`document.querySelectorAll('.photo-webgl canvas').length`),
-      1,
+      route.includes("simulation=sfm") ? 0 : 1,
     );
+    if (route.includes("simulation=sfm")) {
+      assert.equal(
+        await evaluate(
+          "document.querySelectorAll('.sfm-seed-images canvas').length",
+        ),
+        2,
+      );
+      assert(
+        await evaluate(
+          "document.getElementById('sfm-start').checkVisibility()",
+        ),
+      );
+    }
     if (route.includes("aerial-triangulation"))
       await evaluate(
         `[...document.querySelectorAll('.photo-tabs button')].find(b=>b.textContent.includes('Image measurements')).click()`,
@@ -116,6 +129,28 @@ try {
   );
 
   await goto("?simulation=sfm");
+  await evaluate(
+    "document.getElementById('sfm-empty-state').scrollIntoView({block:'center'})",
+  );
+  await screenshot("/tmp/sfm-input-evidence.png");
+  await evaluate("document.getElementById('sfm-start').click()");
+  await until(
+    "document.getElementById('sfm-registered').textContent.includes('2 / 6')",
+  );
+  await until("!!document.querySelector('.photo-webgl canvas')");
+  assert.equal(
+    await evaluate("!!document.getElementById('sfm-empty-state')"),
+    false,
+  );
+  assert.equal(
+    await evaluate("document.querySelectorAll('.photo-webgl-error').length"),
+    0,
+  );
+  await pause(150);
+  await screenshot("/tmp/sfm-estimated-seed.png");
+  await until("!document.getElementById('sfm-reset').disabled");
+  await evaluate("document.getElementById('sfm-reset').click()");
+  await until("!!document.getElementById('sfm-empty-state')");
   assert(
     (
       await evaluate(`document.getElementById('sfm-registered').textContent`)
