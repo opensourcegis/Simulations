@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { SURVEY_MOUNTS } from "./survey-mounts.js";
 
 export function seeded(seed = 19) {
   return () => {
@@ -410,8 +411,8 @@ export function siteDetails(group, height, { trees = true } = {}) {
 // Representative large survey multirotor, dimensions in metres. Sensor centres
 // are the numerical model's mounting points; no camera or scanner is spun for effect.
 export function surveyUas({
-  gps = [-0.9, 0, 1.05],
-  scanner = [0.7, 0, -0.8],
+  gps = SURVEY_MOUNTS.gps,
+  scanner = SURVEY_MOUNTS.scanner,
   boresight = [0, 0, 0],
   camera = false,
   tilt = 0,
@@ -502,6 +503,7 @@ export function surveyUas({
         [...end.slice(0, 2), 0.215],
       );
       prop.rotation.z = sx * sy * 0.3;
+      prop.userData.rotor = true;
       tube(
         g,
         [sx * 0.38, sy * 0.27, -0.05],
@@ -512,11 +514,11 @@ export function surveyUas({
     }
   for (const sy of [-1, 1])
     tube(g, [-0.9, sy * 0.5, -0.65], [0.9, sy * 0.5, -0.65], 0.028, carbon);
-  // Small IMU enclosure, registration screws and bundled harness.
+  // IMU reference at the body origin, inside the airframe enclosure.
   const imu = enclosure(
     g,
     [0.28, 0.22, 0.11],
-    [0, 0, 0.12],
+    [0, 0, 0],
     material(0x9a8558, 0.4, 0.6),
   );
   imu.userData.part = "imu";
@@ -526,15 +528,45 @@ export function surveyUas({
         g,
         new THREE.CylinderGeometry(0.012, 0.012, 0.008, 10),
         metal,
-        [x, y, 0.18],
+        [x, y, 0.06],
       );
       screw.rotation.x = Math.PI / 2;
     }
-  tube(g, [-0.15, 0.18, 0.1], [gps[0], gps[1], gps[2] - 0.08], 0.008, rubber);
-  tube(g, [gps[0], gps[1], 0.1], gps, 0.018, metal);
-  const antenna = mesh(g, new THREE.SphereGeometry(0.18, 28, 16), shell, gps);
-  antenna.scale.set(1, 1, 0.32);
-  antenna.userData.part = "gps";
+  // A supported mast and low-profile radome. Internal wiring is omitted;
+  // no diagonal cable or optical beam should appear to leave the antenna.
+  const foot = [
+    Math.max(-0.42, Math.min(0.42, gps[0])),
+    Math.max(-0.24, Math.min(0.24, gps[1])),
+    0.38,
+  ];
+  enclosure(g, [0.15, 0.15, 0.025], foot, metal);
+  const base = [gps[0], gps[1], gps[2] - 0.07];
+  tube(g, foot, base, 0.023, carbon);
+  const antenna = new THREE.Group();
+  antenna.name = "GNSS radome and phase-centre reference";
+  antenna.position.set(...gps);
+  const profile = [
+    [0, -0.055],
+    [0.105, -0.055],
+    [0.125, -0.035],
+    [0.13, -0.005],
+    [0.115, 0.025],
+    [0.075, 0.047],
+    [0, 0.055],
+  ].map((p) => new THREE.Vector2(...p));
+  const dome = mesh(antenna, new THREE.LatheGeometry(profile, 40), shell);
+  dome.rotation.x = Math.PI / 2;
+  const baseRing = mesh(
+    antenna,
+    new THREE.CylinderGeometry(0.107, 0.107, 0.018, 32),
+    rubber,
+    [0, 0, -0.06],
+  );
+  baseRing.rotation.x = Math.PI / 2;
+  antenna.traverse((o) => {
+    if (o.isMesh) o.userData.part = "gps";
+  });
+  g.add(antenna);
   tube(
     g,
     [0.25, 0, -0.1],

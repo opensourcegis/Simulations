@@ -5,6 +5,7 @@ const SIMULATION_LOADERS = {
   sfm: lazy(() => import('./simulations/StructureFromMotion.jsx')),
   'aerial-triangulation': lazy(() => import('./simulations/AerialTriangulation.jsx')),
   'lidar-ranging': lazy(() => import('./simulations/LidarRanging.jsx')),
+  'lidar-scanning': lazy(() => import('./simulations/LidarScanning.jsx')),
   'adaptive-tin': lazy(() => import('./simulations/AdaptiveTIN.jsx')),
   'block-adjustment': lazy(() => import('./simulations/BlockAdjustment.jsx')),
   'camera-working': lazy(() => import('./simulations/CameraLab.jsx')),
@@ -26,7 +27,7 @@ function simulatorHref(path) {
 
 const simulators = [
   { title: 'LiDAR Ranging', category: 'LiDAR', level: 'Beginner', description: 'Turn light into distance three ways: time a laser pulse’s round trip (R = c·t / 2), read the phase of a continuous modulated wave, and combine multiple modulation frequencies to cover the whole range precisely.', tags: ['Time of flight', 'Phase / CW', 'Multi-frequency', 'Ambiguity'], path: '?simulation=lidar-ranging', kind: 'ranging', status: 'Native React' },
-  { title: 'LiDAR Scan Patterns', category: 'LiDAR', level: 'Beginner', description: 'Compare six real beam-steering mechanisms and watch their ground patterns build up as a drone moves across the map.', tags: ['Scan mechanisms', 'Point pattern', 'Coverage'], path: 'games/lidar-scanning/', kind: 'scanning' },
+  { title: 'LiDAR Scan Patterns — 3D', category: 'LiDAR', level: 'Beginner', description: 'Fly a survey UAS through six steering patterns, intersect visible 3D surfaces, inspect occlusion and build a time-ordered point cloud.', tags: ['3D scan geometry', 'First-surface returns', 'Point pattern'], path: '?simulation=lidar-scanning', kind: 'scanning', status: 'Native React' },
   { title: 'Beam & Target Interaction', category: 'LiDAR', level: 'Intermediate', description: 'Follow a laser pulse through reflection, absorption, transmission, and scatter across different surfaces and targets.', tags: ['Energy balance', 'Signal strength', 'Multi-return'], path: 'games/lidar-interaction/', kind: 'interaction' },
   { title: 'Survey Mission Designer', category: 'Flight planning', level: 'Beginner', description: 'Plan a drone survey over terrain, place control points and obstructions, and explore the trade-offs behind a robust flight plan.', tags: ['Flight planning', 'Terrain', 'Coverage'], path: 'games/survey-mission-designer/', kind: 'survey' },
   { title: 'Aerial Triangulation', category: 'Photogrammetry', level: 'Intermediate', description: 'Plan a six-image aerial block over terrain and buildings, measure matching details, intersect rays, run weighted adjustment, and inspect independent checkpoint errors.', tags: ['Flight strips', 'Image measurements', 'Ray intersection', 'Survey QA'], path: '?simulation=aerial-triangulation', kind: 'triangulation', status: 'Native React' },

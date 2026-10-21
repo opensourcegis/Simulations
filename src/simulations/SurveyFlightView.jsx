@@ -43,7 +43,9 @@ export default function SurveyFlightView({
   showLaser = true,
   showGhost = false,
 }) {
-  const [guides, setGuides] = useState(inspection || teaching),
+  const [guides, setGuides] = useState(inspection),
+    [frames, setFrames] = useState(false),
+    [mountGuide, setMountGuide] = useState(true),
     h = height;
   const shot =
     inspection && surveyShot === undefined
@@ -87,7 +89,7 @@ export default function SurveyFlightView({
     g.add(uas);
     const p = (v) =>
       rotateBody(v, attitude).map((x, i) => x + (i === 2 ? h : 0));
-    if (guides && showArms)
+    if (guides && showArms && !teaching)
       trace(g, [p(arms.gps), p(arms.scanner)], 0xe1bc78, 0.8);
     if (teaching) {
       const antenna = p(arms.gps),
@@ -95,11 +97,11 @@ export default function SurveyFlightView({
       caption(
         g,
         "GNSS antenna",
-        antenna.map((v, i) => v + (i === 2 ? 0.4 : 0)),
+        antenna.map((v, i) => v + (i === 2 ? 0.65 : 0)),
         "#f1db9e",
-        0.36,
+        0.3,
       );
-      caption(g, "IMU / body origin", [0, 0, h + 0.85], "#f1ddd0", 0.34);
+      caption(g, "IMU / body origin", [1, 0.6, h + 0.55], "#f1ddd0", 0.28);
       caption(
         g,
         "LiDAR origin",
@@ -108,25 +110,36 @@ export default function SurveyFlightView({
         0.34,
       );
       const lever = arms.scanner.map((v, i) => v - arms.gps[i]);
-      const a = new THREE.ArrowHelper(
-        new THREE.Vector3(...origin)
-          .sub(new THREE.Vector3(...antenna))
-          .normalize(),
-        new THREE.Vector3(...antenna),
-        Math.hypot(...lever),
-        0xe1bc78,
-        0.3,
-        0.075,
-      );
-      g.add(a);
-      caption(
-        g,
-        "ℓ = " + Math.hypot(...lever).toFixed(3) + " m",
-        antenna.map((v, i) => (v + origin[i]) / 2 + (i === 1 ? 0.23 : 0)),
-        "#f1db9e",
-        0.3,
-      );
-      for (let i = 0; i < 3; i++) {
+      if (mountGuide && showArms && Math.hypot(...lever) > 1e-8) {
+        const a = new THREE.ArrowHelper(
+          new THREE.Vector3(...origin)
+            .sub(new THREE.Vector3(...antenna))
+            .normalize(),
+          new THREE.Vector3(...antenna),
+          Math.hypot(...lever),
+          0xe1bc78,
+          0.3,
+          0.075,
+        );
+        a.line.material.dispose();
+        a.line.material = new THREE.LineDashedMaterial({
+          color: 0xe1bc78,
+          dashSize: 0.06,
+          gapSize: 0.04,
+          depthTest: false,
+        });
+        a.line.computeLineDistances();
+        a.line.renderOrder = 5;
+        g.add(a);
+        caption(
+          g,
+          "ℓ guide = " + Math.hypot(...lever).toFixed(3) + " m",
+          antenna.map((v, i) => (v + origin[i]) / 2 + (i === 1 ? 0.23 : 0)),
+          "#f1db9e",
+          0.3,
+        );
+      }
+      for (let i = 0; frames && i < 3; i++) {
         const v = [0, 0, 0];
         v[i] = i === 0 ? 1 : -1;
         const body = rotateBody(v, attitude),
@@ -154,19 +167,20 @@ export default function SurveyFlightView({
         ),
         angle = nominal.angleTo(actual),
         axis = new THREE.Vector3().crossVectors(nominal, actual).normalize();
-      trace(
-        g,
-        [
-          origin,
-          nominal
-            .clone()
-            .multiplyScalar(1.6)
-            .add(new THREE.Vector3(...origin))
-            .toArray(),
-        ],
-        0xaab8be,
-        0.8,
-      );
+      if (lessonStage !== "lever")
+        trace(
+          g,
+          [
+            origin,
+            nominal
+              .clone()
+              .multiplyScalar(1.6)
+              .add(new THREE.Vector3(...origin))
+              .toArray(),
+          ],
+          0xaab8be,
+          0.8,
+        );
       trace(
         g,
         [
@@ -193,7 +207,9 @@ export default function SurveyFlightView({
       }
       caption(
         g,
-        "βbeam = " + ((angle * 180) / Math.PI).toFixed(2) + "°",
+        lessonStage === "lever"
+          ? "LiDAR ray"
+          : "βbeam = " + ((angle * 180) / Math.PI).toFixed(2) + "°",
         actual
           .clone()
           .multiplyScalar(1.25)
@@ -214,6 +230,14 @@ export default function SurveyFlightView({
     if (!inspection && shot && guides) {
       trace(g, [shot.origin, shot.actual], 0xe4c18d, 0.65);
       trace(g, [shot.reconstructedOrigin, shot.estimated], 0xb17460, 0.65);
+      if (teaching)
+        caption(
+          g,
+          "Computed ray · not emitted",
+          shot.reconstructedOrigin.map((v, i) => v + (i === 1 ? 0.65 : 0)),
+          "#e6b6a7",
+          0.25,
+        );
       const a = new THREE.Mesh(
         new THREE.RingGeometry(0.18, 0.25, 24),
         new THREE.MeshBasicMaterial({
@@ -245,6 +269,8 @@ export default function SurveyFlightView({
     slope,
     teaching,
     lessonStage,
+    frames,
+    mountGuide,
   ]);
   const views = useMemo(
     () =>
@@ -288,21 +314,46 @@ export default function SurveyFlightView({
           {inspection
             ? "Representative survey UAS · GNSS radome / IMU / laser payload"
             : teaching
-              ? "Labelled sensor frames · same observation as the ground map"
+              ? "GNSS / IMU / scanner mounts · optional analytical guides"
               : "Direct georeferencing · physical aircraft and ground dimensions"}
         </span>
-        <label>
-          <input
-            type="checkbox"
-            checked={guides}
-            onChange={(e) => setGuides(e.target.checked)}
-          />
-          {inspection
-            ? "Mount vector"
-            : teaching
-              ? "Full-range ray overlays"
-              : "Measured & reconstructed rays"}
-        </label>
+        <div className="field-guide-options">
+          {teaching && (
+            <>
+              <label>
+                <input
+                  id="geo-show-mount-guide"
+                  type="checkbox"
+                  checked={mountGuide}
+                  onChange={(e) => setMountGuide(e.target.checked)}
+                />
+                Lever-arm guide (not a cable)
+              </label>
+              <label>
+                <input
+                  id="geo-show-frames"
+                  type="checkbox"
+                  checked={frames}
+                  onChange={(e) => setFrames(e.target.checked)}
+                />
+                Coordinate frames
+              </label>
+            </>
+          )}
+          <label>
+            <input
+              id={teaching ? "geo-show-rays" : undefined}
+              type="checkbox"
+              checked={guides}
+              onChange={(e) => setGuides(e.target.checked)}
+            />
+            {inspection
+              ? "Mount vector"
+              : teaching
+                ? "Full-range calculated rays"
+                : "Measured & reconstructed rays"}
+          </label>
+        </div>
       </div>
       <SurveyViewport
         fitAspect={teaching ? 1.3 : 0}

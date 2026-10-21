@@ -131,6 +131,14 @@
     sans-serif;
   color: #627269;
 }
+.field-guide-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.field-guide-options label {
+  white-space: normal;
+}
 .field-caption {
   margin: 10px 0 0;
   color: #63756a;

@@ -135,7 +135,7 @@ export default function GeoreferencingExperiment({
             shot={shot}
           />
           <p className="field-caption">
-            Gold: antenna → scanner lever arm. Body axes: Xb/Yb/Zb
+            <strong>GNSS receives satellite signals; it does not emit the LiDAR beam.</strong> The dashed gold arrow is the mathematical antenna → scanner lever arm, not a wire. Long calculated rays are off by default; if enabled, red is the reconstructed hypothesis and can start at the antenna when the lever arm is omitted. Optional body axes: Xb/Yb/Zb
             (forward/right/down); cyan: corresponding scanner axes Xs/Ys/Zs. β
             is ray-direction separation, not the magnitude of an Euler-angle
             triple. No geometric exaggeration.

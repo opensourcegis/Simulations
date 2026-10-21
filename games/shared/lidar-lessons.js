@@ -3,7 +3,7 @@ const usgs = { title: 'USGS · Lidar Base Specification (data quality and classi
 
 export const LIDAR_LEARNING_PATH = [
   { topic: 'ranging', title: 'Range', path: '?simulation=lidar-ranging' },
-  { topic: 'scanning', title: 'Scan geometry', path: 'games/lidar-scanning/' },
+  { topic: 'scanning', title: 'Scan geometry', path: '?simulation=lidar-scanning' },
   { topic: 'interaction', title: 'Target & returns', path: 'games/lidar-interaction/' },
   { topic: 'footprint', title: 'Beam footprint', path: '?simulation=beam-footprint' },
   { topic: 'boresight', title: 'Georeferencing', path: '?simulation=boresight' },
@@ -41,7 +41,7 @@ export const LIDAR_LESSONS = {
       { id: 'height', title: 'Double the height', prediction: 'Compare the oscillating-mirror swath at 80 m and 160 m.', result: 'With a fixed angular field of view, doubling H doubles the swath. With the same speed and pulse rate, the ideal mean density halves; this does not by itself determine range accuracy.' },
       { id: 'risley', title: 'Test “non-repetitive” scanning', prediction: 'Do the two fixed prism frequencies in this model ever repeat?', result: 'The illustrative +18 Hz and −28 Hz rotations repeat after 0.5 s for a stationary platform. Aircraft motion translates each repetition. Real non-repeating designs depend on their frequency ratio and observation interval.' },
     ],
-    assumptions: 'Flat-plane ray intersections with schematic optics, fixed illustrative sampling rates and a 30 m/s platform. Elevation colours do not ray-trace roof/canopy occlusion. Displayed density counts retained points inside the map; edge clipping and water dropouts bias it relative to q/(vW). Mechanisms use different sample rates, so this is not a fair instrument-performance comparison. MEMS has a mechanically moving microscopic mirror; multi-beam rings assume the shown downward-facing geometry.',
+    assumptions: 'Representative steering laws and deliberately low, illustrative pulse cadences. In the native 3D lab, unit rays intersect the nearest flat ground, rectangular building or opaque ellipsoid canopy surface; nearer surfaces occlude farther ones. Canopy penetration, detection noise and waveform returns are omitted. Density is a nominal flat-strip reference, not measured local coverage. Mechanisms use different sample rates, so this is not an instrument-performance comparison. Risley uses a paraxial deflection approximation. MEMS has a mechanically moving microscopic mirror; multi-beam channels assume the shown downward-facing geometry.',
     question: { prompt: 'A polygon scanner sweeps at constant angular speed over flat ground. Is its ground spacing exactly uniform?', choices: ['No: tan θ makes spacing larger toward the swath edges.', 'Yes: equal angle always means equal ground distance.', 'Only the aircraft speed matters.'], correct: 0, explanation: 'Ground offset is H tan θ. Equal angular increments map to H sec²θ times the angle increment; constant angular speed is not constant ground speed.' },
     references: [noaa],
   },

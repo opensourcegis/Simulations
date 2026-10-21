@@ -244,7 +244,7 @@ test("perfect direct georeferencing cancels the antenna offset and composes cali
 });
 test("omitting the lever arm introduces a rotated translation with the correct magnitude", () => {
   const a = directGeoreference({ attitude: [10, 5, 20], useLever: false });
-  close(a.total, Math.hypot(1.6, 0, -1.85));
+  close(a.total, Math.hypot(...a.antenna.map((v, i) => v - a.origin[i])));
   const b = directGeoreference({
     attitude: [10, 5, 20],
     leverError: [0.03, -0.01, 0.02],

@@ -1,4 +1,5 @@
 import { eulerAxes } from "../../games/shared/lidar-physics.js";
+import { SURVEY_MOUNTS } from "./survey-mounts.js";
 const DEG = Math.PI / 180;
 const add = (a, b) => a.map((x, i) => x + b[i]);
 const toScene = (v) => [v[0], -v[1], -v[2]];
@@ -23,8 +24,8 @@ export function scannerDirection(attitude, boresight, scanAngle) {
 // attitude/boresight are right-handed NED Rz(yaw) Ry(pitch) Rx(roll), degrees.
 export function directGeoreference({
   height = 100,
-  antennaArm = [-0.9, 0, 1.05],
-  scannerArm = [0.7, 0, -0.8],
+  antennaArm = SURVEY_MOUNTS.gps,
+  scannerArm = SURVEY_MOUNTS.scanner,
   attitude = [0, 0, 0],
   boresight = [0, 0, 0],
   scanAngle = 20,

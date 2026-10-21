@@ -37,6 +37,8 @@ export default function SurveyViewport({
     const c = context.current,
       v = viewRef.current[i];
     if (!c || !v) return;
+    c.viewIndex = i;
+    c.viewRevision = (c.viewRevision || 0) + 1;
     c.camera.position.set(...v.position);
     c.controls.target.set(...v.target);
     fitFactor.current = Math.max(1, fitRef.current / c.camera.aspect);
