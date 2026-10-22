@@ -2,14 +2,102 @@
   display: inline-block;
   margin-left: 8px;
   padding: 2px 7px;
-  border: 1px solid rgba(15, 138, 77, .35);
+  border: 1px solid rgba(15, 138, 77, 0.35);
   border-radius: 999px;
   color: #0f8a4d;
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: .5px;
+  letter-spacing: 0.5px;
   vertical-align: middle;
 }
 
-.section-canvas { cursor: grab; }
-.section-canvas:active { cursor: grabbing; }
+.section-canvas {
+  cursor: default;
+}
+
+/* Readable, quiet worksheets: hierarchy comes from content, not tiny capitals. */
+.sim-app .native-badge {
+  display: none;
+}
+.sim-app .sim-layout,
+.sim-app .sim-col,
+.sim-app .sim-panel {
+  min-width: 0;
+}
+.sim-app .title-block {
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.sim-app .title-block h1 {
+  font-size: 22px;
+  line-height: 1.3;
+}
+.sim-app .sim-topbar .title-block .sub {
+  font-size: 13px;
+  color: #c0d8d0;
+  margin-top: 4px;
+}
+.sim-app .sim-topbar,
+.sim-app .sim-panel {
+  box-shadow: none;
+}
+.sim-app .sim-panel h2 {
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #29494b;
+  flex-wrap: wrap;
+}
+.sim-app .sim-panel h2 small {
+  color: #566b76;
+}
+.sim-app .stepno {
+  flex: none;
+}
+.sim-app .control-grid label {
+  font-size: 13px;
+  min-width: 0;
+}
+.sim-app .control-grid input[type="range"] {
+  min-height: 30px;
+  cursor: pointer;
+}
+.sim-app .readouts > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sim-app .readouts span {
+  color: #546873;
+  letter-spacing: 0.3px;
+  text-transform: none;
+  font-size: 11px;
+}
+.sim-app .equation {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.sim-app
+  :is(.gn-note, .gpr-note, .snell-note, .sar-note, .iot-note, .beam-note) {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.sim-app input:focus-visible,
+.sim-app select:focus-visible {
+  outline: 2px solid #1d6c9b;
+  outline-offset: 3px;
+}
+@media (max-width: 560px) {
+  .sim-app .title-block h1 {
+    font-size: 20px;
+  }
+  .sim-app .readouts {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .sim-app .control-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .sim-app .sim-panel {
+    padding: 12px;
+  }
+}

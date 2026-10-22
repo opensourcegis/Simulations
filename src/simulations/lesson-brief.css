@@ -1,0 +1,57 @@
+.lesson-brief {
+  max-width: 1520px;
+  margin: 12px auto;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #d6e2de;
+  border-left: 3px solid #357366;
+  border-radius: 8px;
+  color: #263d40;
+  font:
+    14px/1.6 system-ui,
+    sans-serif;
+}
+.lesson-brief > p {
+  margin: 0;
+}
+.lesson-brief > p > span {
+  display: block;
+  font:
+    600 10px/1.6 ui-monospace,
+    monospace;
+  letter-spacing: 1.2px;
+  color: #3c6b60;
+  margin-bottom: 3px;
+}
+.lesson-brief summary {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #3d625b;
+  cursor: pointer;
+}
+.lesson-brief-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding-top: 10px;
+}
+.lesson-brief h2 {
+  font-size: 13px;
+  margin: 10px 0 5px;
+}
+.lesson-brief-grid p {
+  margin: 0 0 10px;
+}
+.lesson-brief a {
+  text-decoration: underline;
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .lesson-brief-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .lesson-brief {
+    padding: 10px 12px;
+  }
+}

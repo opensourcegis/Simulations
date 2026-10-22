@@ -2,7 +2,7 @@
 
 React + Vite landing page for browser-based survey training simulators.
 
-The five simulator experiences remain standalone HTML applications under `games/`. The Vite production build copies them into `dist/games/`, so they continue to work alongside the React landing page.
+The catalogue contains 23 unique laboratories: 20 React simulations and three standalone HTML lessons under `games/`. Legacy scanning/aerial/ortho URLs remain supported. The Vite build copies standalone assets and the locally installed Leaflet library into `dist/games/`; the planner does not depend on an external JavaScript CDN.
 
 ## Local development
 
@@ -37,6 +37,10 @@ The six LiDAR lessons include working principles, guided experiments, live calcu
 Bundle Block Adjustment now solves actual noisy image observations with a small Levenberg–Marquardt bundle, robust fitting, datum warnings and withheld checkpoints. **How a Camera Works — 3D** adds an orbitable cutaway covering lens focus, aperture, shutter, sensor, exposure/readout and calibration. See [models and verification](docs/PHOTOGRAMMETRY_LABS.md) and run `npm run test:photo` for numerical checks.
 
 Run numerical regression checks with `npm run test:lidar` and `npm run test:photo`, and verify production integration with `npm run build`.
+
+## Teaching objectives and reliability
+
+See the [whole-catalogue teaching review](docs/SIMULATION_TEACHING_REVIEW.md) for the objective, observable evidence and model limits of every lab. `npm test` runs all numerical regressions; `npm run test:all:browser` checks every catalogue entry, and `npm run test:principles:browser` exercises the older lessons and offline planner. GNSS distinguishes a conditional supplied-integer solution from real RTK ambiguity estimation. The incomplete duplicate React ortho preview now opens the working original lesson.
 
 ## Catalogue thumbnails
 

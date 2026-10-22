@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Survey Mission Designer — Payload &amp; Terrain Trainer</title>
 <meta name="description" content="Design a UAV survey mission on a real map: digitize the survey block, place take-off and entry waypoint, pick the right payload for the deliverable, and clear the review board on GSD, overlap, buffers and endurance.">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="../shared/leaflet/leaflet.css">
 <style>
   :root {
     --bg: #eef2f6;
@@ -459,12 +458,14 @@
         </div>
         <div class="card-body">
           <div class="brief-obj" id="briefObjective"></div>
+          <details style="font-size:12px;margin:10px 0"><summary>Teaching model, not an operational flight plan</summary><p>Payload performance, endurance penalties, clearances, airspace ceilings and grading are scenario assumptions, not aircraft specifications or current aviation regulations. Nominal pulse density is not ground-return density under vegetation; optical views and LiDAR both depend on visibility. Online elevations and OpenStreetMap obstacles may be incomplete. A passing score is not flight approval.</p></details>
           <table class="spec-table" id="specTable"></table>
         </div>
       </div>
 
       <div class="card">
         <div id="map"></div>
+        <p id="mapConnectivity" role="status" style="margin:0;padding:8px 12px;font-size:12px;color:#56677a">Basemap and terrain are online context; flight geometry remains available if they cannot load.</p>
         <div class="map-note" id="mapNote"><span class="dot"></span><span id="mapNoteText">Pick a mission, then digitize the survey block.</span><span class="wind-chip" id="windChip"></span></div>
       </div>
     </div>
@@ -499,7 +500,7 @@
           <div class="seg" id="payloadSeg">
             <button data-payload="nadir" aria-pressed="false">Nadir RGB<span class="hint">wide-swath mapping cam · full endurance</span></button>
             <button data-payload="oblique" aria-pressed="false">Oblique 5-cam<span class="hint">for 3D façades · −12% endurance</span></button>
-            <button data-payload="lidar" aria-pressed="false">LiDAR<span class="hint">sees through canopy · −32% endurance</span></button>
+            <button data-payload="lidar" aria-pressed="false">LiDAR<span class="hint">samples canopy gaps · −32% endurance</span></button>
           </div>
           <div class="coach warn2" id="payloadNote" style="display:none;"></div>
         </div>
@@ -578,8 +579,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="../shared/leaflet/leaflet.js"></script>
 <script>
 "use strict";
 
@@ -692,7 +692,7 @@ const MISSIONS = [
       <b>multirotor</b>. A nadir camera looks straight down and never images a wall — pick the
       payload that captures façades. The 2 km² block is fixed over the fort precinct.`,
     concept: `<b>Concept taught:</b> Deliverable drives payload. 3D reconstruction needs oblique
-      views of every vertical surface, higher overlaps (80/75) for the mesh, and the extra lens
+      views of vertical surfaces, higher overlaps (80/75) for the mesh, and the extra lens
       rig costs ~15% endurance — your area budget shrinks accordingly.`,
     spec: { gsdMaxCm: 5.0, densityMin: null, frontMin: 80, sideMin: 75,
             hAccCm: 8, vAccCm: 12, reservePct: 15 },
@@ -709,10 +709,10 @@ const MISSIONS = [
     deliverable: "DTM + 1 m contours (under canopy)",
     objective: `<b>Objective:</b> A <b>bare-earth DTM with 1 m contours</b> under sal forest canopy
       in the Thano range, for a road alignment study. Platform assigned: <b>multirotor</b>
-      (terrain-hugging, low ground speed). Photogrammetry only ever sees the treetops — a camera
-      DSM is the wrong product here. Choose the sensor that reaches the forest floor.`,
-    concept: `<b>Concept taught:</b> Cameras stop at the canopy; only LiDAR returns reach the
-      ground between leaves. The price is the heaviest payload — roughly a third of your battery.
+      (terrain-hugging, low ground speed). Closed-canopy photogrammetry generally lacks visible
+      ground features. Choose a sensor and acquisition plan that can sample canopy gaps.`,
+    concept: `<b>Concept taught:</b> LiDAR can sample the ground through canopy gaps, but does not
+      see through opaque leaves and does not guarantee ground coverage. Cameras can also see through visible gaps; dense matching needs the same ground detail in several images. Here LiDAR is the heaviest payload — roughly a third of your battery.
       Watch point density (spec ≥ 16 pts/m²): slower and lower means denser.`,
     spec: { gsdMaxCm: null, densityMin: 16, frontMin: null, sideMin: 30,
             hAccCm: 15, vAccCm: 10, reservePct: 15 },
@@ -792,7 +792,7 @@ const S = {
   mode: null            // 'aoi' | 'takeoff' | 'start'
 };
 let bestGrades = {};
-try { bestGrades = JSON.parse(localStorage.getItem("smd-best") || "{}"); } catch (e) { bestGrades = {}; }
+try { bestGrades = JSON.parse(localStorage.getItem("smd-best") || "{}"); if (!bestGrades || typeof bestGrades !== 'object' || Array.isArray(bestGrades)) bestGrades = {}; } catch (e) { bestGrades = {}; }
 
 /* ---------------- map ---------------- */
 const map = L.map("map", { zoomControl: true, attributionControl: true });
@@ -808,6 +808,9 @@ const baseHillshade = L.tileLayer(
 const overlayHillshade = L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
   { maxZoom: 16, opacity: 0.45, attribution: "Hillshade © Esri" });
+for (const layer of [baseImagery, baseOsm, baseHillshade, overlayHillshade]) layer.on('tileerror', () => {
+  document.getElementById('mapConnectivity').textContent = 'Some online map tiles are unavailable. The block, scale and flight geometry still work; do not interpret a blank basemap as surveyed empty terrain.';
+});
 baseImagery.addTo(map);
 L.control.layers(
   { "Imagery": baseImagery, "Streets (OSM)": baseOsm, "Hillshade": baseHillshade },
@@ -1059,24 +1062,28 @@ function drawPoints() {
 }
 
 async function refreshTakeoffElev() {
+  S.takeoffElevFinished = false;
   S.elevTakeoff = null; updateTerrainNote();
   if (!S.takeoff) return;
   const p = S.takeoff;
   const e = await elevAt(p.lat, p.lng);
-  if (S.takeoff && S.takeoff.lat === p.lat) { S.elevTakeoff = e; updateTerrainNote(); recalc(); }
+  if (S.takeoff === p) { S.elevTakeoff = e; S.takeoffElevFinished = true; updateTerrainNote(); recalc(); }
 }
 async function refreshAoiElev() {
+  S.aoiElevFinished = false;
   S.elevGrid = null; updateTerrainNote();
   if (!S.aoi) return;
   const b = S.aoi;
   const g = await sampleAoiElev(b);
-  if (S.aoi === b) { S.elevGrid = g; updateTerrainNote(); recalc(); }
+  if (S.aoi === b) { S.elevGrid = g; S.aoiElevFinished = true; updateTerrainNote(); recalc(); }
 }
 function updateTerrainNote() {
   const el = document.getElementById("terrainNote");
   const bits = [];
   if (S.elevTakeoff != null) bits.push(`take-off ≈ ${fmt(S.elevTakeoff)} m AMSL`);
   if (S.elevGrid) bits.push(`block terrain ${fmt(S.elevGrid.min)}–${fmt(S.elevGrid.max)} m (relief ${fmt(S.elevGrid.max - S.elevGrid.min)} m)`);
+  if (S.takeoffElevFinished && S.elevTakeoff == null) bits.push('take-off elevation unavailable');
+  if (S.aoiElevFinished && !S.elevGrid) bits.push('block terrain unavailable; relief checks are provisional');
   el.textContent = bits.length
     ? "Terrain (SRTM via AWS): " + bits.join(" · ")
     : (S.takeoff || S.aoi) ? "Terrain: sampling elevation…" : "Terrain: place take-off and block to sample real elevation.";
@@ -1610,7 +1617,7 @@ function evaluate() {
     if (S.alt <= ceil) { pts = 5; why = `${S.alt} m AGL is within the ${ceil} m ${m.platform === "fixed" ? "survey authorization" : "DGCA ceiling"}.`; }
     else if (S.alt <= ceil + 40) {
       pts = 2; why = `${S.alt} m AGL busts the ${ceil} m ceiling — flyable only with special permission you do not hold.`;
-      tips.push(`<div class="coach warn2"><b>Above the ceiling.</b> The ${ceil} m AGL limit is law, not advice. Descend to ${ceil} m or the mission needs a fresh authorisation.</div>`);
+      tips.push(`<div class="coach warn2"><b>Above the scenario ceiling.</b> This exercise assigns a ${ceil} m AGL limit. Descend or revise the scenario authorisation. Actual legal limits must be checked with the relevant aviation authority.</div>`);
     } else {
       pts = 0; why = `${S.alt} m AGL is ${S.alt - ceil} m above the ${ceil} m ceiling — the plan is unflyable as filed.`;
       tips.push(`<div class="coach alert"><b>Deep ceiling bust.</b> ${S.alt} m AGL against a ${ceil} m limit grounds the mission and invites enforcement action. Bring the height down and win back endurance some other way.</div>`);
@@ -1620,16 +1627,17 @@ function evaluate() {
 
   const total = rows.reduce((a, x) => a + x.pts, 0);
   const grade = total >= 85 ? "A" : total >= 70 ? "B" : total >= 50 ? "C" : "F";
-  if (grade === "A" && !tips.length) tips.push(`<div class="coach"><b>Plan approved.</b> ${m.requiredPayload === "lidar" ? "Sensor, density and terrain margins all hold." : "Right sensor, right height, right margins."} File the flight plan and NOTAM.</div>`);
+  if (grade === "A" && !tips.length) tips.push(`<div class="coach"><b>Teaching criteria met.</b> This simplified score is not flight approval. Verify terrain, surveyed obstacles, weather, regulations, aircraft performance and required authorisations independently.</div>`);
   return { rows, total, grade, tips };
 }
 
 function showDebrief(res) {
   const m = S.mission;
+  const provisional = S.elevTakeoff == null || !S.elevGrid;
   document.getElementById("gradeBadge").textContent = res.grade;
   document.getElementById("gradeBadge").className = "grade-badge " + res.grade;
   document.getElementById("debriefSub").textContent =
-    `${m.title} — ${res.total}/100 · ${res.grade === "A" ? "Approved" : res.grade === "B" ? "Approved with remarks" : res.grade === "C" ? "Returned for rework" : "Rejected"}`;
+    `${m.title} — ${res.total}/100 · ${provisional ? "Provisional: terrain data unavailable" : "Teaching score only; not operational flight approval"}`;
   document.getElementById("scoreRows").innerHTML = res.rows.map(rw => {
     const pct = rw.pts / rw.max * 100;
     const cls = pct >= 99 ? "full" : pct > 0 ? "part" : "zero";
@@ -1638,11 +1646,11 @@ function showDebrief(res) {
       <div class="bar"><i class="${cls}" style="width:${Math.max(3, pct)}%"></i></div>
       <span class="why">${rw.why}</span></div>`;
   }).join("");
-  document.getElementById("debriefCoach").innerHTML = res.tips ? res.tips.join("") : "";
+  document.getElementById("debriefCoach").innerHTML = (provisional ? '<div class="coach alert"><b>Missing elevation evidence.</b> Relief and altitude-derating checks cannot be completed. The score assumes unavailable terrain effects are zero; do not treat it as a safe or approved plan.</div>' : '') + (res.tips ? res.tips.join("") : "");
   document.getElementById("debriefOverlay").style.display = "flex";
 
   const prev = bestGrades[m.id];
-  if (!prev || res.total > prev.total) {
+  if (!provisional && (!prev || res.total > prev.total)) {
     bestGrades[m.id] = { total: res.total, grade: res.grade };
     try { localStorage.setItem("smd-best", JSON.stringify(bestGrades)); } catch (e) {}
     renderTabs();
@@ -1651,10 +1659,18 @@ function showDebrief(res) {
 
 document.getElementById("evalBtn").addEventListener("click", async () => {
   const btn = document.getElementById("evalBtn");
+  const mission = S.mission, takeoff = S.takeoff, aoi = S.aoi;
   btn.disabled = true; btn.textContent = "Sampling terrain…";
   // make sure terrain is in before the board rules
-  if (S.takeoff && S.elevTakeoff == null) S.elevTakeoff = await elevAt(S.takeoff.lat, S.takeoff.lng);
-  if (S.aoi && !S.elevGrid) S.elevGrid = await sampleAoiElev(S.aoi);
+  const [takeoffElevation, blockElevation] = await Promise.all([
+    S.elevTakeoff ?? (takeoff ? elevAt(takeoff.lat, takeoff.lng) : null),
+    S.elevGrid || (aoi ? sampleAoiElev(aoi) : null),
+  ]);
+  if (S.mission !== mission || S.takeoff !== takeoff || S.aoi !== aoi) {
+    btn.textContent = 'Submit plan to review board'; recalc(); return;
+  }
+  S.elevTakeoff = takeoffElevation; S.elevGrid = blockElevation;
+  S.takeoffElevFinished = true; S.aoiElevFinished = true;
   updateTerrainNote(); recalc();
   const res = evaluate();
   showDebrief(res);
@@ -1756,6 +1772,7 @@ function clearDigitized() {
 
 function loadMission(m) {
   S.mission = m;
+  S.takeoffElevFinished = false; S.aoiElevFinished = false;
   // fixed 2 km² tasking block, centred on the mission site
   S.aoi = L.latLngBounds(offsetM(m.center, -AOI_W / 2, -AOI_H / 2), offsetM(m.center, AOI_W / 2, AOI_H / 2));
   S.elevGrid = null;
