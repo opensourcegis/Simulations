@@ -1,0 +1,97 @@
+.scan-optics {
+  margin-top: 16px;
+  border-top: 1px solid #dce2e5;
+  padding-top: 14px;
+  min-width: 0;
+}
+.scan-optics h3 {
+  font: 600 13px/1.5 system-ui;
+  margin: 0 0 10px;
+}
+.scan-optics-view {
+  position: relative;
+  width: 100%;
+  height: 255px;
+  background: #101e28;
+  border-radius: 6px;
+  overflow: hidden;
+  touch-action: none;
+}
+.scan-optic-part {
+  position: absolute;
+  transform: translate(6px, -100%);
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #142a35df;
+  color: #d9edf0;
+  font: 10px/1.4 system-ui;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.scan-optics-view canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.scan-settings .scan-optics-status {
+  margin: 7px 0;
+  color: #586970;
+  font:
+    10px/1.6 ui-monospace,
+    monospace;
+}
+.scan-optics output {
+  display: block;
+  font:
+    600 11px/1.8 ui-monospace,
+    monospace;
+  color: #285d5a;
+  overflow-wrap: anywhere;
+}
+.scan-optics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.scan-optics-actions > label {
+  flex-basis: 100%;
+  flex: 1;
+  min-width: 120px;
+  font-size: 11px;
+  color: #586970;
+}
+.scan-lab #scan-optics-slow {
+  color: #fff;
+  background: #176d66;
+  border-color: #176d66;
+}
+.scan-optics-actions input {
+  display: block;
+  width: 100%;
+  accent-color: #176d66;
+  min-height: 28px;
+}
+.scan-settings .scan-optics-key {
+  font-size: 10px;
+  color: #586970;
+}
+.scan-optics small {
+  display: block;
+  font: 10px/1.7 system-ui;
+  color: #62747a;
+}
+.scan-optics-explanation {
+  margin: 10px 0;
+  font-size: 11px;
+}
+.scan-optics-explanation > summary {
+  cursor: pointer;
+  color: #176d66;
+  min-height: 30px;
+}
+.scan-optics-error {
+  padding: 20px;
+  color: #e0ecef !important;
+}

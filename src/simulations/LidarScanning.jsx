@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ScanningFieldView from "./ScanningFieldView.jsx";
+import ScanningMechanism from "./ScanningMechanism.jsx";
 import LidarLearningPanel from "./LidarLearningPanel.jsx";
 import {
   SCAN_MECHANISMS,
@@ -228,6 +229,19 @@ export default function LidarScanning() {
             <button id="scan-show-all" onClick={() => seek(ref.duration)}>
               Show complete line
             </button>
+            <button
+              id="scan-inspect-optics"
+              onClick={() => {
+                document
+                  .getElementById("scan-optics")
+                  .scrollIntoView({ block: "center", behavior: "instant" });
+                document
+                  .getElementById("scan-optics-heading")
+                  .focus({ preventScroll: true });
+              }}
+            >
+              Inspect mechanism ↓
+            </button>
           </div>
           <p className="scan-note">
             The aircraft is drawn at physical size, not enlarged to fill the
@@ -299,7 +313,18 @@ export default function LidarScanning() {
                 </button>
               ))}
             </div>
-            <p>{m.explanation}</p>
+            <ScanningMechanism
+              key={mechanism}
+              data={data}
+              clock={clock}
+              running={snapshot.running}
+              onPause={pause}
+              onSlow={() => {
+                setRate(0.05);
+                fly();
+              }}
+              onSeek={seek}
+            />
             <code>{m.formula}</code>
           </section>
           <section>
