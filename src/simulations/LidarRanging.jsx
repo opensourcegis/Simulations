@@ -3,10 +3,12 @@ import './simulation.css';
 import './native.css';
 import './ranging.css';
 import './ranging-workbench.css';
+import './ranging-focus.css';
 import LidarLearningPanel from './LidarLearningPanel.jsx';
 import RangingHardware from './RangingHardware.jsx';
 import RangingCalculation from './RangingCalculation.jsx';
 import RangingShotConsole from './RangingShotConsole.jsx';
+import Disclosure from './Disclosure.jsx';
 import { rangingBudget, simulateRangingShot, shotNormal, RANGING_INSTRUMENT } from './ranging-model.js';
 import { LIGHT_SPEED, roundTripNs, phaseMeasurement, pulseAmbiguity } from '../../games/shared/lidar-physics.js';
 
@@ -507,7 +509,7 @@ export default function LidarRanging() {
             <p className="rng-caption">{mode === 'pulsed' ? 'TX and RX use separate gain scales. The captured RX has illustrative, shot-seeded input noise; peaks are display-clipped and at least 3 pixels wide. Acceptance uses the expected matched-filter SNR, not a crossing of the plotted noise samples. The timestamp includes a calibrated 12 ns internal delay.' : mode === 'phase' ? 'These are metre-scale AMCW modulation waves, not optical carrier waves. Phase repeats every 360°; the missing integer cycle must be resolved separately.' : 'Windows are centred on the known synthetic target. They illustrate cycle selection and an assumed ±3° phase error, not a noisy range estimator.'}</p>
           </section>
           {mode === 'phase' && <section className="rng-panel rng-trace"><h2><span>DISAMBIGUATION</span>Which whole cycle?</h2><div className="rng-comb-action"><button className="rng-action secondary" onClick={playComb}>Animate the calculation</button><span>0.45 MHz coarse tone → {unambCoarse.toFixed(0)} m interval</span></div><canvas ref={combRef} className="rng-canvas" width={COMB_W} height={COMB_H} role="img" aria-label="Fine-phase candidate ranges with a coarse estimate selecting the correct cycle." /><p className="rng-caption">N = round(Rcoarse / (λ/2) − Δφ/360°) = {Ncalc}. The coarse estimate must select the correct fine cycle; here it is ideal and unambiguous across the scene.</p></section>}
-          {mode === 'pulsed' && <div className="rng-worked-calculation"><h2><span>03 / WORK THE MEASUREMENT</span>From receiver timestamp to range</h2><RangingCalculation mode={mode} budget={budget} measured={measured} lambda={lambda} phiDeg={phiDeg} unamb={unamb} Ncalc={Ncalc} distance={distance}/></div>}
+          {mode === 'pulsed' && <Disclosure title="Worked range calculation" className="rng-worked-disclosure"><div className="rng-worked-calculation"><RangingCalculation mode={mode} budget={budget} measured={measured} lambda={lambda} phiDeg={phiDeg} unamb={unamb} Ncalc={Ncalc} distance={distance}/></div></Disclosure>}
         </div>
         <aside className="rng-controls" aria-label="Experiment configuration">
           {mode !== 'pulsed' && <section className="rng-panel">
@@ -516,7 +518,7 @@ export default function LidarRanging() {
             {mode === 'phase' ? <label className="rng-control">Modulation frequency <b>{fMod} MHz</b><input id="rng-frequency" type="range" min="1" max="30" step="1" value={fMod} onChange={e => setFMod(Number(e.target.value))} /></label>
               : <label className="rng-control">Modulation tones <b>{nTones}</b><input id="rng-tones" type="range" min="2" max="4" step="1" value={nTones} onChange={e => setNTones(Number(e.target.value))} /></label>}
           </section>}
-          {mode === 'pulsed' && <section className="rng-panel">
+          {mode === 'pulsed' && <Disclosure title="Receiver & environment">
             <h2><span>RECEIVER &amp; ENVIRONMENT</span>Will the echo survive?</h2>
             <label className="rng-control">Target reflectance <b>{reflectivity}%</b><input id="rng-reflectivity" type="range" min="1" max="90" step="1" value={reflectivity} onChange={e => setReflectivity(Number(e.target.value))} /></label>
             <label className="rng-control">Receiver aperture <b>{aperture} mm</b><input id="rng-aperture" type="range" min="10" max="80" step="1" value={aperture} onChange={e => setAperture(Number(e.target.value))} /></label>
@@ -524,7 +526,7 @@ export default function LidarRanging() {
             <label className="rng-control">Atmospheric extinction <b>{extinction.toFixed(2)} km⁻¹</b><input id="rng-extinction" type="range" min="0" max="4" step="0.05" value={extinction} onChange={e => setExtinction(Number(e.target.value))} /></label>
             <label className="rng-control">Air refractive index <b>{airIndex.toFixed(5)}</b><input id="rng-air-index" type="range" min="1" max="1.0004" step="0.00001" value={airIndex} onChange={e => setAirIndex(Number(e.target.value))} /></label>
             <details className="rng-receiver-assumptions"><summary>Receiver model assumptions</summary><p className="rng-hint">*Background rate at 30 mm aperture, after the optical filter; scales with collecting area. A large, normal-incidence diffuse target fills the beam. Pulse energy is fixed at 100 nJ; the small optical reference tap is included in the assumed optical efficiency.</p></details>
-          </section>}
+          </Disclosure>}
           {mode === 'pulsed' && <details className="rng-panel rng-periodic-settings"><summary>Periodic pulse ambiguity <small>Optional PRF experiment—not the playback rate</small></summary>
             <label className="rng-control">Periodic PRF <b>{prf} kHz</b><input id="rng-prf" type="range" min="10" max="1000" step="5" value={prf} onChange={e => setPrf(+e.target.value)} /></label>
             <p className="rng-hint">Untagged periodic pulses have a vacuum-reference interval of {rMax.toFixed(2)} m. This is separate from the single-pulse capture and slowed repeat playback.</p>

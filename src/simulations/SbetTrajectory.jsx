@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import PhotoLabScene from "./PhotoLabScene.jsx";
-import { Panel, Slider, Metric, MethodTabs } from "./PhotoLabUI.jsx";
+import { Panel, Slider, Metric, MethodTabs, Controls } from "./PhotoLabUI.jsx";
+import Disclosure from './Disclosure.jsx';
 import {
   NavigationLab,
   Playback,
@@ -274,6 +275,7 @@ export default function SbetTrajectory() {
       </div>
       <div className="nav-workspace">
         <aside className="nav-sidebar">
+          <Controls breakpoint={760}>
           <Panel
             tag="SYNTHETIC SENSOR EVIDENCE"
             title="GNSS availability & precision"
@@ -338,6 +340,7 @@ export default function SbetTrajectory() {
           <Panel
             tag="TRUE SENSOR BIASES · HIDDEN FROM FILTER"
             title="How strongly does INS drift?"
+            collapsible
           >
             <Slider
               id="sbet-accel-bias"
@@ -369,6 +372,7 @@ export default function SbetTrajectory() {
           <Panel
             tag="CALIBRATED MOUNTING & SYNCHRONIZATION"
             title="A trajectory is only one ingredient"
+            collapsible defaultOpen={stage === 'lidar'}
           >
             <label className="nav-checkbox">
               <input
@@ -396,6 +400,7 @@ export default function SbetTrajectory() {
               trajectory.
             </p>
           </Panel>
+          </Controls>
         </aside>
         <main className="nav-main">
           <Panel
@@ -509,6 +514,7 @@ export default function SbetTrajectory() {
                     : "pground = pIMU(t) + R(t) [lscanner + r dbeam]"}
             </p>
           </section>
+          <Disclosure title="Worked Kalman correction" defaultOpen={stage === 'update'}>
           <section className="nav-worked-update" id="sbet-worked-update">
             <h3>
               A real recorded Kalman correction ·{" "}
@@ -561,6 +567,7 @@ export default function SbetTrajectory() {
               </p>
             )}
           </section>
+          </Disclosure>
           <SeriesChart
             id="sbet-error-chart"
             title="East position error and propagated uncertainty"
@@ -582,6 +589,7 @@ export default function SbetTrajectory() {
             time={clock.time}
             unit="metres"
           />
+          <Disclosure title="Trajectory record & CSV export" defaultOpen={stage === 'lidar'}>
           <section className="nav-export">
             <h2>Inspect the trajectory record</h2>
             <p>
@@ -615,6 +623,7 @@ export default function SbetTrajectory() {
               Download 10 Hz teaching trajectory CSV ↓
             </button>
           </section>
+          </Disclosure>
           <KnowledgeCheck
             question="Why can an offline smoothed trajectory improve the middle of a GNSS outage?"
             choices={[
@@ -668,7 +677,7 @@ export default function SbetTrajectory() {
               recorded history.
             </p>
           </Panel>
-          <Panel tag="SELECTED TRAJECTORY STATE" title={modes[mode]}>
+          <Panel tag="SELECTED TRAJECTORY STATE" title={modes[mode]} collapsible>
             <VectorReadout
               label="IMU position · East / North / Up"
               values={row[mode].p}

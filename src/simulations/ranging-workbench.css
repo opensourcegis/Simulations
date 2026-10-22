@@ -1,4 +1,13 @@
-/* Action-first pulse layout; the phase and multi-frequency labs keep their layout. */
+/* Compact action console keeps Fire beside the measurement without burying the scene. */
+.rng-shot-console .rng-shot-heading{padding:12px 16px 8px}
+.rng-shot-console .rng-shot-heading h2{font-size:16px}
+.rng-shot-console .rng-shot-fields{padding:0 16px 10px;gap:16px}
+.rng-shot-console .rng-shot-readout{padding:8px 12px}
+.rng-shot-console .rng-result-label{min-height:0;margin:3px 0 0}
+.rng-playback-options>summary{padding:8px 16px;cursor:pointer;font-size:11px;color:#536a5b;border-top:1px solid #e1e6da}
+.rng-shot-console .rng-playback-options .rng-shot-footer{margin:0 16px;border-top:0}
+.rng-instruments>.lab-disclosure .rng-worked-calculation{margin:0;border:0;padding:0}
+.rng-controls .lab-disclosure .rng-control:first-child{margin-top:0}
 .rng-workspace {
   grid-template-areas: "controls instruments diagnostics";
 }

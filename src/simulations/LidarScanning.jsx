@@ -97,7 +97,7 @@ export default function LidarScanning() {
       </header>
       <div className="scan-intro">
         <span>THE SCANNING LAB</span>
-        <h1>Fly the sensor. Build a 3D point cloud.</h1>
+        <h1>LiDAR scan patterns</h1>
         <p>
           Steer a ray, intersect the first visible surface, and watch aircraft
           motion translate the scan pattern.

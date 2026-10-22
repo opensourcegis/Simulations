@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import "./photo-lab.css";
 export function PhotoLab({
   name,
@@ -17,9 +18,8 @@ export function PhotoLab({
           {discipline} · {name.toUpperCase()}
         </span>
       </header>
-      <section className="photo-intro">
-        <p className="photo-eyebrow">{name}</p>
-        <h1>{title}</h1>
+      <section className="photo-intro" aria-label={title}>
+        <h1>{name}</h1>
         <p>{intro}</p>
       </section>
       {children}
@@ -39,15 +39,55 @@ export function PhotoLab({
     </div>
   );
 }
-export function Panel({ tag, title, children, className = "" }) {
+export function Panel({
+  tag,
+  title,
+  children,
+  className = "",
+  collapsible = false,
+  defaultOpen = false,
+}) {
+  const heading = (
+    <h2>
+      <span>{tag}</span>
+      {title}
+    </h2>
+  );
+  if (collapsible)
+    return (
+      <details
+        className={`photo-panel photo-disclosure ${className}`}
+        open={defaultOpen}
+      >
+        <summary>{heading}</summary>
+        <div className="photo-panel-body">{children}</div>
+      </details>
+    );
   return (
     <section className={"photo-panel " + className}>
-      <h2>
-        <span>{tag}</span>
-        {title}
-      </h2>
+      {heading}
       {children}
     </section>
+  );
+}
+export function Controls({ children, breakpoint = 800 }) {
+  const query = `(min-width: ${breakpoint + 1}px)`;
+  const [open, setOpen] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const change = (e) => setOpen(e.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, [query]);
+  return (
+    <details
+      className="photo-control-disclosure"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary>Experiment settings</summary>
+      <div className="photo-controls-stack">{children}</div>
+    </details>
   );
 }
 export function Slider({

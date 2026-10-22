@@ -15,6 +15,7 @@ import {
   number,
 } from "./LeastSquaresVisuals.jsx";
 import "./least-squares.css";
+import Disclosure from "./Disclosure.jsx";
 
 const STAGES = [
   ["observe", "Network & observations"],
@@ -457,7 +458,8 @@ export default function LeastSquaresAdjustment() {
     [geometry, setGeometry] = useState("spread"),
     [initialOffset, setInitialOffset] = useState(1),
     [selected, setSelected] = useState("L1"),
-    [stage, setStage] = useState("equations"),
+    [stage, setStage] = useState("observe"),
+    [showAll, setShowAll] = useState(false),
     [iteration, setIteration] = useState(0),
     [profile, setProfile] = useState(false),
     [trial, setTrial] = useState(100),
@@ -485,7 +487,8 @@ export default function LeastSquaresAdjustment() {
     parameters = result.parameters,
     rowIndex = step?.model.rows.findIndex((o) => o.id === selected) ?? -1,
     small = data.kind !== "code",
-    selectedObservation = data.observations.find((o) => o.id === selected);
+    selectedObservation = data.observations.find((o) => o.id === selected),
+    stageIndex = STAGES.findIndex(([id]) => id === stage);
   const updateData = (fn) => {
     setIteration(0);
     setData(fn);
@@ -504,7 +507,8 @@ export default function LeastSquaresAdjustment() {
     setInitialOffset(1);
     setProfile(false);
     setCheck(null);
-    setStage("equations");
+    setStage("observe");
+    setShowAll(false);
   };
   const regenerate = (g, o) => {
     const next = makeLeastSquaresExample("code", {
@@ -524,18 +528,7 @@ export default function LeastSquaresAdjustment() {
     }));
   const jump = (id) => {
     setStage(id);
-    const selector = {
-      observe: ".ls-geometry-panel",
-      equations: "#ls-equation-inspector",
-      solve: ".ls-normal-system",
-      quality: "#ls-quality",
-    }[id];
-    document.querySelector(selector)?.scrollIntoView({
-      block: "start",
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-    });
+    setShowAll(false);
   };
   const perturb = () => {
     if (selectedObservation)
@@ -861,7 +854,11 @@ export default function LeastSquaresAdjustment() {
                     outlier flag, and nothing is automatically rejected.
                   </p>
                 </Panel>
-                <Panel tag="NOTATION" title="Keep signs and units straight">
+                <Panel
+                  tag="NOTATION"
+                  title="Signs, symbols & units"
+                  collapsible
+                >
                   <dl className="ls-symbols">
                     <dt>l</dt>
                     <dd>Measured observations, metres</dd>
@@ -883,10 +880,12 @@ export default function LeastSquaresAdjustment() {
             </details>
           </aside>
           <main className="ls-main">
-            <div className="ls-stages" aria-label="Jump to a worksheet section">
+            <div className="ls-stages" aria-label="Worksheet steps">
               {STAGES.map(([id, label], i) => (
                 <button
                   key={id}
+                  id={`ls-step-${id}`}
+                  aria-controls={`ls-pane-${id}`}
                   aria-pressed={stage === id}
                   className={stage === id ? "on" : ""}
                   onClick={() => jump(id)}
@@ -895,6 +894,16 @@ export default function LeastSquaresAdjustment() {
                   {label}
                 </button>
               ))}
+            </div>
+            <div className="ls-view-option">
+              <span>One step at a time</span>
+              <button
+                id="ls-full-worksheet"
+                aria-pressed={showAll}
+                onClick={() => setShowAll((v) => !v)}
+              >
+                {showAll ? "Return to focused view" : "Show full worksheet"}
+              </button>
             </div>
             {result.error && (
               <section
@@ -906,62 +915,69 @@ export default function LeastSquaresAdjustment() {
                 <p>{result.error}</p>
                 <p>
                   No fitted coordinates or covariance have been invented. You
-                  can still inspect A and N below. Restoring sufficient
-                  observations and an appropriate datum resolves different kinds
-                  of rank deficiency.
+                  can still inspect A and N in the equations and adjustment
+                  steps. Restoring sufficient observations and an appropriate
+                  datum resolves different kinds of rank deficiency.
                 </p>
               </section>
             )}
-            <Panel
-              tag={
-                data.kind === "code"
-                  ? "SYNTHETIC EPOCH GEOMETRY"
-                  : "OBSERVATIONS ARE CONNECTED EVIDENCE"
-              }
-              title={LS_CASES[data.kind]}
-              className="ls-geometry-panel"
+            <div
+              id="ls-pane-observe"
+              className="ls-stage-panel"
+              hidden={!showAll && stage !== "observe"}
+              aria-labelledby="ls-step-observe"
             >
-              {data.kind === "mean" ? (
-                <MeanObjective
-                  data={data}
-                  fit={fit}
-                  trial={trial}
-                  onTrial={setTrial}
-                />
-              ) : data.kind === "code" ? (
-                <SkyView
-                  data={data}
-                  result={result}
-                  selected={selected}
-                  onSelect={setSelected}
-                />
-              ) : (
-                <NetworkView
-                  data={data}
-                  result={result}
-                  selected={selected}
-                  onSelect={setSelected}
-                  profile={profile}
-                />
-              )}
-              {data.kind === "level" && (
-                <div className="ls-view-controls">
-                  <button
-                    aria-pressed={!profile}
-                    onClick={() => setProfile(false)}
-                  >
-                    Network plan
-                  </button>
-                  <button
-                    aria-pressed={profile}
-                    onClick={() => setProfile(true)}
-                  >
-                    Height profile
-                  </button>
-                  <span>Click a line to inspect its equation</span>
-                </div>
-              )}
-            </Panel>
+              <Panel
+                tag={
+                  data.kind === "code"
+                    ? "SYNTHETIC EPOCH GEOMETRY"
+                    : "OBSERVATIONS ARE CONNECTED EVIDENCE"
+                }
+                title={LS_CASES[data.kind]}
+                className="ls-geometry-panel"
+              >
+                {data.kind === "mean" ? (
+                  <MeanObjective
+                    data={data}
+                    fit={fit}
+                    trial={trial}
+                    onTrial={setTrial}
+                  />
+                ) : data.kind === "code" ? (
+                  <SkyView
+                    data={data}
+                    result={result}
+                    selected={selected}
+                    onSelect={setSelected}
+                  />
+                ) : (
+                  <NetworkView
+                    data={data}
+                    result={result}
+                    selected={selected}
+                    onSelect={setSelected}
+                    profile={profile}
+                  />
+                )}
+                {data.kind === "level" && (
+                  <div className="ls-view-controls">
+                    <button
+                      aria-pressed={!profile}
+                      onClick={() => setProfile(false)}
+                    >
+                      Network plan
+                    </button>
+                    <button
+                      aria-pressed={profile}
+                      onClick={() => setProfile(true)}
+                    >
+                      Height profile
+                    </button>
+                    <span>Click a line to inspect its equation</span>
+                  </div>
+                )}
+              </Panel>
+            </div>
             {data.kind === "code" && (
               <section className="ls-iteration" id="ls-iteration">
                 <div>
@@ -994,7 +1010,10 @@ export default function LeastSquaresAdjustment() {
                 <button onClick={() => setIteration(0)}>First iteration</button>
               </section>
             )}
-            <section className="ls-observations">
+            <section
+              className="ls-observations"
+              hidden={!showAll && stage !== "observe"}
+            >
               <div className="ls-section-title">
                 <span>01 / FIELD BOOK</span>
                 <h2>Measured evidence—not adjusted values</h2>
@@ -1037,7 +1056,10 @@ export default function LeastSquaresAdjustment() {
                           <button
                             className="ls-observation-pick"
                             aria-pressed={selected === o.id}
-                            onClick={() => setSelected(o.id)}
+                            onClick={() => {
+                              setSelected(o.id);
+                              jump("equations");
+                            }}
                           >
                             {o.id} · {o.label}
                           </button>
@@ -1075,236 +1097,282 @@ export default function LeastSquaresAdjustment() {
                 </table>
               </div>
             </section>
-            <div className="ls-section-title">
-              <span>02 / LINEARIZE & WEIGHT</span>
-              <h2>l + v = f(xₖ) + Aδx → Aδx − w = v</h2>
-              <p>
-                The selected physical observation is highlighted across the
-                design matrix and misclosure vector.
-              </p>
-              <label className="ls-select" htmlFor="ls-inspect">
-                Inspect an observation equation
-                <select
-                  id="ls-inspect"
-                  value={selected}
-                  onChange={(e) => setSelected(e.target.value)}
-                >
-                  {inspectionRows.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.id} · {o.label}
-                      {o.active ? "" : " · excluded"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <EquationInspector
-              data={data}
-              step={inspectionStep}
-              selected={selected}
-              parameters={parameters}
-            />
-            {fit?.A && (
-              <div className="ls-matrix-grid">
-                <Matrix
-                  name="A · design matrix"
-                  values={fit.A}
-                  rows={equationRows.map((o) => o.id)}
-                  columns={names}
-                  selectedRow={rowIndex}
-                />
-                <Matrix
-                  name="w = l − f(xₖ)"
-                  values={fit.w}
-                  rows={equationRows.map((o) => o.id)}
-                  columns={["misclosure / m"]}
-                  selectedRow={rowIndex}
-                />
-                <Matrix
-                  name="Σ · assumed observation covariance"
-                  values={fit.Sigma}
-                  rows={equationRows.map((o) => o.id)}
-                  columns={equationRows.map((o) => o.id)}
-                  selectedRow={rowIndex}
-                  unit="m²"
-                />
-                <Matrix
-                  name="P = Σ⁻¹ · precision matrix"
-                  values={fit.P}
-                  rows={equationRows.map((o) => o.id)}
-                  columns={equationRows.map((o) => o.id)}
-                  selectedRow={rowIndex}
-                  unit="m⁻²"
-                />
+            <div
+              id="ls-pane-equations"
+              className="ls-stage-panel"
+              hidden={!showAll && stage !== "equations"}
+              aria-labelledby="ls-step-equations"
+            >
+              <div className="ls-section-title">
+                <span>02 / LINEARIZE & WEIGHT</span>
+                <h2>l + v = f(xₖ) + Aδx → Aδx − w = v</h2>
+                <p>
+                  The selected physical observation is highlighted across the
+                  design matrix and misclosure vector.
+                </p>
+                <label className="ls-select" htmlFor="ls-inspect">
+                  Inspect an observation equation
+                  <select
+                    id="ls-inspect"
+                    value={selected}
+                    onChange={(e) => setSelected(e.target.value)}
+                  >
+                    {inspectionRows.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.id} · {o.label}
+                        {o.active ? "" : " · excluded"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            )}
-            {fit?.N && (
-              <>
-                <div className="ls-section-title">
-                  <span>03 / MINIMIZE THE WEIGHTED SQUARED RESIDUALS</span>
-                  <h2>Nδx = u, with N = AᵀPA and u = AᵀPw</h2>
-                  <p>
-                    The visible normal equations describe the solution. The
-                    numerical engine uses whitened, column-pivoted QR for
-                    stability.
-                  </p>
-                </div>
-                <NormalCalculation fit={fit} parameters={parameters} />
-                <div className="ls-normal-system">
+              <EquationInspector
+                data={data}
+                step={inspectionStep}
+                selected={selected}
+                parameters={parameters}
+              />
+              {fit?.A && (
+                <div className="ls-matrix-grid">
                   <Matrix
-                    name="N = AᵀPA"
-                    values={fit.N}
-                    rows={names}
+                    name="A · design matrix"
+                    values={fit.A}
+                    rows={equationRows.map((o) => o.id)}
                     columns={names}
-                    unit="m⁻²"
+                    selectedRow={rowIndex}
                   />
                   <Matrix
-                    name="u = AᵀPw"
-                    values={fit.u}
-                    rows={names}
-                    columns={["right-hand side"]}
-                    unit="m⁻¹"
+                    name="w = l − f(xₖ)"
+                    values={fit.w}
+                    rows={equationRows.map((o) => o.id)}
+                    columns={["misclosure / m"]}
+                    selectedRow={rowIndex}
                   />
-                  <Matrix
-                    name="δx · jointly solved corrections"
-                    values={fit.dx}
-                    rows={names}
-                    columns={["correction / m"]}
-                  />
-                </div>
-                <details className="ls-details">
-                  <summary>
-                    Inspect Cholesky whitening and the pivoted QR system
-                  </summary>
-                  <div className="ls-matrix-grid">
-                    <Matrix name="L, where Σ = LLᵀ" values={fit.L} unit="m" />
+                  <Disclosure
+                    title="Covariance & precision matrices"
+                    className="ls-matrix-disclosure"
+                  >
                     <Matrix
-                      name="Aᵥ = L⁻¹A"
-                      values={fit.white.A}
-                      columns={names}
+                      name="Σ · assumed observation covariance"
+                      values={fit.Sigma}
+                      rows={equationRows.map((o) => o.id)}
+                      columns={equationRows.map((o) => o.id)}
+                      selectedRow={rowIndex}
+                      unit="m²"
                     />
-                    <Matrix name="wᵥ = L⁻¹w" values={fit.white.w} />
                     <Matrix
-                      name="QR upper factor R"
-                      values={fit.R}
-                      columns={fit.permutation?.map((i) => names[i])}
-                      caption="Columns are pivoted in the displayed order. The solve restores the original unknown order."
+                      name="P = Σ⁻¹ · precision matrix"
+                      values={fit.P}
+                      rows={equationRows.map((o) => o.id)}
+                      columns={equationRows.map((o) => o.id)}
+                      selectedRow={rowIndex}
+                      unit="m⁻²"
+                    />
+                  </Disclosure>
+                </div>
+              )}
+            </div>
+            <div
+              id="ls-pane-solve"
+              className="ls-stage-panel"
+              hidden={!showAll && stage !== "solve"}
+              aria-labelledby="ls-step-solve"
+            >
+              {fit?.N && (
+                <>
+                  <div className="ls-section-title">
+                    <span>03 / MINIMIZE THE WEIGHTED SQUARED RESIDUALS</span>
+                    <h2>Nδx = u, with N = AᵀPA and u = AᵀPw</h2>
+                    <p>
+                      The visible normal equations describe the solution. The
+                      numerical engine uses whitened, column-pivoted QR for
+                      stability.
+                    </p>
+                  </div>
+                  <NormalCalculation fit={fit} parameters={parameters} />
+                  <div className="ls-normal-system">
+                    <Matrix
+                      name="N = AᵀPA"
+                      values={fit.N}
+                      rows={names}
+                      columns={names}
+                      unit="m⁻²"
+                    />
+                    <Matrix
+                      name="u = AᵀPw"
+                      values={fit.u}
+                      rows={names}
+                      columns={["right-hand side"]}
+                      unit="m⁻¹"
+                    />
+                    <Matrix
+                      name="δx · jointly solved corrections"
+                      values={fit.dx}
+                      rows={names}
+                      columns={["correction / m"]}
                     />
                   </div>
-                </details>
-              </>
-            )}
-            {step && (
-              <section className="ls-solution" id="ls-solution">
-                <span>UPDATE THE UNKNOWNS · xₖ₊₁ = xₖ + δx</span>
-                <h2>Each correction has a traceable destination</h2>
-                <div className="ls-table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Unknown</th>
-                        <th>Before / m</th>
-                        <th>δx / m</th>
-                        <th>After / m</th>
-                        <th>A priori σ / m</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {parameters.map((p, i) => (
-                        <tr key={p.id}>
-                          <th>{p.label}</th>
-                          <td>{step.before[i].toFixed(7)}</td>
-                          <td>{step.fit.dx[i].toFixed(9)}</td>
-                          <td>{step.after[i].toFixed(7)}</td>
-                          <td>{Math.sqrt(step.fit.Cx[i][i]).toFixed(7)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {data.kind === "mean" && (
-                  <p className="ls-equation">
-                    Ĥ = Σ(pᵢlᵢ) / Σpᵢ ={" "}
-                    {number(
-                      step.model.rows.reduce(
-                        (s, o, i) => s + step.fit.P[i][i] * o.value,
-                        0,
-                      ),
-                      12,
-                    )}{" "}
-                    /{" "}
-                    {number(
-                      step.fit.P.reduce((s, r, i) => s + r[i], 0),
-                      12,
-                    )}{" "}
-                    = {step.after[0].toFixed(9)} m
-                  </p>
-                )}
-                {data.kind === "code" && (
-                  <p>
-                    Correction norm:{" "}
-                    {norm(step.fit.dx.slice(0, 3)).toExponential(5)} m; clock
-                    correction: {step.fit.dx[3].toExponential(5)} m. Exact
-                    recomputed objective after this step ={" "}
-                    {number(step.afterObjective, 10)}. Convergence requires
-                    position and clock-range corrections below 0.00001 m.
-                  </p>
-                )}
-              </section>
-            )}
-            {result.gnss && step?.converged && (
-              <section className="ls-gnss-solution">
-                <h3>Converged receiver result</h3>
-                <p>
-                  Latitude{" "}
-                  {((result.gnss.geodetic.lat * 180) / Math.PI).toFixed(8)}° ·
-                  longitude{" "}
-                  {((result.gnss.geodetic.lon * 180) / Math.PI).toFixed(8)}° ·
-                  ellipsoid height {result.gnss.geodetic.h.toFixed(4)} m.
-                </p>
-                <p className="ls-equation">
-                  Δt = b/c = {result.final.after[3].toFixed(6)} / 299792458 ={" "}
-                  {result.gnss.clockNs.toFixed(6)} ns
-                </p>
-                <p>
-                  Horizontal 95% ellipse semi-axes:{" "}
-                  {result.gnss.ellipse.major.toFixed(4)} m,{" "}
-                  {result.gnss.ellipse.minor.toFixed(4)} m. These derive from
-                  the a priori ECEF covariance rotated into the local ENU frame.
-                </p>
-              </section>
-            )}
-            <QualityPanel step={step} result={result} />
-            <section className="ls-check">
-              <h3>Check your reasoning</h3>
-              <p>
-                If all assumed observation standard deviations are doubled, what
-                happens to a full-rank linear solution?
-              </p>
-              <div>
-                {[
-                  "The fitted coordinates change by a factor of two",
-                  "Coordinates stay the same; covariance grows fourfold",
-                  "Nothing changes, including uncertainty",
-                ].map((text, i) => (
-                  <button
-                    key={text}
-                    aria-pressed={check === i}
-                    onClick={() => setCheck(i)}
-                  >
-                    {text}
-                  </button>
-                ))}
-              </div>
-              {check !== null && (
-                <p role="status">
-                  {check === 1 ? "Correct. " : "Revisit the normal equations. "}
-                  P becomes P/4; both N and u scale by 1/4, so δx is unchanged,
-                  while N⁻¹ grows by four. Try the σ multiplier and inspect the
-                  matrices.
-                </p>
+                  <details className="ls-details">
+                    <summary>
+                      Inspect Cholesky whitening and the pivoted QR system
+                    </summary>
+                    <div className="ls-matrix-grid">
+                      <Matrix name="L, where Σ = LLᵀ" values={fit.L} unit="m" />
+                      <Matrix
+                        name="Aᵥ = L⁻¹A"
+                        values={fit.white.A}
+                        columns={names}
+                      />
+                      <Matrix name="wᵥ = L⁻¹w" values={fit.white.w} />
+                      <Matrix
+                        name="QR upper factor R"
+                        values={fit.R}
+                        columns={fit.permutation?.map((i) => names[i])}
+                        caption="Columns are pivoted in the displayed order. The solve restores the original unknown order."
+                      />
+                    </div>
+                  </details>
+                </>
               )}
-            </section>
+              {step && (
+                <section className="ls-solution" id="ls-solution">
+                  <span>UPDATE THE UNKNOWNS · xₖ₊₁ = xₖ + δx</span>
+                  <h2>Each correction has a traceable destination</h2>
+                  <div className="ls-table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Unknown</th>
+                          <th>Before / m</th>
+                          <th>δx / m</th>
+                          <th>After / m</th>
+                          <th>A priori σ / m</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parameters.map((p, i) => (
+                          <tr key={p.id}>
+                            <th>{p.label}</th>
+                            <td>{step.before[i].toFixed(7)}</td>
+                            <td>{step.fit.dx[i].toFixed(9)}</td>
+                            <td>{step.after[i].toFixed(7)}</td>
+                            <td>{Math.sqrt(step.fit.Cx[i][i]).toFixed(7)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {data.kind === "mean" && (
+                    <p className="ls-equation">
+                      Ĥ = Σ(pᵢlᵢ) / Σpᵢ ={" "}
+                      {number(
+                        step.model.rows.reduce(
+                          (s, o, i) => s + step.fit.P[i][i] * o.value,
+                          0,
+                        ),
+                        12,
+                      )}{" "}
+                      /{" "}
+                      {number(
+                        step.fit.P.reduce((s, r, i) => s + r[i], 0),
+                        12,
+                      )}{" "}
+                      = {step.after[0].toFixed(9)} m
+                    </p>
+                  )}
+                  {data.kind === "code" && (
+                    <p>
+                      Correction norm:{" "}
+                      {norm(step.fit.dx.slice(0, 3)).toExponential(5)} m; clock
+                      correction: {step.fit.dx[3].toExponential(5)} m. Exact
+                      recomputed objective after this step ={" "}
+                      {number(step.afterObjective, 10)}. Convergence requires
+                      position and clock-range corrections below 0.00001 m.
+                    </p>
+                  )}
+                </section>
+              )}
+            </div>
+            <div
+              id="ls-pane-quality"
+              className="ls-stage-panel"
+              hidden={!showAll && stage !== "quality"}
+              aria-labelledby="ls-step-quality"
+            >
+              {result.gnss && step?.converged && (
+                <section className="ls-gnss-solution">
+                  <h3>Converged receiver result</h3>
+                  <p>
+                    Latitude{" "}
+                    {((result.gnss.geodetic.lat * 180) / Math.PI).toFixed(8)}° ·
+                    longitude{" "}
+                    {((result.gnss.geodetic.lon * 180) / Math.PI).toFixed(8)}° ·
+                    ellipsoid height {result.gnss.geodetic.h.toFixed(4)} m.
+                  </p>
+                  <p className="ls-equation">
+                    Δt = b/c = {result.final.after[3].toFixed(6)} / 299792458 ={" "}
+                    {result.gnss.clockNs.toFixed(6)} ns
+                  </p>
+                  <p>
+                    Horizontal 95% ellipse semi-axes:{" "}
+                    {result.gnss.ellipse.major.toFixed(4)} m,{" "}
+                    {result.gnss.ellipse.minor.toFixed(4)} m. These derive from
+                    the a priori ECEF covariance rotated into the local ENU
+                    frame.
+                  </p>
+                </section>
+              )}
+              <QualityPanel step={step} result={result} />
+              <section className="ls-check">
+                <h3>Check your reasoning</h3>
+                <p>
+                  If all assumed observation standard deviations are doubled,
+                  what happens to a full-rank linear solution?
+                </p>
+                <div>
+                  {[
+                    "The fitted coordinates change by a factor of two",
+                    "Coordinates stay the same; covariance grows fourfold",
+                    "Nothing changes, including uncertainty",
+                  ].map((text, i) => (
+                    <button
+                      key={text}
+                      aria-pressed={check === i}
+                      onClick={() => setCheck(i)}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+                {check !== null && (
+                  <p role="status">
+                    {check === 1
+                      ? "Correct. "
+                      : "Revisit the normal equations. "}
+                    P becomes P/4; both N and u scale by 1/4, so δx is
+                    unchanged, while N⁻¹ grows by four. Try the σ multiplier and
+                    inspect the matrices.
+                  </p>
+                )}
+              </section>
+            </div>
+            {!showAll && (
+              <nav
+                className="ls-step-actions"
+                aria-label="Continue the worked example"
+              >
+                {stageIndex > 0 && (
+                  <button onClick={() => jump(STAGES[stageIndex - 1][0])}>
+                    ← Previous step
+                  </button>
+                )}
+                {stageIndex < STAGES.length - 1 && (
+                  <button onClick={() => jump(STAGES[stageIndex + 1][0])}>
+                    Next: {STAGES[stageIndex + 1][1]} →
+                  </button>
+                )}
+              </nav>
+            )}
             <button
               id="ls-export"
               className="ls-download"

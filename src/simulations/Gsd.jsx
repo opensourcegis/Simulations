@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GsdFieldView from "./GsdFieldView.jsx";
 import GsdGeometry from "./GsdGeometry.jsx";
-import { PhotoLab, Panel, Slider, Metric } from "./PhotoLabUI.jsx";
+import { PhotoLab, Panel, Slider, Metric, Controls } from "./PhotoLabUI.jsx";
 import {
   CAMERA_SENSORS,
   gsdCamera,
@@ -170,6 +170,7 @@ export default function Gsd() {
     >
       <div className="photo-workspace gsd-workspace">
         <aside className="photo-controls">
+          <Controls>
           <Panel tag="01 / CAMERA & SURFACE" title="Project the actual pixel">
             <Slider
               id="gsd-height"
@@ -246,7 +247,7 @@ export default function Gsd() {
               </select>
             </label>
           </Panel>
-          <Panel tag="02 / IMAGE FORMATION" title="Separate sampling from blur">
+          <Panel tag="02 / IMAGE FORMATION" title="Blur, motion & sensor noise" collapsible>
             <Slider
               id="gsd-fnumber"
               label="Aperture f-number"
@@ -301,6 +302,7 @@ export default function Gsd() {
               </button>
             </div>
           </Panel>
+          </Controls>
         </aside>
         <div className="photo-instruments">
           <Panel
@@ -487,6 +489,7 @@ export default function Gsd() {
           <Panel
             tag="OPTICS & MOTION"
             title="Smaller GSD is not always sharper"
+            collapsible
           >
             <dl>
               <Metric

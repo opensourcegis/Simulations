@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test scripts/*.test.js",
     "test:all:browser": "node scripts/all-simulations-browser.mjs",
+    "test:layout:browser": "node scripts/declutter-browser.mjs",
     "test:principles": "node --test scripts/principles.test.js",
     "test:principles:browser": "node scripts/principles-browser.mjs",
     "dev": "vite",

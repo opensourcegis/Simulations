@@ -1,0 +1,26 @@
+.lidar-learning.lidar-learning-compact {
+  padding: 14px 18px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+.lidar-learning-compact .lidar-learning-heading h2 {
+  font-size: 12px;
+  letter-spacing: 0;
+  margin: 0 0 4px;
+  text-transform: none;
+  color: #38645a;
+}
+.lidar-learning-compact .lidar-learning-heading p {
+  font-size: 13px;
+  margin: 0;
+}
+.lidar-learning-content > summary {
+  cursor: pointer;
+  color: #40685d;
+  font-size: 12px;
+  margin-top: 10px;
+}
+.lidar-learning-content > h3 {
+  font-size: 16px;
+  margin: 16px 0 8px;
+}

@@ -346,7 +346,6 @@ function SimulatorCard({ simulator }) {
     <a className="card" href={simulatorHref(simulator.path)}>
       <div className="thumb">
         <Thumbnail kind={simulator.kind} />
-        <span className="pill live">Interactive lab</span>
       </div>
       <div className="card-body">
         <div className="card-top">
@@ -357,13 +356,6 @@ function SimulatorCard({ simulator }) {
         </div>
         <h3>{simulator.title}</h3>
         <p>{simulator.description}</p>
-        <div className="tags">
-          {simulator.tags.map((tag) => (
-            <span className="tag" key={tag}>
-              {tag}
-            </span>
-          ))}
-        </div>
         <span className="go">
           Open simulator <span className="arrow">&rarr;</span>
         </span>

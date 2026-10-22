@@ -3,7 +3,8 @@ import PhotoLabScene from "./PhotoLabScene.jsx";
 import { buildCameraScene } from "./camera-scene.js";
 import { renderCameraImage } from "./camera-image.js";
 import { SENSOR_MODEL } from "./camera-sensor-model.js";
-import { PhotoLab, Panel, Slider, Metric, MethodTabs } from "./PhotoLabUI.jsx";
+import { PhotoLab, Panel, Slider, Metric, MethodTabs, Controls } from "./PhotoLabUI.jsx";
+import Disclosure from './Disclosure.jsx';
 import { cameraOptics } from "./photogrammetry-model.js";
 
 const PARTS = {
@@ -321,6 +322,7 @@ export default function CameraLab() {
       <MethodTabs tabs={STAGES} value={stage} onChange={setStage} />
       <div className="photo-workspace">
         <aside className="photo-controls">
+          <Controls>
           <Panel tag="01 / CONFIGURE" title="Lens & scene">
             <Slider
               id="camera-focal"
@@ -375,7 +377,7 @@ export default function CameraLab() {
               Focus on the object
             </button>
           </Panel>
-          <Panel tag="EXPOSURE & READOUT" title="Time, gain & motion">
+          <Panel tag="EXPOSURE & READOUT" title="Exposure & readout settings" collapsible defaultOpen={stage === 'exposure'}>
             <Slider
               id="camera-shutter"
               label="Exposure time"
@@ -447,6 +449,7 @@ export default function CameraLab() {
               />
             )}
           </Panel>
+          </Controls>
         </aside>
         <div className="photo-instruments">
           <Panel
@@ -597,6 +600,7 @@ export default function CameraLab() {
             <p className="photo-note">
               Geometric defocus-circle diameter · diffraction remains at focus
             </p>
+            <Disclosure title="Detailed optical measurements" defaultOpen={stage === 'focus'}>
             <dl>
               <Metric
                 label="Best image distance v"
@@ -634,8 +638,9 @@ export default function CameraLab() {
                 unit="px"
               />
             </dl>
+            </Disclosure>
           </Panel>
-          <Panel tag="03 / READ THE SENSOR" title="Exposure is not sensitivity">
+          <Panel tag="03 / READ THE SENSOR" title="Sensor measurements & exposure" collapsible defaultOpen={stage === 'exposure'}>
             <dl>
               <Metric
                 label="Mid-grey collected charge (live)"

@@ -37,8 +37,7 @@ export default function RangingShotConsole({
     >
       <div className="rng-shot-heading">
         <div>
-          <span className="rng-eyebrow">01 / SET → FIRE → MEASURE</span>
-          <h2 id="rng-shot-title">Take a range measurement.</h2>
+          <h2 id="rng-shot-title">Pulse measurement</h2>
         </div>
         <div className="rng-shot-actions">
           <button
@@ -109,6 +108,7 @@ export default function RangingShotConsole({
           </p>
         </div>
       </div>
+      <details className="rng-playback-options"><summary>Playback &amp; repeat settings</summary>
       <div className="rng-shot-footer">
         <label className="rng-check">
           <input
@@ -137,6 +137,7 @@ export default function RangingShotConsole({
           in ns.
         </p>
       </div>
+      </details>
       <div
         className="rng-shot-progress"
         aria-label={

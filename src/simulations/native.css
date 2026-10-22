@@ -14,6 +14,9 @@
 .section-canvas {
   cursor: default;
 }
+:root .sim-app .sim-topbar{padding:16px 20px;border-radius:10px}
+.sim-app .sim-topbar .title-block::before{display:none}
+.sim-app :is(.gn-note,.gpr-note,.snell-note,.sar-note,.iot-note,.beam-note){background:transparent;border-left:0;padding:0}
 
 /* Readable, quiet worksheets: hierarchy comes from content, not tiny capitals. */
 .sim-app .native-badge {

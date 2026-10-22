@@ -3,6 +3,7 @@ import "./simulation.css";
 import "./native.css";
 import "./snell.css";
 import LessonBrief from "./LessonBrief.jsx";
+import Disclosure from './Disclosure.jsx';
 import {
   refract as snell,
   criticalAngle,
@@ -585,11 +586,7 @@ export default function Snell() {
             </div>
           </section>
 
-          <section className="sim-panel">
-            <h2>
-              <span className="stepno">3</span> Why photogrammetry cares{" "}
-              <small>&mdash; lens distortion</small>
-            </h2>
+          <Disclosure title="Radial distortion & camera calibration">
             <canvas
               ref={c3}
               className="sim-canvas section-canvas"
@@ -658,7 +655,7 @@ export default function Snell() {
                 and through-window surveys must model explicitly.
               </p>
             </div>
-          </section>
+          </Disclosure>
         </div>
       </div>
     </div>

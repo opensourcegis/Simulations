@@ -4,6 +4,7 @@ import GroundPointComparison from "./GroundPointComparison.jsx";
 import { BORESIGHT_STAGES } from "./boresight-lesson.js";
 import { errorContributions } from "./georeferencing-model.js";
 import "./survey-realism.css";
+import Disclosure from "./Disclosure.jsx";
 
 export default function GeoreferencingExperiment({
   settings: s,
@@ -55,16 +56,19 @@ export default function GeoreferencingExperiment({
         ))}
       </nav>
       <div className="teaching-objective">
-        <span>LEARNING OBJECTIVE</span>
         <h2 id="geo-objective">{lesson.objective}</h2>
-        <p id="geo-prediction">Predict: {lesson.predict}</p>
         <button className="bs-btn" onClick={() => setReveal(!reveal)}>
-          {reveal ? "Hide explanation" : "Explain the relationship"}
+          {reveal ? "Hide lesson" : "Predict & explain"}
         </button>
-        {reveal && <p>{lesson.explain}</p>}
+        {reveal && (
+          <div>
+            <p id="geo-prediction">Predict: {lesson.predict}</p>
+            <p>{lesson.explain}</p>
+          </div>
+        )}
       </div>
-      <div className="teaching-definition">
-        <strong>
+      <details className="teaching-definition" key={stage}>
+        <summary>
           {stage === "lever"
             ? "Lever arm ℓ = scanner offset − antenna offset"
             : stage === "boresight"
@@ -72,7 +76,7 @@ export default function GeoreferencingExperiment({
               : stage === "attitude"
                 ? "Attitude = changing body-to-map rotation"
                 : "Point = antenna position + Rattitude [ℓ + Rboresight (ρ × ray)]"}
-        </strong>
+        </summary>
         <p>
           {stage === "lever"
             ? "Mount-input ℓ (forward/left/up) = [" +
@@ -86,7 +90,7 @@ export default function GeoreferencingExperiment({
               ? "The scanner frame and body frame are different. True mounting angles orient the physical instrument; the correction controls only reconstruction."
               : "Each measurement is reconstructed with the same recorded range. Applying a correction does not move the real aircraft, scanner or ground hit."}
         </p>
-      </div>
+      </details>
       <div className="teaching-corrections">
         {[
           ["geo-use-lever", "Apply lever-arm translation", "useLever"],
@@ -134,12 +138,22 @@ export default function GeoreferencingExperiment({
             scanAngle={s.scanAngle}
             shot={shot}
           />
-          <p className="field-caption">
-            <strong>GNSS receives satellite signals; it does not emit the LiDAR beam.</strong> The dashed gold arrow is the mathematical antenna → scanner lever arm, not a wire. Long calculated rays are off by default; if enabled, red is the reconstructed hypothesis and can start at the antenna when the lever arm is omitted. Optional body axes: Xb/Yb/Zb
-            (forward/right/down); cyan: corresponding scanner axes Xs/Ys/Zs. β
-            is ray-direction separation, not the magnitude of an Euler-angle
-            triple. No geometric exaggeration.
-          </p>
+          <details className="field-caption">
+            <summary>How to read this view</summary>
+            <p>
+              <strong>
+                GNSS receives satellite signals; it does not emit the LiDAR
+                beam.
+              </strong>{" "}
+              The dashed gold arrow is the mathematical antenna → scanner lever
+              arm, not a wire. Long calculated rays are off by default; if
+              enabled, red is the reconstructed hypothesis and can start at the
+              antenna when the lever arm is omitted. Optional body axes:
+              Xb/Yb/Zb (forward/right/down); cyan: corresponding scanner axes
+              Xs/Ys/Zs. β is ray-direction separation, not the magnitude of an
+              Euler-angle triple. No geometric exaggeration.
+            </p>
+          </details>
         </div>
         <GroundPointComparison shot={shot} />
       </div>
@@ -209,31 +223,35 @@ export default function GeoreferencingExperiment({
               (v) => change({ slope: v }),
               "°",
             )}
-            {["roll", "pitch", "yaw"].map((name, i) =>
-              slider(
-                "geo-att-" + i,
-                "Measured body " + name,
-                s.attitude[i],
-                -30,
-                30,
-                1,
-                (v) => vector("attitude", i, v),
-                "°",
-              ),
-            )}
-            {["roll", "pitch", "yaw"].map((name, i) =>
-              slider(
-                "geo-mount-" + i,
-                "True scanner-to-body " + name,
-                s.boresight[i],
-                -15,
-                15,
-                0.5,
-                (v) => vector("boresight", i, v),
-                "°",
-              ),
-            )}
           </div>
+          <Disclosure title="Body attitude & scanner mounting">
+            <div className="control-grid realism-controls">
+              {["roll", "pitch", "yaw"].map((name, i) =>
+                slider(
+                  "geo-att-" + i,
+                  "Measured body " + name,
+                  s.attitude[i],
+                  -30,
+                  30,
+                  1,
+                  (v) => vector("attitude", i, v),
+                  "°",
+                ),
+              )}
+              {["roll", "pitch", "yaw"].map((name, i) =>
+                slider(
+                  "geo-mount-" + i,
+                  "True scanner-to-body " + name,
+                  s.boresight[i],
+                  -15,
+                  15,
+                  0.5,
+                  (v) => vector("boresight", i, v),
+                  "°",
+                ),
+              )}
+            </div>
+          </Disclosure>
           <details>
             <summary>Edit mounting positions from the IMU</summary>
             <p>

@@ -3,6 +3,7 @@ import "./simulation.css";
 import "./native.css";
 import "./sar.css";
 import LessonBrief from "./LessonBrief.jsx";
+import Disclosure from './Disclosure.jsx';
 import { sarResolutions } from "./principles-model.js";
 
 // ---------------------------------------------------------------------------
@@ -714,10 +715,7 @@ export default function SarImaging() {
             </div>
           </section>
 
-          <section className="sim-panel">
-            <h2>
-              <span className="stepno">5</span> All the other aspects
-            </h2>
+          <Disclosure title="Further study: imaging modes, speckle & InSAR">
             <div className="sar-modes">
               <div className="sar-mode">
                 <b>Imaging modes</b>
@@ -781,7 +779,7 @@ export default function SarImaging() {
                 terrain-height accuracy.
               </p>
             </div>
-          </section>
+          </Disclosure>
         </div>
       </div>
     </div>

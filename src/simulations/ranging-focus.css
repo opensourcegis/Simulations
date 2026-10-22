@@ -1,0 +1,61 @@
+/* The ray and the action console share the first row. Mobile retains the
+   task-first order and the existing fixed Fire/Stop action bar. */
+.rng-workspace.rng-pulsed-workspace {
+  display: grid;
+  grid-template-areas: "stage console" "trace controls" "worked controls" "diagnostics diagnostics";
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.rng-pulsed-workspace .rng-instruments {
+  display: contents;
+}
+.rng-pulsed-workspace .rng-shot-console {
+  grid-area: console;
+}
+.rng-pulsed-workspace .rng-stage {
+  grid-area: stage;
+}
+.rng-pulsed-workspace .rng-trace {
+  grid-area: trace;
+}
+.rng-pulsed-workspace .rng-worked-disclosure {
+  grid-area: worked;
+}
+.rng-pulsed-workspace .rng-shot-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.rng-pulsed-workspace .rng-shot-readout {
+  grid-column: 1/-1;
+}
+.rng-pulsed-workspace .rng-shot-heading {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.rng-pulsed-workspace .rng-shot-actions {
+  width: 100%;
+}
+.rng-pulsed-workspace .rng-fire-primary {
+  flex: 1;
+  justify-content: center;
+}
+.rng-pulse-lab .rng-intro > .rng-constant {
+  font-size: 11px;
+}
+.rng-pulse-lab .rng-intro .rng-eyebrow {
+  display: none;
+}
+.rng-pulse-lab .rng-intro h1 {
+  font-size: 28px;
+  letter-spacing: -0.6px;
+}
+.rng-pulse-lab .rng-stage h2 > span {
+  display: none;
+}
+@media (max-width: 800px) {
+  .rng-workspace.rng-pulsed-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "console" "stage" "trace" "controls" "worked" "diagnostics";
+  }
+  .rng-pulsed-workspace .rng-shot-actions {
+    width: auto;
+  }
+}

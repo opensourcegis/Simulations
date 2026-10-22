@@ -9,6 +9,7 @@ import "./simulation.css";
 import "./native.css";
 import "./mapproj.css";
 import LessonBrief from "./LessonBrief.jsx";
+import Disclosure from './Disclosure.jsx';
 import {
   pEquirect,
   pMercator,
@@ -837,10 +838,7 @@ export default function MapProjections() {
             </div>
           </section>
 
-          <section className="sim-panel">
-            <h2>
-              <span className="stepno">3</span> Why it matters
-            </h2>
+          <Disclosure title="Interpret the map properties">
             <div className="rect-summary">
               <b>You can flatten the sphere, but not for free</b>
               <p>
@@ -860,7 +858,7 @@ export default function MapProjections() {
                 not geodesic area calculations.
               </p>
             </div>
-          </section>
+          </Disclosure>
         </div>
       </div>
     </div>

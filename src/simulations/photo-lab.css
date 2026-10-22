@@ -71,7 +71,7 @@
   letter-spacing: 1px;
 }
 .photo-intro {
-  padding: 28px 0;
+  padding: 20px 0;
 }
 .photo-eyebrow {
   display: block;
@@ -85,20 +85,20 @@
 }
 .photo-intro h1 {
   margin: 0;
-  font-size: clamp(27px, 3vw, 42px);
+  font-size: clamp(25px, 2.5vw, 32px);
   line-height: 1.15;
   font-weight: 600;
-  letter-spacing: -1.6px;
+  letter-spacing: -.7px;
 }
 .photo-intro > p:last-child {
-  max-width: 850px;
-  margin: 12px 0 0;
+  max-width: 940px;
+  margin: 8px 0 0;
   color: var(--photo-muted);
   font-size: 13px;
 }
 .photo-workspace {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 290px;
+  grid-template-columns: 260px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -117,6 +117,24 @@
   border-radius: 10px;
   background: var(--photo-paper);
 }
+.photo-diagnostics{grid-column:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.photo-disclosure{padding:0}
+.photo-disclosure>summary{padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none}
+.photo-disclosure>summary::-webkit-details-marker{display:none}
+.photo-disclosure>summary::after{content:'+';margin-left:auto;color:var(--photo-muted);font-size:19px}
+.photo-disclosure[open]>summary::after{content:'−'}
+.photo-disclosure>summary h2{margin:0}
+.photo-disclosure>summary h2>span{display:none}
+.photo-panel-body{padding:0 18px 18px}
+.photo-controls .photo-panel-body>button{margin-top:14px;width:100%}
+.photo-control-disclosure{min-width:0;width:100%;grid-column:1/-1}
+.photo-control-disclosure>summary{cursor:pointer;list-style:none;padding:12px 16px;background:var(--photo-paper);border:1px solid var(--photo-border);border-radius:7px;font-size:13px;font-weight:600}
+.photo-control-disclosure>summary::after{content:'+';float:right}
+.photo-control-disclosure[open]>summary::after{content:'−'}
+.photo-control-disclosure>summary::-webkit-details-marker{display:none}
+.photo-controls-stack{display:flex;flex-direction:column;gap:12px;min-width:0}
+@media(min-width:801px){.photo-control-disclosure[open]>summary{display:none}}
+@media(max-width:800px){.photo-lab .photo-controls{order:-1;display:block}.photo-controls-stack{margin-top:12px}}
 .photo-panel h2 {
   margin: 0 0 16px;
   font-size: 15px;
@@ -487,7 +505,7 @@
 }
 @media (min-width: 1650px) {
   .photo-workspace {
-    grid-template-columns: 270px minmax(0, 1fr) 310px;
+    grid-template-columns: 280px minmax(0, 1fr);
     gap: 20px;
   }
   .photo-webgl {

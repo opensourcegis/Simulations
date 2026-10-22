@@ -127,10 +127,12 @@ try {
     ),
     /L2/,
   );
+  await click("ls-step-equations");
   await evaluate(
     "document.getElementById('ls-equation-inspector').scrollIntoView({block:'start'})",
   );
   await screenshot("/tmp/least-squares-worked-equation.png");
+  await click("ls-step-solve");
   await evaluate(
     "document.querySelector('.ls-normal-system').scrollIntoView({block:'center'})",
   );

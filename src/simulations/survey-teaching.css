@@ -253,3 +253,12 @@
     font-size: 16px;
   }
 }
+.teaching-lab .teaching-objective{padding:12px 14px;margin:12px 0;display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;background:transparent;border-left:0;border-bottom:1px solid #dce5dc}
+.teaching-lab .teaching-objective h2{flex:1 1 460px;margin:0;line-height:1.6}
+.teaching-lab .teaching-objective>div{flex-basis:100%}
+.teaching-lab .teaching-definition{padding:10px 14px;margin:10px 0}
+.teaching-definition>summary{cursor:pointer;font:600 13px/1.6 ui-monospace,monospace}
+.teaching-definition:not([open])>summary{color:#526b60}
+.teaching-geometry .field-caption{font-size:12px;margin:10px 0}
+.teaching-geometry .field-caption>summary{cursor:pointer;color:#526b60}
+.teaching-controls .lab-disclosure{margin-top:14px}

@@ -5,6 +5,7 @@ import "./simulation.css";
 import "./native.css";
 import "./beam.css";
 import LidarLearningPanel from "./LidarLearningPanel.jsx";
+import Disclosure from './Disclosure.jsx';
 import { beamFootprint as geom } from "../../games/shared/lidar-physics.js";
 
 // ---------------------------------------------------------------------------
@@ -721,6 +722,7 @@ export default function BeamFootprint() {
                 />
               </label>
             </div>
+            <Disclosure title="Response charts: height & incidence">
             <div className="beam-charts">
               <figure>
                 <canvas ref={cH} width={280} height={150} />
@@ -735,16 +737,14 @@ export default function BeamFootprint() {
                 </figcaption>
               </figure>
             </div>
+            </Disclosure>
             <div className="equation">
               d ≈ d₀ + R·γ; R = H/cosθ; a ≈ d/cosθ; b = d; A ≈ π(d₀ +
               Hγ/cosθ)²/(4cosθ). γ is the full divergence angle in radians.
             </div>
           </section>
 
-          <section className="sim-panel">
-            <h2>
-              <span className="stepno">4</span> Why it matters
-            </h2>
+          <Disclosure title="Interpret footprint size and return strength">
             <div className="rect-summary">
               <b>Divergence, footprint &amp; incidence angle</b>
               <p>
@@ -773,7 +773,7 @@ export default function BeamFootprint() {
               Source: NIGST — Principles of LiDAR, Module&nbsp;1: Laser–Target
               Interaction &amp; LiDAR Components.
             </div>
-          </section>
+          </Disclosure>
         </div>
       </div>
     </div>

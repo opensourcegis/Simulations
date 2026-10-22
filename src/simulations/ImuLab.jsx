@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef } from "react";
 import PhotoLabScene from "./PhotoLabScene.jsx";
-import { Panel, Slider, Metric, MethodTabs } from "./PhotoLabUI.jsx";
+import { Panel, Slider, Metric, MethodTabs, Controls } from "./PhotoLabUI.jsx";
 import {
   NavigationLab,
   Playback,
@@ -175,6 +175,7 @@ export default function ImuLab() {
       </div>
       <div className="nav-workspace">
         <aside className="nav-sidebar">
+          <Controls breakpoint={760}>
           <Panel tag="CONTROLLED MOTION" title="Make a sensor prediction">
             <label className="nav-select" htmlFor="imu-preset">
               Motion experiment
@@ -257,7 +258,7 @@ export default function ImuLab() {
               . This is imposed motion, not an IMU speed measurement.
             </p>
           </Panel>
-          <Panel tag="SENSOR IMPERFECTIONS" title="Why integration drifts">
+          <Panel tag="SENSOR IMPERFECTIONS" title="Sensor bias & calibration" collapsible>
             <Slider
               id="imu-gyro-bias"
               label="Z gyro zero-rate bias"
@@ -302,6 +303,7 @@ export default function ImuLab() {
               disclosed in the notebook.
             </p>
           </Panel>
+          </Controls>
         </aside>
         <main className="nav-main">
           <Panel
@@ -405,6 +407,7 @@ export default function ImuLab() {
           <Panel
             tag="PROPAGATED ATTITUDE → ACCELERATION"
             title="Why the frame matters"
+            collapsible
           >
             <VectorReadout
               id="imu-estimated-acceleration"

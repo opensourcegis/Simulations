@@ -17,7 +17,7 @@ Select any observation or uncertain control row to see its functional equation, 
 
 The worksheet exposes **A, w, Σ, P, N, u, δx, residuals, parameter covariance and residual covariance**. A chosen N[j,k] and u[j] expand into actual row-by-row products. Cholesky whitening and the pivoted QR factor are inspectable. The quality section expands `vᵀPv` into the squared components of `L⁻¹v`. These are the solver's own arrays, not separately maintained illustrative numbers. Matrix cells expose full precision on hover; printed values are rounded.
 
-Worksheet links jump to geometry/evidence, equations, normal-equation calculations and quality interpretation. The desktop assumptions panel stays alongside the calculations. On narrow screens it starts as a reachable collapsed controls panel above the worksheet; wide matrices and field books scroll inside their own containers.
+The worksheet shows one step at a time: geometry/observations, equations, adjustment, then quality interpretation. Next/previous actions and the step selector change views without changing the problem. “Show full worksheet” exposes all four steps for review. Covariance/precision matrices and notation are expandable; the default view starts with the network and field book. The desktop assumptions panel sits alongside the active step without an additional vertical scrollbar. On narrow screens controls start collapsed above the worksheet; wide matrices and field books retain their own horizontal scrolling.
 
 ## Sign and unit conventions
 
@@ -80,7 +80,7 @@ Residual covariance is `Cv = Σ − A Cx Aᵀ`. Normalized residuals use `vi / �
 
 The reported a priori parameter covariance is `Cx = (AᵀPA)⁻¹` from absolute Σ. The estimated common-scale matrix `σ̂₀² Cx` is displayed separately and explicitly qualified. A priori 95% horizontal ellipses use χ²₂,₀.₉₅ = 5.99146; estimated-scale ellipses would require a different treatment and are not claimed. Baseline ellipses are magnified 1500× with the factor labelled, and the plan uses equal horizontal axis scale. A zero-redundancy fit reports no variance-factor/global test rather than claiming perfect quality.
 
-The residual CSV contains measured/adjusted values, signed residual, stated sigma, *assumed marginal* sigma, normalized residual and generalized redundancy. It is not a substitute for the full covariance matrix when components are correlated; Σ and P remain visible in the worksheet.
+The residual CSV contains measured/adjusted values, signed residual, stated sigma, *assumed marginal* sigma, normalized residual and generalized redundancy. It is not a substitute for the full covariance matrix when components are correlated; expand “Covariance & precision matrices” in the equations step to inspect Σ and P.
 
 ## Verification
 

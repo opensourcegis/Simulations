@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PhotoLabScene from "./PhotoLabScene.jsx";
-import { PhotoLab, Panel, Slider, Metric, MethodTabs } from "./PhotoLabUI.jsx";
+import { PhotoLab, Panel, Slider, Metric, MethodTabs, Controls } from "./PhotoLabUI.jsx";
 import {
   bundleStep,
   bundleMetrics,
@@ -385,6 +385,7 @@ export default function BlockAdjustment({ triangulation = false }) {
       )}
       <div className="photo-workspace">
         <aside className="photo-controls">
+          <Controls>
           <Panel tag="01 / FLIGHT GEOMETRY" title="Survey & camera network">
             <Slider
               id="ba-altitude"
@@ -522,6 +523,7 @@ export default function BlockAdjustment({ triangulation = false }) {
                 : "Actual solver steps. Changing geometry, measurements or fitting method resets the experiment."}
             </p>
           </Panel>
+          </Controls>
         </aside>
         <div className="photo-instruments">
           <Panel
@@ -727,6 +729,7 @@ export default function BlockAdjustment({ triangulation = false }) {
           </Panel>
           <Panel
             tag="DATUM & NETWORK"
+            collapsible defaultOpen={!absolute}
             title={
               absolute
                 ? "Survey-weighted georeferencing"

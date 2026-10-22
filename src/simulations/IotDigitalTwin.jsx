@@ -3,6 +3,7 @@ import "./simulation.css";
 import "./native.css";
 import "./iot.css";
 import LessonBrief from "./LessonBrief.jsx";
+import Disclosure from './Disclosure.jsx';
 import { seededRandom, stepMachine, advanceClock } from "./iot-model.js";
 
 // ---------------------------------------------------------------------------
@@ -858,10 +859,7 @@ export default function IotDigitalTwin() {
             </div>
           </section>
 
-          <section className="sim-panel">
-            <h2>
-              <span className="stepno">4</span> How IoT drives a digital twin
-            </h2>
+          <Disclosure title="The five layers of a digital twin">
             <div className="iot-layers">
               <div className="iot-layer">
                 <i style={{ background: "#5ad1ff" }}>①</i>
@@ -934,7 +932,7 @@ export default function IotDigitalTwin() {
                 mirrors reality.
               </p>
             </div>
-          </section>
+          </Disclosure>
         </div>
       </div>
     </div>

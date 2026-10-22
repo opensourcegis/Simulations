@@ -82,6 +82,27 @@ were retained rather than covered with duplicate instructions.
   older worksheet typography, header contrast and phone controls. Added a caught
   render-failure page so an unsupported 3D renderer does not leave a blank screen.
 
+## Focused layouts
+
+The dense photo/navigation workspaces now use two columns: experiment settings
+and the main view. Diagnostics follow the visual instead of squeezing it into a
+third column. Mobile settings have a keyboard-accessible disclosure above the
+scene. Secondary exposure, bias, mounting, theory and record-export sections are
+closed until requested; selecting a relevant teaching stage opens its settings.
+Opening or closing a section does not regenerate observations or reset a fit.
+
+Least squares now presents one worksheet step at a time, with an optional full
+worksheet. Boresight puts the geometry before detailed frame definitions. Pulse
+ranging places its Fire/result console beside the ray view on desktop and keeps
+the existing reachable action bar on phones. Repeated catalogue badges and tag
+chips have been removed; their keywords still participate in search.
+
+`npm run test:layout:browser` checks real pointer/keyboard activation, expanded
+layouts, state preservation, active worksheet steps, accessible optional
+calculations, wider scenes and reachable pulse controls. It writes desktop/phone
+inspection screenshots into `/tmp/declutter-*.png`. No numerical models were
+changed by this layout pass.
+
 ## Repeatable verification
 
 ```sh

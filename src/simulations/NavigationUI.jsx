@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PhotoLab } from "./PhotoLabUI.jsx";
+import Disclosure from "./Disclosure.jsx";
 import "./navigation-labs.css";
 
 export function NavigationLab(props) {
@@ -246,26 +247,27 @@ export function VectorReadout({ label, values, unit, id }) {
 export function KnowledgeCheck({ question, choices, answer, explanation }) {
   const [selected, setSelected] = useState(null);
   return (
-    <section className="nav-check">
-      <h3>Check your understanding</h3>
-      <p>{question}</p>
-      <div>
-        {choices.map((c, i) => (
-          <button
-            key={c}
-            aria-pressed={selected === i}
-            onClick={() => setSelected(i)}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-      {selected !== null && (
-        <p role="status">
-          {selected === answer ? "Correct. " : "Try the reasoning again. "}
-          {explanation}
-        </p>
-      )}
-    </section>
+    <Disclosure title="Check your understanding">
+      <section className="nav-check">
+        <p>{question}</p>
+        <div>
+          {choices.map((c, i) => (
+            <button
+              key={c}
+              aria-pressed={selected === i}
+              onClick={() => setSelected(i)}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+        {selected !== null && (
+          <p role="status">
+            {selected === answer ? "Correct. " : "Try the reasoning again. "}
+            {explanation}
+          </p>
+        )}
+      </section>
+    </Disclosure>
   );
 }

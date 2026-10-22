@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PhotoLabScene from "./PhotoLabScene.jsx";
-import { PhotoLab, Panel, Slider, Metric } from "./PhotoLabUI.jsx";
+import { PhotoLab, Panel, Slider, Metric, Controls } from "./PhotoLabUI.jsx";
 import { createAerialSurvey, intersectObservations } from "./aerial-survey.js";
 import {
   initialiseSfm,
@@ -253,6 +253,7 @@ export default function StructureFromMotion() {
       </div>
       <div className="photo-workspace">
         <aside className="photo-controls">
+          <Controls>
           <Panel tag="IMAGE EVIDENCE" title="Geometry & match quality">
             <Slider
               id="sfm-noise"
@@ -353,6 +354,7 @@ export default function StructureFromMotion() {
               ))}
             </ol>
           </Panel>
+          </Controls>
         </aside>
         <div className="photo-instruments">
           <Panel
@@ -509,6 +511,7 @@ export default function StructureFromMotion() {
           </Panel>
           <Panel
             tag="NEXT: GEOREFERENCING"
+            collapsible
             title="Relative shape is not a survey"
           >
             <p className="photo-note">
