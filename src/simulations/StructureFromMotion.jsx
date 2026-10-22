@@ -441,6 +441,7 @@ export default function StructureFromMotion() {
           <Panel
             tag="OBSERVATION TRACKS"
             title="The same physical feature in overlapping images"
+            collapsible defaultOpen={!model.cameras.some(Boolean)}
           >
             <p className="photo-note">
               These are synthetic perspective images with detector-noisy feature

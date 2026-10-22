@@ -120,3 +120,24 @@ footer a { color: var(--text-dim); } footer a:hover { color: var(--accent); }
   color: var(--text-dim);
   font-size: 1.05rem;
 }
+
+/* Catalogue: the experiments, rather than promotional decoration, lead. */
+.site-nav { position: static; background: #fff; backdrop-filter: none; }
+.brand-mark { background: #176d66; box-shadow: none; border-radius: 7px; }
+.brand-tag { display: none; }
+.wrap { max-width: 1280px; padding-top: 32px; }
+.hero { max-width: 760px; margin-bottom: 24px; }
+.hero h1 { font-size: clamp(28px, 4vw, 38px); letter-spacing: -.8px; margin-bottom: 10px; }
+.hero .lead { font-size: 15px; }
+.section-head { margin-top: 24px; }
+.grid { gap: 20px; }
+.card { border-radius: 9px; box-shadow: none; }
+.card:hover { transform: none; box-shadow: none; border-color: #90aaa5; }
+.card-body { gap: 9px; }
+.card-body h3 { font-size: 18px; }
+.card-body p { font-size: 13px; line-height: 1.65; }
+.eyebrow-cat { font-size: 11px; letter-spacing: .2px; text-transform: none; color: #586970; }
+.level { background: none !important; color: #586970 !important; padding: 0; font-size: 11px; letter-spacing: 0; text-transform: none; }
+.filter { border-radius: 6px; }
+.filter.active { background: #176d66; border-color: #176d66; box-shadow: none; }
+.go { border-top: 0; padding-top: 4px; color: #176d66; }

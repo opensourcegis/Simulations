@@ -374,7 +374,6 @@ const CATEGORIES = [
   "Radar",
   "IoT",
 ];
-const TOPIC_AREAS = new Set(simulators.map((s) => s.category)).size;
 
 function Landing() {
   const [filter, setFilter] = useState("All");
@@ -416,29 +415,11 @@ function Landing() {
 
       <main className="wrap">
         <header className="hero">
-          <h1>
-            Understand surveying &amp; remote sensing through{" "}
-            <em>interactive simulators</em>.
-          </h1>
+          <h1>Geospatial simulations</h1>
           <p className="lead">
-            Hands-on, browser-based lessons in LiDAR, photogrammetry and flight
-            planning. Adjust the inputs, watch the geometry respond, and build
-            real intuition — nothing to install and no sign-up.
+            Explore surveying and remote sensing. Change a setting, inspect the
+            result, and understand the theory.
           </p>
-          <div className="stats">
-            <div className="stat">
-              <b>{simulators.length}</b>
-              <span>simulators</span>
-            </div>
-            <div className="stat">
-              <b>{TOPIC_AREAS}</b>
-              <span>topic areas</span>
-            </div>
-            <div className="stat">
-              <b>100%</b>
-              <span>in your browser</span>
-            </div>
-          </div>
         </header>
 
         <div className="section-head" id="simulators">

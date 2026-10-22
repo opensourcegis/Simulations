@@ -31,6 +31,11 @@ try {
       false,
       `${link.title} failed to mount`,
     );
+    assert.equal(
+      await page.evaluate('getComputedStyle(document.body).backgroundColor'),
+      'rgb(245, 246, 247)',
+      `${link.title}: shared minimal workspace theme missing`,
+    );
     const report = { title: link.title, errors: [], overflow: [] };
     for (const width of [1440, 768, 390, 320]) {
       await page.send("Emulation.setDeviceMetricsOverride", {

@@ -598,7 +598,7 @@ export default function BuildingLod() {
   const cell = TABLE[`${lod}.${variant}`];
 
   return (
-    <div className="sim-app">
+    <div className="sim-app scene-first">
       <header className="sim-topbar">
         <a className="back-link" href={import.meta.env.BASE_URL}>
           &larr; All simulators

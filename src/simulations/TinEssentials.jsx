@@ -79,8 +79,7 @@ export default function TinEssentials({
       </header>
       <div className="tin-simple-intro">
         <div>
-          <p>THE TIN LESSON</p>
-          <h1>Build a ground surface in five steps.</h1>
+          <h1>Adaptive TIN ground filter</h1>
           <span>
             Choose seeds. Test one point. See why the triangles change.
           </span>

@@ -91,6 +91,23 @@ scene. Secondary exposure, bias, mounting, theory and record-export sections are
 closed until requested; selecting a relevant teaching stage opens its settings.
 Opening or closing a section does not regenerate observations or reset a fit.
 
+All 23 catalogue entries, including the three standalone laboratories, share a
+minimal workspace skin: neutral surfaces, compact headers, understated stage
+navigation and fewer boxed metrics. Diagram colours, warning states and scientific
+units are not restyled as decorative accents. The catalogue itself has a short
+introduction rather than promotional statistic cards.
+
+SAR and optics open one concept at a time, with an explicit **Compare all** view.
+The fixed-coordinate 2D canvases stay mounted when changing sections. Map
+projections, building LOD and beam footprint use a large scene and a narrower
+parameter rail. GSD starts with the triangle diagram; worked calculations follow
+it, while native-pixel sampling has its own step. Camera capture opens with the
+exposure step, and recovered SfM image-track galleries can be expanded on demand.
+True ortho puts source and corrected imagery side by side before the supporting
+geometry/elevation views. Beam–target interaction no longer squeezes its main view
+between two sidebars; phone settings use native disclosures without discarding
+their values. Mission requirements remain available in an expandable brief.
+
 Least squares now presents one worksheet step at a time, with an optional full
 worksheet. Boresight puts the geometry before detailed frame definitions. Pulse
 ranging places its Fire/result console beside the ray view on desktop and keeps
@@ -117,7 +134,12 @@ Use `PHOTO_CDP_URL` and `PHOTO_BASE_URL` to override. Run browser scripts serial
 per browser: a newly opened foreground tab can suspend another tab's animation.
 
 - `npm run test:all:browser`: every catalogue entry, exceptions/mount failures and
-  desktop/tablet/phone overflow checks (1440, 768, 390, 320 px).
+  desktop/tablet/phone overflow checks (1440, 768, 390, 320 px), including shared
+  theme loading on standalone routes.
+- `npm run test:minimal:browser`: pointer-activated concept steps, expanded
+  comparisons, rendered diagrams, retained settings and camera captures, GSD
+  sampling, responsive beam settings and ortho source/output layout. Writes
+  `/tmp/minimal-*.png` visual-inspection screenshots.
 - `npm run test:principles:browser`: GNSS stages/clock/integer hypotheses, GPR
   pause/acquisition, Snell TIR, seven projection factors, IoT pause/reset/latency,
   stationary 3D defaults, planner with external services blocked and the legacy

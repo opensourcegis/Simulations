@@ -15,7 +15,7 @@ export function PhotoLab({
           <span aria-hidden="true">⌁</span> GEOSIM / All laboratories
         </a>
         <span>
-          {discipline} · {name.toUpperCase()}
+          {discipline}
         </span>
       </header>
       <section className="photo-intro" aria-label={title}>
@@ -46,6 +46,7 @@ export function Panel({
   className = "",
   collapsible = false,
   defaultOpen = false,
+  hidden = false,
 }) {
   const heading = (
     <h2>
@@ -56,6 +57,7 @@ export function Panel({
   if (collapsible)
     return (
       <details
+        hidden={hidden}
         className={`photo-panel photo-disclosure ${className}`}
         open={defaultOpen}
       >
@@ -64,7 +66,7 @@ export function Panel({
       </details>
     );
   return (
-    <section className={"photo-panel " + className}>
+    <section className={"photo-panel " + className} hidden={hidden}>
       {heading}
       {children}
     </section>

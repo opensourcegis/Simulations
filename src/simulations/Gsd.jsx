@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import GsdFieldView from "./GsdFieldView.jsx";
 import GsdGeometry from "./GsdGeometry.jsx";
-import { PhotoLab, Panel, Slider, Metric, Controls } from "./PhotoLabUI.jsx";
+import {
+  PhotoLab,
+  Panel,
+  Slider,
+  Metric,
+  Controls,
+  MethodTabs,
+} from "./PhotoLabUI.jsx";
 import {
   CAMERA_SENSORS,
   gsdCamera,
@@ -14,6 +21,7 @@ import "./survey-realism.css";
 const cm = (x) => (Number.isFinite(x) ? (x * 100).toFixed(2) : "—");
 
 export default function Gsd() {
+  const [stage, setStage] = useState("geometry");
   const [contextOpen, setContextOpen] = useState(false);
   const [f, setF] = useState(50),
     [height, setHeight] = useState(100),
@@ -168,146 +176,160 @@ export default function Gsd() {
         </>
       }
     >
+      <MethodTabs
+        value={stage}
+        onChange={setStage}
+        tabs={[
+          ["geometry", "Pixel geometry"],
+          ["sampling", "Image sampling & blur"],
+        ]}
+      />
       <div className="photo-workspace gsd-workspace">
         <aside className="photo-controls">
           <Controls>
-          <Panel tag="01 / CAMERA & SURFACE" title="Project the actual pixel">
-            <Slider
-              id="gsd-height"
-              label="Camera height above datum"
-              value={height}
-              display={height + " m"}
-              min={30}
-              max={200}
-              step={5}
-              onChange={setHeight}
-            />
-            <Slider
-              id="gsd-elevation"
-              label="Terrain elevation at X = 0"
-              value={elevation}
-              display={elevation + " m"}
-              min={-20}
-              max={25}
-              onChange={setElevation}
-            />
-            <Slider
-              id="gsd-focal"
-              label="Focal length"
-              value={f}
-              display={f + " mm"}
-              min={16}
-              max={100}
-              onChange={setF}
-            />
-            <Slider
-              id="gsd-tilt"
-              label="Camera off-nadir tilt"
-              value={tilt}
-              display={tilt + "°"}
-              min={0}
-              max={70}
-              onChange={setTilt}
-            />
-            <Slider
-              id="gsd-slope"
-              label="Terrain slope along X"
-              value={slope}
-              display={slope + "°"}
-              min={-25}
-              max={25}
-              onChange={setSlope}
-            />
-            <label className="photo-select">
-              Sensor format
-              <select
-                id="gsd-sensor"
-                value={sensor}
-                onChange={(e) => setSensor(+e.target.value)}
-              >
-                {CAMERA_SENSORS.map((s, i) => (
-                  <option key={s.name} value={i}>
-                    {s.name} · {s.width} mm wide
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="photo-select">
-              Native resolution
-              <select
-                id="gsd-resolution"
-                value={megapixels}
-                onChange={(e) => setMegapixels(+e.target.value)}
-              >
-                {[12, 24, 48, 96].map((n) => (
-                  <option key={n} value={n}>
-                    {n} MP
-                  </option>
-                ))}
-              </select>
-            </label>
-          </Panel>
-          <Panel tag="02 / IMAGE FORMATION" title="Blur, motion & sensor noise" collapsible>
-            <Slider
-              id="gsd-fnumber"
-              label="Aperture f-number"
-              value={fNumber}
-              display={"f/" + fNumber}
-              min={2}
-              max={22}
-              step={0.1}
-              onChange={setFNumber}
-            />
-            <Slider
-              id="gsd-exposure"
-              label="Exposure time"
-              value={exposureMs}
-              display={exposureMs.toFixed(1) + " ms"}
-              min={0.1}
-              max={10}
-              step={0.1}
-              onChange={setExposure}
-            />
-            <Slider
-              id="gsd-speed"
-              label="Local along-image ground speed"
-              value={speed}
-              display={speed + " m/s"}
-              min={0}
-              max={50}
-              onChange={setSpeed}
-            />
-            <label className="photo-check">
-              <input
-                id="gsd-noise"
-                type="checkbox"
-                checked={noise}
-                onChange={(e) => setNoise(e.target.checked)}
+            <Panel tag="01 / CAMERA & SURFACE" title="Project the actual pixel">
+              <Slider
+                id="gsd-height"
+                label="Camera height above datum"
+                value={height}
+                display={height + " m"}
+                min={30}
+                max={200}
+                step={5}
+                onChange={setHeight}
               />
-              Illustrative shot/read noise
-            </label>
-            <div className="photo-actions">
-              <button id="gsd-new-sample" onClick={() => setSeed(seed + 1)}>
-                New sensor-noise sample
-              </button>
-              <button
-                id="gsd-nadir"
-                onClick={() => {
-                  setTilt(0);
-                  setSlope(0);
-                  setElevation(0);
-                }}
-              >
-                Nadir / flat-datum reference
-              </button>
-            </div>
-          </Panel>
+              <Slider
+                id="gsd-elevation"
+                label="Terrain elevation at X = 0"
+                value={elevation}
+                display={elevation + " m"}
+                min={-20}
+                max={25}
+                onChange={setElevation}
+              />
+              <Slider
+                id="gsd-focal"
+                label="Focal length"
+                value={f}
+                display={f + " mm"}
+                min={16}
+                max={100}
+                onChange={setF}
+              />
+              <Slider
+                id="gsd-tilt"
+                label="Camera off-nadir tilt"
+                value={tilt}
+                display={tilt + "°"}
+                min={0}
+                max={70}
+                onChange={setTilt}
+              />
+              <Slider
+                id="gsd-slope"
+                label="Terrain slope along X"
+                value={slope}
+                display={slope + "°"}
+                min={-25}
+                max={25}
+                onChange={setSlope}
+              />
+              <label className="photo-select">
+                Sensor format
+                <select
+                  id="gsd-sensor"
+                  value={sensor}
+                  onChange={(e) => setSensor(+e.target.value)}
+                >
+                  {CAMERA_SENSORS.map((s, i) => (
+                    <option key={s.name} value={i}>
+                      {s.name} · {s.width} mm wide
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="photo-select">
+                Native resolution
+                <select
+                  id="gsd-resolution"
+                  value={megapixels}
+                  onChange={(e) => setMegapixels(+e.target.value)}
+                >
+                  {[12, 24, 48, 96].map((n) => (
+                    <option key={n} value={n}>
+                      {n} MP
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </Panel>
+            <Panel
+              tag="02 / IMAGE FORMATION"
+              title="Blur, motion & sensor noise"
+              collapsible
+              defaultOpen={stage === "sampling"}
+            >
+              <Slider
+                id="gsd-fnumber"
+                label="Aperture f-number"
+                value={fNumber}
+                display={"f/" + fNumber}
+                min={2}
+                max={22}
+                step={0.1}
+                onChange={setFNumber}
+              />
+              <Slider
+                id="gsd-exposure"
+                label="Exposure time"
+                value={exposureMs}
+                display={exposureMs.toFixed(1) + " ms"}
+                min={0.1}
+                max={10}
+                step={0.1}
+                onChange={setExposure}
+              />
+              <Slider
+                id="gsd-speed"
+                label="Local along-image ground speed"
+                value={speed}
+                display={speed + " m/s"}
+                min={0}
+                max={50}
+                onChange={setSpeed}
+              />
+              <label className="photo-check">
+                <input
+                  id="gsd-noise"
+                  type="checkbox"
+                  checked={noise}
+                  onChange={(e) => setNoise(e.target.checked)}
+                />
+                Illustrative shot/read noise
+              </label>
+              <div className="photo-actions">
+                <button id="gsd-new-sample" onClick={() => setSeed(seed + 1)}>
+                  New sensor-noise sample
+                </button>
+                <button
+                  id="gsd-nadir"
+                  onClick={() => {
+                    setTilt(0);
+                    setSlope(0);
+                    setElevation(0);
+                  }}
+                >
+                  Nadir / flat-datum reference
+                </button>
+              </div>
+            </Panel>
           </Controls>
         </aside>
         <div className="photo-instruments">
           <Panel
             tag="LIVE GEOMETRY & CALCULATION"
             title="From sensor pitch to an actual ground footprint"
+            hidden={stage !== "geometry"}
           >
             <GsdGeometry
               camera={camera}
@@ -321,6 +343,8 @@ export default function Gsd() {
           <Panel
             tag="INSPECT IMAGE POSITION"
             title="Select a region and inspect its central native pixel"
+            className="gsd-region-panel"
+            collapsible
           >
             <div
               className="gsd-region-picker"
@@ -349,6 +373,9 @@ export default function Gsd() {
           <Panel
             tag="NATIVE SENSOR CROP"
             title="Same marker, different sampling"
+            className="gsd-sample-panel"
+            collapsible
+            defaultOpen={stage === "sampling"}
           >
             <div className="gsd-samples">
               <figure>

@@ -3,7 +3,8 @@ import "./simulation.css";
 import "./native.css";
 import "./sar.css";
 import LessonBrief from "./LessonBrief.jsx";
-import Disclosure from './Disclosure.jsx';
+import ConceptSteps from "./ConceptSteps.jsx";
+import Disclosure from "./Disclosure.jsx";
 import { sarResolutions } from "./principles-model.js";
 
 // ---------------------------------------------------------------------------
@@ -410,6 +411,7 @@ function drawDoppler(cv, v, R0km, lam) {
 }
 
 export default function SarImaging() {
+  const [section, setSection] = useState("geometry");
   const [Hkm, setHkm] = useState(693);
   const [theta, setTheta] = useState(35);
   const [bandId, setBandId] = useState("C");
@@ -467,9 +469,27 @@ export default function SarImaging() {
       </header>
       <LessonBrief topic="sar" />
 
-      <div className="sim-layout">
+      <ConceptSteps
+        id="sar"
+        value={section}
+        onChange={setSection}
+        steps={[
+          ["geometry", "Imaging geometry"],
+          ["range", "Range resolution"],
+          ["azimuth", "Synthetic aperture"],
+          ["doppler", "Doppler history"],
+        ]}
+      />
+      <div
+        className={`sim-layout concept-workspace ${section === "all" ? "concept-overview" : ""}`}
+      >
         <div className="sim-col">
-          <section className="sim-panel">
+          <section
+            className="sim-panel"
+            id="sar-pane-geometry"
+            aria-labelledby="sar-step-geometry"
+            hidden={section !== "all" && section !== "geometry"}
+          >
             <h2>
               <span className="stepno">1</span> Side-looking geometry{" "}
               <small>&mdash; range / swath</small>
@@ -480,88 +500,95 @@ export default function SarImaging() {
               width={720}
               height={340}
             />
-            <div className="sar-bands">
-              <span
-                style={{
-                  width: "100%",
-                  fontSize: 11,
-                  color: "#7d8fa1",
-                  textTransform: "uppercase",
-                  letterSpacing: ".6px",
-                }}
-              >
-                Radar band (wavelength λ)
-              </span>
-              {BANDS.map((b) => (
-                <button
-                  key={b.id}
-                  className={`sar-bbtn ${bandId === b.id ? "on" : ""}`}
-                  onClick={() => setBandId(b.id)}
+            <div className="concept-controls">
+              <div className="sar-bands">
+                <span
+                  style={{
+                    width: "100%",
+                    fontSize: 11,
+                    color: "#7d8fa1",
+                    textTransform: "uppercase",
+                    letterSpacing: ".6px",
+                  }}
                 >
-                  <b>{b.name}</b>
-                  <span>{(b.lam * 100).toFixed(1)} cm</span>
-                </button>
-              ))}
-            </div>
-            <div
-              className="control-grid"
-              style={{ gridTemplateColumns: "1fr 1fr" }}
-            >
-              <label>
-                altitude H <b>{Hkm.toFixed(0)} km</b>
-                <input
-                  type="range"
-                  min="4"
-                  max="800"
-                  step="1"
-                  value={Hkm}
-                  onChange={(e) => setHkm(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                look / incidence θ <b>{theta.toFixed(0)}°</b>
-                <input
-                  type="range"
-                  min="18"
-                  max="52"
-                  step="1"
-                  value={theta}
-                  onChange={(e) => setTheta(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div
-              className="readouts"
-              style={{ gridTemplateColumns: "repeat(4,1fr)" }}
-            >
-              <div>
-                <span>slant range R</span>
-                <b>{Rkm.toFixed(0)} km</b>
+                  Radar band (wavelength λ)
+                </span>
+                {BANDS.map((b) => (
+                  <button
+                    key={b.id}
+                    className={`sar-bbtn ${bandId === b.id ? "on" : ""}`}
+                    onClick={() => setBandId(b.id)}
+                  >
+                    <b>{b.name}</b>
+                    <span>{(b.lam * 100).toFixed(1)} cm</span>
+                  </button>
+                ))}
               </div>
-              <div>
-                <span>incidence θ</span>
-                <b>{theta.toFixed(0)}°</b>
+              <div
+                className="control-grid"
+                style={{ gridTemplateColumns: "1fr 1fr" }}
+              >
+                <label>
+                  altitude H <b>{Hkm.toFixed(0)} km</b>
+                  <input
+                    type="range"
+                    min="4"
+                    max="800"
+                    step="1"
+                    value={Hkm}
+                    onChange={(e) => setHkm(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  look / incidence θ <b>{theta.toFixed(0)}°</b>
+                  <input
+                    type="range"
+                    min="18"
+                    max="52"
+                    step="1"
+                    value={theta}
+                    onChange={(e) => setTheta(Number(e.target.value))}
+                  />
+                </label>
               </div>
-              <div>
-                <span>ground δR</span>
-                <b>{(dR / Math.sin(theta * D2R)).toFixed(2)} m</b>
+              <div
+                className="readouts"
+                style={{ gridTemplateColumns: "repeat(4,1fr)" }}
+              >
+                <div>
+                  <span>slant range R</span>
+                  <b>{Rkm.toFixed(0)} km</b>
+                </div>
+                <div>
+                  <span>incidence θ</span>
+                  <b>{theta.toFixed(0)}°</b>
+                </div>
+                <div>
+                  <span>ground δR</span>
+                  <b>{(dR / Math.sin(theta * D2R)).toFixed(2)} m</b>
+                </div>
+                <div>
+                  <span>wavelength λ</span>
+                  <b>{(lam * 100).toFixed(1)} cm</b>
+                </div>
               </div>
-              <div>
-                <span>wavelength λ</span>
-                <b>{(lam * 100).toFixed(1)} cm</b>
+              <div className="sar-note">
+                Radar is <b>active</b> (its own illumination) and uses{" "}
+                <b>microwaves</b>, so it images day or night and sees through
+                cloud, smoke and rain. It must look <b>to the side</b> — a
+                nadir-looking radar could not tell left from right, and range
+                alone orders the echoes across the <b>swath</b> from near to far
+                range.
               </div>
-            </div>
-            <div className="sar-note">
-              Radar is <b>active</b> (its own illumination) and uses{" "}
-              <b>microwaves</b>, so it images day or night and sees through
-              cloud, smoke and rain. It must look <b>to the side</b> — a
-              nadir-looking radar could not tell left from right, and range
-              alone orders the echoes across the <b>swath</b> from near to far
-              range.
             </div>
           </section>
 
-          <section className="sim-panel">
+          <section
+            className="sim-panel"
+            id="sar-pane-azimuth"
+            aria-labelledby="sar-step-azimuth"
+            hidden={section !== "all" && section !== "azimuth"}
+          >
             <h2>
               <span className="stepno">3</span> Azimuth resolution — the
               synthetic aperture <small>&mdash; δaz = D/2</small>
@@ -572,60 +599,67 @@ export default function SarImaging() {
               width={720}
               height={330}
             />
-            <div
-              className="control-grid"
-              style={{ gridTemplateColumns: "1fr" }}
-            >
-              <label>
-                antenna length D <b>{D.toFixed(0)} m</b>
-                <input
-                  type="range"
-                  min="1"
-                  max="15"
-                  step="0.5"
-                  value={D}
-                  onChange={(e) => setD(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div
-              className="readouts"
-              style={{ gridTemplateColumns: "repeat(3,1fr)" }}
-            >
-              <div>
-                <span>beam footprint λR/D</span>
-                <b>
-                  {foot > 1000
-                    ? `${(foot / 1000).toFixed(1)} km`
-                    : `${foot.toFixed(0)} m`}
-                </b>
+            <div className="concept-controls">
+              <div
+                className="control-grid"
+                style={{ gridTemplateColumns: "1fr" }}
+              >
+                <label>
+                  antenna length D <b>{D.toFixed(0)} m</b>
+                  <input
+                    type="range"
+                    min="1"
+                    max="15"
+                    step="0.5"
+                    value={D}
+                    onChange={(e) => setD(Number(e.target.value))}
+                  />
+                </label>
               </div>
-              <div>
-                <span>real-aperture res</span>
-                <b className="orange">
-                  {foot > 1000
-                    ? `${(foot / 1000).toFixed(1)} km`
-                    : `${foot.toFixed(0)} m`}
-                </b>
+              <div
+                className="readouts"
+                style={{ gridTemplateColumns: "repeat(3,1fr)" }}
+              >
+                <div>
+                  <span>beam footprint λR/D</span>
+                  <b>
+                    {foot > 1000
+                      ? `${(foot / 1000).toFixed(1)} km`
+                      : `${foot.toFixed(0)} m`}
+                  </b>
+                </div>
+                <div>
+                  <span>real-aperture res</span>
+                  <b className="orange">
+                    {foot > 1000
+                      ? `${(foot / 1000).toFixed(1)} km`
+                      : `${foot.toFixed(0)} m`}
+                  </b>
+                </div>
+                <div>
+                  <span>SAR δaz = D/2</span>
+                  <b>{dAz.toFixed(1)} m</b>
+                </div>
               </div>
-              <div>
-                <span>SAR δaz = D/2</span>
-                <b>{dAz.toFixed(1)} m</b>
+              <div className="sar-note">
+                The real beam is wide (λR/D), so a real-aperture radar would
+                smear a target over kilometres. But the target sits in the beam
+                across the whole <b>synthetic aperture L = λR/D</b>; coherently
+                combining those echoes sharpens azimuth to <b>δaz = D/2</b> —
+                remarkably, a <b>smaller</b> antenna gives <b>finer</b>{" "}
+                resolution, and it does not depend on range or wavelength.
               </div>
-            </div>
-            <div className="sar-note">
-              The real beam is wide (λR/D), so a real-aperture radar would smear
-              a target over kilometres. But the target sits in the beam across
-              the whole <b>synthetic aperture L = λR/D</b>; coherently combining
-              those echoes sharpens azimuth to <b>δaz = D/2</b> — remarkably, a{" "}
-              <b>smaller</b> antenna gives <b>finer</b> resolution, and it does
-              not depend on range or wavelength.
             </div>
           </section>
         </div>
 
         <div className="sim-col">
-          <section className="sim-panel">
+          <section
+            className="sim-panel"
+            id="sar-pane-range"
+            aria-labelledby="sar-step-range"
+            hidden={section !== "all" && section !== "range"}
+          >
             <h2>
               <span className="stepno">2</span> Range resolution — pulse
               compression <small>&mdash; δR = c/2B</small>
@@ -636,49 +670,57 @@ export default function SarImaging() {
               width={720}
               height={360}
             />
-            <div
-              className="control-grid"
-              style={{ gridTemplateColumns: "1fr 1fr" }}
-            >
-              <label>
-                bandwidth B <b>{B.toFixed(0)} MHz</b>
-                <input
-                  type="range"
-                  min="20"
-                  max="1200"
-                  step="10"
-                  value={B}
-                  onChange={(e) => setB(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                target spacing <b>{sep.toFixed(1)} m</b>
-                <input
-                  type="range"
-                  min="0.2"
-                  max="12"
-                  step="0.1"
-                  value={sep}
-                  onChange={(e) => setSep(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div className="equation">
-              Ideal slant-range resolution δR = c/(2B) = {dR.toFixed(3)} m.
-              Ground-range resolution = δR/sinθ = {resolution.ground.toFixed(3)}{" "}
-              m. First-null spacing is a resolution criterion, not a guarantee
-              for unequal or noisy targets.
-            </div>
-            <div className="sar-note">
-              A short pulse would need enormous peak power. Instead SAR sends a
-              long <b>linear-FM chirp</b> and <b>match-filters</b> the echo
-              (pulse compression), collapsing it to a sharp spike. Range
-              resolution depends only on <b>bandwidth B</b>, not pulse length —
-              more bandwidth, finer range.
+            <div className="concept-controls">
+              <div
+                className="control-grid"
+                style={{ gridTemplateColumns: "1fr 1fr" }}
+              >
+                <label>
+                  bandwidth B <b>{B.toFixed(0)} MHz</b>
+                  <input
+                    type="range"
+                    min="20"
+                    max="1200"
+                    step="10"
+                    value={B}
+                    onChange={(e) => setB(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  target spacing <b>{sep.toFixed(1)} m</b>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="12"
+                    step="0.1"
+                    value={sep}
+                    onChange={(e) => setSep(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+              <div className="equation">
+                Ideal slant-range resolution δR = c/(2B) = {dR.toFixed(3)} m.
+                Ground-range resolution = δR/sinθ ={" "}
+                {resolution.ground.toFixed(3)} m. First-null spacing is a
+                resolution criterion, not a guarantee for unequal or noisy
+                targets.
+              </div>
+              <div className="sar-note">
+                A short pulse would need enormous peak power. Instead SAR sends
+                a long <b>linear-FM chirp</b> and <b>match-filters</b> the echo
+                (pulse compression), collapsing it to a sharp spike. Range
+                resolution depends only on <b>bandwidth B</b>, not pulse length
+                — more bandwidth, finer range.
+              </div>
             </div>
           </section>
 
-          <section className="sim-panel">
+          <section
+            className="sim-panel"
+            id="sar-pane-doppler"
+            aria-labelledby="sar-step-doppler"
+            hidden={section !== "all" && section !== "doppler"}
+          >
             <h2>
               <span className="stepno">4</span> Doppler history{" "}
               <small>&mdash; azimuth is a chirp too</small>
@@ -689,29 +731,32 @@ export default function SarImaging() {
               width={720}
               height={230}
             />
-            <div
-              className="control-grid"
-              style={{ gridTemplateColumns: "1fr" }}
-            >
-              <label>
-                platform speed v <b>{v.toFixed(0)} m/s</b>
-                <input
-                  type="range"
-                  min="120"
-                  max="7700"
-                  step="20"
-                  value={v}
-                  onChange={(e) => setV(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div className="sar-note">
-              As the platform flies past, the target&rsquo;s range first
-              shortens then lengthens, so its echo&rsquo;s{" "}
-              <b>Doppler shifts linearly</b> from + to − through zero at closest
-              approach — an <b>azimuth chirp</b>. Match-filtering this Doppler
-              history (azimuth compression) is exactly what synthesises the
-              aperture; the two compressions together form the focused image.
+            <div className="concept-controls">
+              <div
+                className="control-grid"
+                style={{ gridTemplateColumns: "1fr" }}
+              >
+                <label>
+                  platform speed v <b>{v.toFixed(0)} m/s</b>
+                  <input
+                    type="range"
+                    min="120"
+                    max="7700"
+                    step="20"
+                    value={v}
+                    onChange={(e) => setV(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+              <div className="sar-note">
+                As the platform flies past, the target&rsquo;s range first
+                shortens then lengthens, so its echo&rsquo;s{" "}
+                <b>Doppler shifts linearly</b> from + to − through zero at
+                closest approach — an <b>azimuth chirp</b>. Match-filtering this
+                Doppler history (azimuth compression) is exactly what
+                synthesises the aperture; the two compressions together form the
+                focused image.
+              </div>
             </div>
           </section>
 

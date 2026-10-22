@@ -6,16 +6,18 @@
 <title>LiDAR Beam &amp; Target Interaction — Returns and Signal Strength</title>
 <meta name="description" content="Learn what happens when an incident LiDAR pulse meets a target: reflection, absorption, transmission and scattering. Change the angle of incidence, see why only a tiny scattered fraction reaches the receiver, how signal strength varies over water, grass, asphalt and roofs, and how pulses penetrate a tree canopy to give first, intermediate and last returns.">
 <link rel="stylesheet" href="./interaction.css">
+<link rel="stylesheet" href="../shared/minimal-workspace.css">
+<script type="module" src="../shared/minimal-workspace.js"></script>
 </head>
 <body>
-<div class="app">
+<div class="app interaction-app">
 
   <header class="lab-header">
     <a class="back-link" href="../../"><span class="brand-mark" aria-hidden="true">⌁</span> GEOSIM <span class="brand-divider">/</span> All laboratories</a>
     <span class="lab-id">REMOTE SENSING <span>LAB 03 / 06</span></span>
   </header>
   <section class="lab-intro" aria-labelledby="labTitle">
-    <div><p class="eyebrow">THE INTERACTION LAB</p><h1 id="labTitle">One pulse. Many possibilities.</h1>
+    <div><h1 id="labTitle">Beam &amp; target interaction</h1>
       <p class="intro-copy">Explore LiDAR beam–target interaction. Follow the energy, change the geometry, and discover what makes it back.</p></div>
     <div class="model-tag"><span class="status-dot"></span>1064 nm <span>ILLUSTRATIVE 2D MODEL</span></div>
   </section>
@@ -49,7 +51,9 @@
     </div>
 
     <div class="col">
-      <aside class="surface-controls" aria-label="Target and sensor configuration">
+      <details class="surface-controls" data-responsive-settings open aria-label="Target and sensor configuration">
+      <summary>Experiment settings</summary>
+      <div class="interaction-setting-stack">
       <div class="panel material-panel">
         <h3><span class="panel-index">01 / CONFIGURE</span> Choose a target</h3>
         <div class="mat-grid" id="matGrid"></div>
@@ -74,7 +78,8 @@
         </div>
       </div>
 
-      </aside>
+      </div>
+      </details>
       <div class="panel energy-panel">
         <h3><span class="panel-index">03 / OBSERVE</span> Where the energy goes</h3>
         <div class="bal" id="balBar"></div>
@@ -130,8 +135,8 @@
     </div>
 
     <div class="col">
-      <div class="panel canopy-controls">
-        <h3><span class="panel-index">01 / CONFIGURE</span> Canopy &amp; beam</h3>
+      <details class="panel canopy-controls" data-responsive-settings open>
+        <summary>Canopy &amp; beam settings</summary>
         <div class="experiment-buttons">
           <button class="btn" data-canopy="dense">Dense crown</button>
           <button class="btn" data-canopy="winter">Leaf-off</button>
@@ -163,7 +168,7 @@
             <label class="chk"><input type="checkbox" id="leafOff"> Leaf-off (winter) canopy</label>
           </div>
         </div>
-      </div>
+      </details>
 
       <div class="panel pulse-panel">
         <h3><span class="panel-index">DETECTOR READOUT</span> This pulse</h3>

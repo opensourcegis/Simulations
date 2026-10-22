@@ -504,7 +504,7 @@ export default function BeamFootprint() {
   const relE = gNadir.area / g.area;
 
   return (
-    <div className="sim-app">
+    <div className="sim-app scene-first">
       <header className="sim-topbar">
         <a className="back-link" href={import.meta.env.BASE_URL}>
           &larr; All simulators

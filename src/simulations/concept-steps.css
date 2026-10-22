@@ -1,0 +1,110 @@
+.concept-steps {
+  max-width: 1520px;
+  margin: 16px auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid #dce2e5;
+}
+.concept-steps button {
+  padding: 10px 14px;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #586970;
+  font:
+    600 13px/1.5 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.concept-steps button[aria-pressed="true"] {
+  color: #176d66;
+  border-bottom-color: #176d66;
+}
+.concept-steps .concept-compare {
+  margin-left: auto;
+  font-weight: 400;
+}
+.concept-workspace [hidden] {
+  display: none !important;
+}
+.concept-workspace .sim-col {
+  display: contents;
+}
+.concept-workspace:not(.concept-overview) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.concept-workspace > .sim-col > .sim-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px 24px;
+  align-items: start;
+}
+.concept-workspace > .sim-col > .sim-panel > h2 {
+  grid-column: 1/-1;
+  margin-bottom: 0;
+}
+.concept-workspace > .sim-col > .sim-panel > canvas {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  justify-self: center;
+  width: min(100%, 800px);
+}
+.concept-workspace > .sim-col > .sim-panel > :not(h2, canvas) {
+  grid-column: 2;
+  margin-top: 0;
+}
+.concept-workspace .concept-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.concept-workspace .concept-controls > .readouts {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.concept-workspace .concept-controls > .control-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.concept-workspace.concept-overview > .sim-col > .sim-panel {
+  display: block;
+}
+.concept-workspace.concept-overview .concept-controls {
+  display: flex;
+}
+.concept-workspace.concept-overview .sim-panel > :not(h2, canvas) {
+  margin-top: 12px;
+}
+.concept-workspace.concept-overview #sar-pane-geometry {
+  order: 1;
+}
+.concept-workspace.concept-overview #sar-pane-range {
+  order: 2;
+}
+.concept-workspace.concept-overview #sar-pane-azimuth {
+  order: 3;
+}
+.concept-workspace.concept-overview #sar-pane-doppler {
+  order: 4;
+}
+.concept-workspace.concept-overview > .sim-col > .lab-disclosure {
+  order: 5;
+}
+.concept-workspace > .sim-col > .lab-disclosure {
+  grid-column: 1/-1;
+}
+@media (max-width: 800px) {
+  .concept-workspace > .sim-col > .sim-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .concept-workspace > .sim-col > .sim-panel > * {
+    width: 100%;
+  }
+  .concept-steps button {
+    padding: 10px;
+    font-size: 12px;
+  }
+}

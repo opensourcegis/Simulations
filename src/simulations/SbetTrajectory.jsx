@@ -707,6 +707,7 @@ export default function SbetTrajectory() {
           <Panel
             tag="ONE RANGE · TWO ENDPOINTS"
             title="Error at this laser shot"
+            collapsible defaultOpen={stage === "lidar"}
           >
             <p>
               Recorded range: <b>{row.shot.range.toFixed(3)} m</b>

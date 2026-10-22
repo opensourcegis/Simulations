@@ -432,9 +432,10 @@
   }
 </style>
 <link rel="stylesheet" href="../shared/simulation-theme.css">
+<link rel="stylesheet" href="../shared/minimal-workspace.css">
 </head>
 <body>
-<div class="app">
+<div class="app mission-app">
 
   <header class="topbar">
     <a class="back-link" href="../../">← All simulators</a>
@@ -459,7 +460,7 @@
         <div class="card-body">
           <div class="brief-obj" id="briefObjective"></div>
           <details style="font-size:12px;margin:10px 0"><summary>Teaching model, not an operational flight plan</summary><p>Payload performance, endurance penalties, clearances, airspace ceilings and grading are scenario assumptions, not aircraft specifications or current aviation regulations. Nominal pulse density is not ground-return density under vegetation; optical views and LiDAR both depend on visibility. Online elevations and OpenStreetMap obstacles may be incomplete. A passing score is not flight approval.</p></details>
-          <table class="spec-table" id="specTable"></table>
+          <details class="mission-specs"><summary>Mission requirements</summary><table class="spec-table" id="specTable"></table></details>
         </div>
       </div>
 

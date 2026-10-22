@@ -527,6 +527,8 @@ export default function CameraLab() {
             title={
               upright ? "Processed upright image" : "Inverted sensor image"
             }
+            className="camera-preview-panel"
+            collapsible defaultOpen={stage === "exposure"}
           >
             <canvas
               ref={preview}

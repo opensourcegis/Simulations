@@ -101,9 +101,10 @@
   .hide{display:none!important}
 </style>
 <link rel="stylesheet" href="../shared/simulation-theme.css">
+<link rel="stylesheet" href="../shared/minimal-workspace.css">
 </head>
 <body>
-<div class="app">
+<div class="app ortho-app">
 
   <div class="topbar">
     <a class="back-link" href="../../">← All simulators</a>
@@ -119,7 +120,7 @@
   <div class="layout">
     <!-- ============ LEFT ============ -->
     <div class="col">
-      <div class="panel">
+      <div class="panel ortho-source">
         <h3><span class="stepno">1</span> Source aerial photo <span class="lt">— tilted central perspective</span></h3>
         <canvas class="scene" id="srcCanvas" width="640" height="640"></canvas>
         <div class="ctl-row">
@@ -139,7 +140,7 @@
         <div class="callout" id="srcNote"></div>
       </div>
 
-      <div class="panel">
+      <div class="panel ortho-section">
         <h3><span class="stepno">2</span> Geometry at the probe <span class="lt">— side view, drawn to scale</span></h3>
         <canvas class="scene" id="secCanvas" width="640" height="380"></canvas>
         <div class="ctl-row">
@@ -158,7 +159,7 @@
 
     <!-- ============ RIGHT ============ -->
     <div class="col">
-      <div class="panel">
+      <div class="panel ortho-elevation">
         <h3><span class="stepno">3</span> Elevation models <span class="lt">— what links image to ground</span></h3>
         <div class="elev-pair">
           <div class="elev-cell" id="cellDtm"><canvas id="dtmCanvas" width="300" height="300"></canvas><div class="cap"><b>DTM</b> — bare earth</div></div>
@@ -167,16 +168,18 @@
         <div class="ramp-row"><span>0 m</span><span class="ramp"></span><span>60 m</span></div>
       </div>
 
-      <div class="panel">
+      <div class="panel ortho-result">
         <h3><span class="stepno">4</span> Rectify — project onto the datum</h3>
         <div class="modes" id="modes">
-          <button class="mode" data-mode="datum"><span class="dot"></span><span><b>No elevation — datum plane</b>
-            Z = 0 everywhere. Tilt is removed but all relief displacement stays.</span></button>
-          <button class="mode" data-mode="dtm"><span class="dot"></span><span><b>DTM — conventional orthophoto</b>
-            Terrain is corrected; buildings are not in the DTM, so roofs stay displaced and façades stay smeared.</span></button>
-          <button class="mode on" data-mode="dsm"><span class="dot"></span><span><b>DSM — TRUE orthophoto</b>
-            Every roof returns to its footprint as a true rectangle. Façades vanish; hidden ground becomes occlusion.</span></button>
+          <button class="mode" data-mode="datum"><span class="dot"></span><span><b>Datum plane</b></span></button>
+          <button class="mode" data-mode="dtm"><span class="dot"></span><span><b>DTM · ground</b></span></button>
+          <button class="mode on" data-mode="dsm"><span class="dot"></span><span><b>DSM · surface</b></span></button>
         </div>
+        <details class="ortho-mode-guide"><summary>What does each elevation model correct?</summary>
+          <p><b>Datum plane:</b> Z = 0 everywhere. Tilt is removed, but relief displacement stays.</p>
+          <p><b>DTM:</b> Terrain is corrected; buildings are absent, so roofs stay displaced and façades stay smeared.</p>
+          <p><b>DSM:</b> Roofs return to their footprints. Façades vanish; ground hidden from this image remains occluded.</p>
+        </details>
         <div class="ctl-row">
           <label class="chk" id="wrapOcc"><input type="checkbox" id="chkOcc" checked> occlusion mask</label>
           <label class="chk" id="wrapFill"><input type="checkbox" id="chkFill"> fill from neighbouring photos</label>

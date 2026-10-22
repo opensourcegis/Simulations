@@ -3,7 +3,7 @@ import "./simulation.css";
 import "./native.css";
 import "./snell.css";
 import LessonBrief from "./LessonBrief.jsx";
-import Disclosure from './Disclosure.jsx';
+import ConceptSteps from "./ConceptSteps.jsx";
 import {
   refract as snell,
   criticalAngle,
@@ -380,6 +380,7 @@ function drawDistortion(cv, k) {
 }
 
 export default function Snell() {
+  const [section, setSection] = useState("refraction");
   const [t1, setT1] = useState(40);
   const [n1i, setN1i] = useState(0); // Air
   const [n2i, setN2i] = useState(2); // Glass
@@ -434,9 +435,26 @@ export default function Snell() {
       </header>
       <LessonBrief topic="snell" />
 
-      <div className="sim-layout">
+      <ConceptSteps
+        id="optics"
+        value={section}
+        onChange={setSection}
+        steps={[
+          ["refraction", "Refraction"],
+          ["lens", "Thin lens"],
+          ["distortion", "Radial distortion"],
+        ]}
+      />
+      <div
+        className={`sim-layout concept-workspace ${section === "all" ? "concept-overview" : ""}`}
+      >
         <div className="sim-col">
-          <section className="sim-panel">
+          <section
+            className="sim-panel"
+            id="optics-pane-refraction"
+            aria-labelledby="optics-step-refraction"
+            hidden={section !== "all" && section !== "refraction"}
+          >
             <h2>
               <span className="stepno">1</span> Refraction at an interface{" "}
               <small>&mdash; n₁ sinθ₁ = n₂ sinθ₂</small>
@@ -447,92 +465,103 @@ export default function Snell() {
               width={720}
               height={520}
             />
-            <div className="snell-media">
-              <span className="snell-lab">Incoming medium n₁</span>
-              {MEDIA.map((m, k) => (
-                <button
-                  key={m.name}
-                  className={`snell-mbtn ${n1i === k ? "on" : ""}`}
-                  onClick={() => setN1i(k)}
-                >
-                  <b>{m.name}</b>
-                  <span>{m.n.toFixed(2)}</span>
-                </button>
-              ))}
-            </div>
-            <div className="snell-media">
-              <span className="snell-lab">Medium the ray enters n₂</span>
-              {MEDIA.map((m, k) => (
-                <button
-                  key={m.name}
-                  className={`snell-mbtn ${n2i === k ? "on" : ""}`}
-                  onClick={() => setN2i(k)}
-                >
-                  <b>{m.name}</b>
-                  <span>{m.n.toFixed(2)}</span>
-                </button>
-              ))}
-            </div>
-            <div
-              className="control-grid"
-              style={{ gridTemplateColumns: "1fr" }}
-            >
-              <label>
-                angle of incidence θ₁ <b>{t1.toFixed(0)}°</b>
-                <input
-                  type="range"
-                  min="0"
-                  max="89"
-                  step="1"
-                  value={t1}
-                  onChange={(e) => setT1(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div
-              className="readouts"
-              style={{ gridTemplateColumns: "repeat(4,1fr)" }}
-            >
-              <div>
-                <span>θ₂ refracted</span>
-                <b>{res.tir ? "—" : `${res.t2.toFixed(1)}°`}</b>
+            <div className="concept-controls">
+              <div className="snell-media">
+                <span className="snell-lab">Incoming medium n₁</span>
+                {MEDIA.map((m, k) => (
+                  <button
+                    key={m.name}
+                    className={`snell-mbtn ${n1i === k ? "on" : ""}`}
+                    onClick={() => setN1i(k)}
+                  >
+                    <b>{m.name}</b>
+                    <span>{m.n.toFixed(2)}</span>
+                  </button>
+                ))}
               </div>
-              <div>
-                <span>bends</span>
-                <b>
-                  {n2 > n1 ? "to normal" : n2 < n1 ? "from normal" : "straight"}
-                </b>
+              <div className="snell-media">
+                <span className="snell-lab">Medium the ray enters n₂</span>
+                {MEDIA.map((m, k) => (
+                  <button
+                    key={m.name}
+                    className={`snell-mbtn ${n2i === k ? "on" : ""}`}
+                    onClick={() => setN2i(k)}
+                  >
+                    <b>{m.name}</b>
+                    <span>{m.n.toFixed(2)}</span>
+                  </button>
+                ))}
               </div>
-              <div>
-                <span>critical angle</span>
-                <b>{tc ? `${tc.toFixed(1)}°` : "—"}</b>
+              <div
+                className="control-grid"
+                style={{ gridTemplateColumns: "1fr" }}
+              >
+                <label>
+                  angle of incidence θ₁ <b>{t1.toFixed(0)}°</b>
+                  <input
+                    type="range"
+                    min="0"
+                    max="89"
+                    step="1"
+                    value={t1}
+                    onChange={(e) => setT1(Number(e.target.value))}
+                  />
+                </label>
               </div>
-              <div>
-                <span>state</span>
-                <b className={res.tir ? "orange" : ""}>
-                  {res.tir ? "TIR" : "refracts"}
-                </b>
+              <div
+                className="readouts"
+                style={{ gridTemplateColumns: "repeat(4,1fr)" }}
+              >
+                <div>
+                  <span>θ₂ refracted</span>
+                  <b>{res.tir ? "—" : `${res.t2.toFixed(1)}°`}</b>
+                </div>
+                <div>
+                  <span>bends</span>
+                  <b>
+                    {n2 > n1
+                      ? "to normal"
+                      : n2 < n1
+                        ? "from normal"
+                        : "straight"}
+                  </b>
+                </div>
+                <div>
+                  <span>critical angle</span>
+                  <b>{tc ? `${tc.toFixed(1)}°` : "—"}</b>
+                </div>
+                <div>
+                  <span>state</span>
+                  <b className={res.tir ? "orange" : ""}>
+                    {res.tir ? "TIR" : "refracts"}
+                  </b>
+                </div>
               </div>
+              <div className="equation">
+                n₁·sinθ₁ = n₂·sinθ₂ &nbsp;→&nbsp; θ₂ = asin( (n₁/n₂)·sinθ₁ ) ={" "}
+                {res.tir
+                  ? "undefined (total internal reflection)"
+                  : `${res.t2.toFixed(2)}°`}
+              </div>
+              {tc && (
+                <div className="snell-tir">
+                  Going from denser to lighter glass (n₁ &gt; n₂), any θ₁ beyond
+                  the <b>critical angle {tc.toFixed(1)}°</b> is{" "}
+                  <b>totally internally reflected</b> — the basis of fibre
+                  optics and of light-guiding inside prisms.
+                </div>
+              )}
             </div>
-            <div className="equation">
-              n₁·sinθ₁ = n₂·sinθ₂ &nbsp;→&nbsp; θ₂ = asin( (n₁/n₂)·sinθ₁ ) ={" "}
-              {res.tir
-                ? "undefined (total internal reflection)"
-                : `${res.t2.toFixed(2)}°`}
-            </div>
-            {tc && (
-              <div className="snell-tir">
-                Going from denser to lighter glass (n₁ &gt; n₂), any θ₁ beyond
-                the <b>critical angle {tc.toFixed(1)}°</b> is{" "}
-                <b>totally internally reflected</b> — the basis of fibre optics
-                and of light-guiding inside prisms.
-              </div>
-            )}
           </section>
         </div>
 
         <div className="sim-col">
-          <section className="sim-panel">
+          <section
+            className="sim-panel"
+            id="optics-pane-lens"
+            aria-labelledby="optics-step-lens"
+            hidden={section !== "all" && section !== "lens"}
+          >
             <h2>
               <span className="stepno">2</span> A lens is stacked refraction{" "}
               <small>&mdash; the projection centre</small>
@@ -543,119 +572,129 @@ export default function Snell() {
               width={720}
               height={360}
             />
-            <div
-              className="control-grid"
-              style={{ gridTemplateColumns: "1fr" }}
-            >
-              <label>
-                lens glass index n <b>{nglass.toFixed(2)}</b>
-                <input
-                  type="range"
-                  min="1.30"
-                  max="1.90"
-                  step="0.01"
-                  value={nglass}
-                  onChange={(e) => setNglass(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div
-              className="readouts"
-              style={{ gridTemplateColumns: "repeat(3,1fr)" }}
-            >
-              <div>
-                <span>focal length f</span>
-                <b>{thinLensFocalLength(nglass).toFixed(1)} mm</b>
+            <div className="concept-controls">
+              <div
+                className="control-grid"
+                style={{ gridTemplateColumns: "1fr" }}
+              >
+                <label>
+                  lens glass index n <b>{nglass.toFixed(2)}</b>
+                  <input
+                    type="range"
+                    min="1.30"
+                    max="1.90"
+                    step="0.01"
+                    value={nglass}
+                    onChange={(e) => setNglass(Number(e.target.value))}
+                  />
+                </label>
               </div>
-              <div>
-                <span>lens power</span>
-                <b>{(1000 / thinLensFocalLength(nglass)).toFixed(2)} D</b>
+              <div
+                className="readouts"
+                style={{ gridTemplateColumns: "repeat(3,1fr)" }}
+              >
+                <div>
+                  <span>focal length f</span>
+                  <b>{thinLensFocalLength(nglass).toFixed(1)} mm</b>
+                </div>
+                <div>
+                  <span>lens power</span>
+                  <b>{(1000 / thinLensFocalLength(nglass)).toFixed(2)} D</b>
+                </div>
+                <div>
+                  <span>centre ray</span>
+                  <b>undeviated</b>
+                </div>
               </div>
-              <div>
-                <span>centre ray</span>
-                <b>undeviated</b>
+              <div className="snell-note">
+                For this symmetric thin lens in air, R₁ = +80 mm and R₂ = −80
+                mm. Lensmaker: <b>1/f = (n−1)(1/R₁ − 1/R₂)</b>. Higher n
+                shortens f. The drawing uses the paraxial thin-lens
+                approximation; it is not a ray trace through the illustrated
+                glass surfaces. A centred thin-lens ray is undeviated; real
+                compound cameras have principal planes and entrance/exit pupils.
               </div>
-            </div>
-            <div className="snell-note">
-              For this symmetric thin lens in air, R₁ = +80 mm and R₂ = −80 mm.
-              Lensmaker: <b>1/f = (n−1)(1/R₁ − 1/R₂)</b>. Higher n shortens f.
-              The drawing uses the paraxial thin-lens approximation; it is not a
-              ray trace through the illustrated glass surfaces. A centred
-              thin-lens ray is undeviated; real compound cameras have principal
-              planes and entrance/exit pupils.
             </div>
           </section>
 
-          <Disclosure title="Radial distortion & camera calibration">
+          <section
+            className="sim-panel"
+            id="optics-pane-distortion"
+            aria-labelledby="optics-step-distortion"
+            hidden={section !== "all" && section !== "distortion"}
+          >
+            <h2>Radial distortion &amp; camera calibration</h2>
             <canvas
               ref={c3}
               className="sim-canvas section-canvas"
               width={720}
               height={430}
             />
-            <div
-              className="control-grid"
-              style={{ gridTemplateColumns: "1fr" }}
-            >
-              <label>
-                normalized radial coefficient k₁ <b>{kdist.toFixed(2)}</b>
-                <input
-                  type="range"
-                  min="-0.35"
-                  max="0.35"
-                  step="0.01"
-                  value={kdist}
-                  onChange={(e) => setKdist(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div
-              className="readouts"
-              style={{ gridTemplateColumns: "repeat(3,1fr)" }}
-            >
-              <div>
-                <span>pattern</span>
-                <b>
-                  {kdist < -0.001
-                    ? "barrel"
-                    : kdist > 0.001
-                      ? "pincushion"
-                      : "none"}
-                </b>
+            <div className="concept-controls">
+              <div
+                className="control-grid"
+                style={{ gridTemplateColumns: "1fr" }}
+              >
+                <label>
+                  normalized radial coefficient k₁ <b>{kdist.toFixed(2)}</b>
+                  <input
+                    type="range"
+                    min="-0.35"
+                    max="0.35"
+                    step="0.01"
+                    value={kdist}
+                    onChange={(e) => setKdist(Number(e.target.value))}
+                  />
+                </label>
               </div>
-              <div>
-                <span>corner |Δr| / r</span>
-                <b>{edgeShift}%</b>
+              <div
+                className="readouts"
+                style={{ gridTemplateColumns: "repeat(3,1fr)" }}
+              >
+                <div>
+                  <span>pattern</span>
+                  <b>
+                    {kdist < -0.001
+                      ? "barrel"
+                      : kdist > 0.001
+                        ? "pincushion"
+                        : "none"}
+                  </b>
+                </div>
+                <div>
+                  <span>corner |Δr| / r</span>
+                  <b>{edgeShift}%</b>
+                </div>
+                <div>
+                  <span>model</span>
+                  <b>r(1+k₁r²)</b>
+                </div>
               </div>
-              <div>
-                <span>model</span>
-                <b>r(1+k₁r²)</b>
+              <div className="equation">
+                image radius: r&#39; = r·(1 + k₁r² + k₂r⁴ + …) &nbsp;·&nbsp; the
+                pinhole model assumes a straight ray; real optics depart from it
+              </div>
+              <div className="rect-summary">
+                <b>From Snell&rsquo;s law to camera calibration</b>
+                <p>
+                  Photogrammetry&rsquo;s <b>collinearity equations</b> assume
+                  the ground point, the projection centre and the image point
+                  lie on one <b>straight</b> line. But the image is formed by{" "}
+                  <b>refraction</b> through a stack of glass elements, and real
+                  optics never match the ideal pinhole perfectly: straight
+                  ground lines bow into curves (<b>barrel</b> or{" "}
+                  <b>pincushion</b> distortion). Camera <b>calibration</b>{" "}
+                  recovers the principal distance, the principal point and the
+                  radial/decentring distortion terms (k₁, k₂, p₁, p₂) — the{" "}
+                  <b>interior orientation</b> — so every measured pixel can be
+                  corrected back onto the straight ray Snell&rsquo;s law only
+                  approximates. The same refraction shifts apparent positions
+                  when shooting <b>through water or a glass port</b>, which
+                  underwater and through-window surveys must model explicitly.
+                </p>
               </div>
             </div>
-            <div className="equation">
-              image radius: r&#39; = r·(1 + k₁r² + k₂r⁴ + …) &nbsp;·&nbsp; the
-              pinhole model assumes a straight ray; real optics depart from it
-            </div>
-            <div className="rect-summary">
-              <b>From Snell&rsquo;s law to camera calibration</b>
-              <p>
-                Photogrammetry&rsquo;s <b>collinearity equations</b> assume the
-                ground point, the projection centre and the image point lie on
-                one <b>straight</b> line. But the image is formed by{" "}
-                <b>refraction</b> through a stack of glass elements, and real
-                optics never match the ideal pinhole perfectly: straight ground
-                lines bow into curves (<b>barrel</b> or <b>pincushion</b>{" "}
-                distortion). Camera <b>calibration</b> recovers the principal
-                distance, the principal point and the radial/decentring
-                distortion terms (k₁, k₂, p₁, p₂) — the{" "}
-                <b>interior orientation</b> — so every measured pixel can be
-                corrected back onto the straight ray Snell&rsquo;s law only
-                approximates. The same refraction shifts apparent positions when
-                shooting <b>through water or a glass port</b>, which underwater
-                and through-window surveys must model explicitly.
-              </p>
-            </div>
-          </Disclosure>
+          </section>
         </div>
       </div>
     </div>
