@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PhotoLab, MethodTabs, Slider } from "./PhotoLabUI.jsx";
 import Disclosure from "./Disclosure.jsx";
+import FrameworkLesson from "./SurveyFrameworkLesson.jsx";
 import {
   CONTROL_ROUTE,
   CONTROL_NAMES,
@@ -10,11 +11,6 @@ import {
 import "./survey-principles.css";
 
 const fmt = (v, n = 2) => (Number.isFinite(v) ? v.toFixed(n) : "—");
-const FRAME_STEPS = [
-  "Establish control",
-  "Subdivide the area",
-  "Survey the details",
-];
 const RANGE_STEPS = [
   "Measure AP",
   "Add reference B",
@@ -221,31 +217,24 @@ function SitePlan({ step, points, method, badLeg, details = [] }) {
     </svg>
   );
 }
-function FrameworkLesson({ onNext }) {
-  const [step, setStep] = useState(0),
-    [error, setError] = useState(5),
+function FrameworkErrorExperiment() {
+  const step = 2;
+  const [error, setError] = useState(5),
     [badLeg, setBadLeg] = useState(4);
   const model = controlFrameworkExample(badLeg, error);
   const cell = model.cells[model.affectedCell];
-  const instructions = [
-    "First establish and independently check A, B, C and D around the whole site. This framework provides a common position and orientation for later work.",
-    "Now subdivide the site with local control stations 1–8. Short traverses connect the established main controls; the details will be tied to these local stations.",
-    "The same field mistake is present in both examples. One long traverse spreads its correction across the site. Control-first working confines it to one cell. Small squares are detail points tied to local stations.",
-  ];
   return (
-    <section className="sp-lesson" aria-label="Work from whole to part">
-      <Steps
-        id="framework"
-        items={FRAME_STEPS}
-        step={step}
-        onChange={setStep}
-      />
+    <section
+      className="sp-error-experiment"
+      aria-label="Optional error containment experiment"
+    >
+      <p>
+        After learning the hierarchy, compare the same measured traverse with
+        and without intermediate checked control. This is a separate error
+        experiment, not the construction sequence above.
+      </p>
       <div className="sp-layout">
         <div className="sp-main">
-          <h2>{FRAME_STEPS[step]}</h2>
-          <p className="sp-objective" id="framework-objective">
-            {instructions[step]}
-          </p>
           <div className={`sp-maps ${step === 2 ? "sp-compare" : ""}`}>
             {step === 2 && (
               <figure>
@@ -304,13 +293,6 @@ function FrameworkLesson({ onNext }) {
               <span>Small squares: details tied to local stations</span>
             )}
           </div>
-          <Progress
-            step={step}
-            setStep={setStep}
-            items={FRAME_STEPS}
-            onComplete={onNext}
-            completeLabel="Explore principle 2 →"
-          />
           {step === 2 && (
             <Disclosure title="See the closure calculation">
               <p>
@@ -432,12 +414,11 @@ function FrameworkLesson({ onNext }) {
           <button
             id="framework-reset"
             onClick={() => {
-              setStep(0);
               setError(5);
               setBadLeg(4);
             }}
           >
-            Restart this lesson
+            Reset error experiment
           </button>
         </aside>
       </div>
@@ -924,7 +905,10 @@ export default function SurveyPrinciples() {
           ]}
         />
         <div hidden={principle !== "framework"}>
-          <FrameworkLesson onNext={() => setPrinciple("references")} />
+          <FrameworkLesson
+            onNext={() => setPrinciple("references")}
+            errorExperiment={<FrameworkErrorExperiment />}
+          />
         </div>
         <div hidden={principle !== "references"}>
           <ReferenceLesson />

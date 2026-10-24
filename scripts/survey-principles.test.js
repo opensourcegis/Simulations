@@ -6,11 +6,90 @@ import {
   rangeIntersections,
   rangeGeometry,
   referencePointExample,
+  surveyHierarchyExample,
 } from "../src/simulations/survey-principles-model.js";
 const close = (a, b, eps = 1e-8) =>
   assert(Math.abs(a - b) < eps, `${a} != ${b}`);
 const point = (a, b) => a.forEach((v, i) => close(v, b[i]));
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+test("whole-to-part establishes local control from primary observations on the field-sketch side", () => {
+  const expected = [
+    [
+      [62, 30],
+      [54, 34],
+    ],
+    [
+      [30, 46],
+      [22, 47],
+    ],
+  ];
+  for (const zone of [0, 1]) {
+    const m = surveyHierarchyExample(zone);
+    m.stations.forEach((s, i) => {
+      point(s, expected[zone][i]);
+      m.baselineNames.forEach((name, j) =>
+        close(dist(m.controls[name], s), m.ties[i][j]),
+      );
+    });
+    // Each working station lies inside the selected primary triangle.
+    const [a, b, c] = m.names.map((n) => m.controls[n]);
+    const cross = (u, v, w) =>
+      (v[0] - u[0]) * (w[1] - u[1]) - (v[1] - u[1]) * (w[0] - u[0]);
+    for (const p of [...m.stations, ...m.building]) {
+      const signs = [cross(a, b, p), cross(b, c, p), cross(c, a, p)];
+      assert(signs.every((v) => v >= -1e-8) || signs.every((v) => v <= 1e-8));
+    }
+  }
+});
+test("building detail uses local coordinates, orientation and polar observations with a withheld check", () => {
+  for (const zone of [0, 1])
+    for (const corner of [0, 1, 2]) {
+      const m = surveyHierarchyExample(zone, corner);
+      point(m.point, m.building[[0, 1, 3][corner]]);
+      close(dist(m.stations[0], m.point), m.range);
+      close(m.checkRange, m.computedCheck);
+      close(m.point[0], m.stations[0][0] + m.range * Math.sin(m.gridBearing));
+      close(m.point[1], m.stations[0][1] + m.range * Math.cos(m.gridBearing));
+      close(
+        (m.backsightBearing + m.horizontalAngle) % (2 * Math.PI),
+        m.gridBearing,
+      );
+      // Neither the locating ray nor the withheld check passes through the
+      // building footprint: intersect the segment's open coordinate slabs.
+      for (const s of m.stations) {
+        let low = 0,
+          high = 1;
+        for (const axis of [0, 1]) {
+          const min = m.building[0][axis],
+            max = m.building[2][axis];
+          const delta = m.point[axis] - s[axis];
+          if (Math.abs(delta) < 1e-10) {
+            if (s[axis] <= min || s[axis] >= max) high = -1;
+          } else {
+            const ts = [(min - s[axis]) / delta, (max - s[axis]) / delta];
+            low = Math.max(low, Math.min(...ts));
+            high = Math.min(high, Math.max(...ts));
+          }
+        }
+        assert(
+          high - low < 1e-8,
+          "A survey ray must not pass through a building",
+        );
+      }
+    }
+});
+test("detail and area selections never change the primary framework or establish control from details", () => {
+  const base = surveyHierarchyExample();
+  for (const zone of [0, 1])
+    for (const corner of [0, 1, 2]) {
+      const m = surveyHierarchyExample(zone, corner);
+      assert.deepEqual(m.controls, base.controls);
+      assert.deepEqual(m.stations, surveyHierarchyExample(zone, 0).stations);
+    }
+  assert.throws(() => surveyHierarchyExample(-1), RangeError);
+  assert.throws(() => surveyHierarchyExample(0, 5), RangeError);
+});
 
 test("without an introduced mistake both control strategies recover the same site", () => {
   const copy = JSON.stringify(CONTROL_ROUTE),

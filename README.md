@@ -4,7 +4,7 @@ React + Vite landing page for browser-based survey training simulators.
 
 The catalogue contains 24 unique laboratories: 21 React simulations and three standalone HTML lessons under `games/`. Legacy scanning/aerial/ortho URLs remain supported. The Vite build copies standalone assets and the locally installed Leaflet library into `dist/games/`; the planner does not depend on an external JavaScript CDN.
 
-The beginner **Two Principles of Surveying** lesson explains working from whole to part and fixing points with independent measurements. It includes a control-framework error comparison, distance-circle intersections, field-side ambiguity, geometry-dependent uncertainty and a withheld independent check. See [the lesson guide](docs/SURVEY_PRINCIPLES.md).
+The beginner **Two Principles of Surveying** lesson explains working from whole to part and fixing points with independent measurements. Follow a site from primary control through smaller areas to a measured building corner, with an enlarged instrument view and worked coordinates. Advanced error comparisons stay optional. The second principle explores distance circles, ambiguity, geometry and an independent check. See [the lesson guide](docs/SURVEY_PRINCIPLES.md).
 
 ## Local development
 

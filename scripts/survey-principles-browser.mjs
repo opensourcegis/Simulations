@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { openBrowserPage } from "./thumbnail-browser-client.mjs";
-import { referencePointExample } from "../src/simulations/survey-principles-model.js";
+import {
+  referencePointExample,
+  surveyHierarchyExample,
+} from "../src/simulations/survey-principles-model.js";
 const page = await openBrowserPage();
 const base = process.env.PHOTO_BASE_URL || "http://localhost:4173/Simulations/";
 const pause = (ms = 100) => new Promise((r) => setTimeout(r, ms));
@@ -82,8 +85,81 @@ try {
     await evaluate("document.querySelector('h1').textContent"),
     "Two principles of surveying",
   );
+  assert.equal(
+    await evaluate(
+      "document.querySelectorAll('#framework-hierarchy-plan .sf-marker.sf-primary').length",
+    ),
+    4,
+  );
+  assert.equal(
+    await evaluate(
+      "document.querySelectorAll('#framework-hierarchy-plan .sf-marker.sf-secondary').length",
+    ),
+    0,
+  );
+  assert.equal(
+    await evaluate("!!document.getElementById('framework-detail-plan')"),
+    false,
+  );
+  await shot("whole-site");
   await click("#framework-step-1");
+  assert.equal(
+    await evaluate(
+      "document.querySelectorAll('#framework-hierarchy-plan .sf-marker.sf-secondary').length",
+    ),
+    2,
+  );
+  assert.equal(
+    await evaluate("!!document.getElementById('framework-detail-plan')"),
+    false,
+  );
+  await click("#framework-zone-1");
+  assert.match(
+    await evaluate(
+      "document.getElementById('framework-hierarchy-plan').getAttribute('aria-label')",
+    ),
+    /Area 2/,
+  );
+  await shot("local-control");
   await click("#framework-step-2");
+  assert.equal(
+    await evaluate("!!document.getElementById('framework-detail-plan')"),
+    true,
+  );
+  const detailResult = () =>
+    evaluate(
+      "({...document.getElementById('framework-detail-results').dataset})",
+    );
+  for (const zone of [0, 1]) {
+    await click(`#framework-zone-${zone}`);
+    for (const corner of [0, 1, 2]) {
+      await set("framework-corner", corner);
+      const actual = await detailResult(),
+        expected = surveyHierarchyExample(zone, corner);
+      assert(Math.abs(+actual.east - expected.point[0]) < 1e-8);
+      assert(Math.abs(+actual.north - expected.point[1]) < 1e-8);
+      assert(Math.abs(+actual.range - expected.range) < 1e-8);
+    }
+  }
+  await set("framework-corner", 0);
+  await click("#framework-zone-0");
+  await shot("detail-survey");
+  await click(
+    "section[aria-label='Work from whole to part'] > .lab-disclosure > summary",
+  );
+  assert.match(
+    await evaluate(
+      "document.getElementById('framework-coordinate-working').textContent",
+    ),
+    /Eₚ = Eₛ₁/,
+  );
+  assert.equal(
+    await evaluate(
+      "document.querySelector('#framework-error-disclosure').open",
+    ),
+    false,
+  );
+  await click("#framework-error-disclosure > summary");
   assert.equal(
     await evaluate(
       "document.getElementById('framework-long-outside').textContent",
@@ -110,12 +186,10 @@ try {
   );
   await set("framework-leg", 0);
   await set("framework-error", 6);
-  await click(
-    "section[aria-label='Work from whole to part'] .lab-disclosure > summary",
-  );
+  await click(".sp-error-experiment .lab-disclosure > summary");
   assert(
     await evaluate(
-      "document.querySelector('section[aria-label=\"Work from whole to part\"] .lab-disclosure').textContent.includes('6.000')",
+      "document.querySelector('.sp-error-experiment .lab-disclosure').textContent.includes('6.000')",
     ),
   );
 
@@ -227,12 +301,14 @@ try {
     await click(".sp-lab > .photo-tabs button:nth-child(1)");
   }
   await resize(390);
+  await click("#framework-step-2");
+  await shot("framework-phone");
   await click(".sp-lab > .photo-tabs button:nth-child(2)");
   await click("#references-step-2");
   await shot("phone");
   assert.equal(page.errors.length, 0, JSON.stringify(page.errors));
   console.log(
-    "Two surveying principles: shared observations, error containment, ambiguous fixes, weak/singular geometry, withheld checks, direct dragging, retained inputs, expanded maths and six responsive widths passed.",
+    "Two surveying principles: progressive control hierarchy, two selectable areas, six polar detail solutions, optional error experiment, ambiguous fixes, weak/singular geometry, withheld checks, dragging, retained inputs, expanded maths and six responsive widths passed.",
   );
 } finally {
   await page.close();

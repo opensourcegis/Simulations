@@ -6,6 +6,356 @@
 .sp-lesson {
   min-width: 0;
 }
+.sf-sequence {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px 0 24px;
+}
+.sf-sequence button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: #f6f8f4;
+  padding: 14px;
+}
+.sf-sequence button > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #b7c8c2;
+  border-radius: 50%;
+  flex: none;
+}
+.sf-sequence strong {
+  display: block;
+  font-size: 14px;
+}
+.sf-sequence small {
+  display: block;
+  font-weight: 400;
+  color: #62747a;
+}
+.sf-sequence button > b {
+  margin-left: auto;
+  color: #7a9291;
+}
+.sf-sequence button[aria-pressed="true"] {
+  background: #e9f2ed;
+  border-color: #176d66;
+  color: #176d66;
+}
+.sf-sequence button[aria-pressed="true"] > span {
+  background: #176d66;
+  color: #fff;
+  border-color: #176d66;
+}
+.sf-heading h2 {
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+.sf-heading p {
+  max-width: 900px;
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 0 0 18px;
+  color: #586970;
+}
+.sf-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: #586970;
+}
+.sf-tools button[aria-pressed="true"] {
+  color: #176d66;
+  border-color: #176d66;
+  background: #e9f2ed;
+}
+.sf-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 22px;
+  align-items: start;
+}
+.sf-drawing {
+  min-width: 0;
+}
+.sf-plans {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.sf-plans.sf-with-detail {
+  grid-template-columns: 1.2fr 1fr;
+}
+.sf-plans figure {
+  margin: 0;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #dce2e5;
+  border-radius: 8px;
+}
+.sf-plans figcaption {
+  padding: 16px 18px 0;
+  font: 600 14px/1.6 system-ui;
+}
+.sf-plans figcaption small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #62747a;
+}
+.sf-plans svg {
+  max-height: 450px;
+}
+.sp-lab .sf-plans svg text {
+  font: 16px system-ui;
+}
+.sf-plans .sf-marker text {
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.sf-primary {
+  color: #176d66;
+}
+.sf-secondary {
+  color: #356a9b;
+}
+.sf-detail {
+  color: #b95830;
+}
+.sf-marker.sf-primary {
+  fill: #fff;
+  stroke: #176d66;
+  stroke-width: 2;
+}
+.sf-marker.sf-primary text {
+  fill: #176d66;
+}
+.sf-marker.sf-secondary {
+  fill: #4c75a0;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.sf-marker.sf-secondary text {
+  fill: #356a9b;
+}
+.sf-marker.sf-detail {
+  fill: #b95830;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.sf-marker.sf-detail text {
+  fill: #b95830;
+}
+.sf-area-label {
+  fill: #176d66;
+  font-weight: 600 !important;
+}
+.sf-area-muted {
+  fill: #7b8b80;
+}
+.sf-building-label {
+  fill: #876548;
+}
+.sf-angle-label {
+  fill: #b95830;
+  font-style: italic !important;
+}
+.sf-measurements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  padding: 0 18px 18px;
+  color: #62747a;
+  font-size: 12px;
+}
+.sf-measurements b {
+  margin-left: 6px;
+  color: #994c2e;
+}
+.sf-station-label {
+  fill: #356a9b;
+  font-weight: 700 !important;
+}
+.sp-lab .sf-plans .sf-scale text {
+  font-size: 13px;
+}
+.sf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 11px;
+  margin-top: 12px;
+  color: #62747a;
+}
+.sf-guide {
+  padding: 18px;
+  border-left: 2px solid #d9e5dc;
+}
+.sf-eyebrow {
+  color: #176d66;
+  font: 600 10px/1.5 system-ui;
+  letter-spacing: 0.12em;
+}
+.sf-guide h3 {
+  font-size: 17px;
+  margin: 10px 0;
+  line-height: 1.5;
+}
+.sf-guide p,
+.sf-field-steps {
+  color: #586970;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.sf-insight {
+  margin-top: 22px;
+  padding-top: 15px;
+  border-top: 1px solid #dce2e5;
+  font-size: 13px;
+}
+.sf-insight p {
+  margin: 6px 0;
+}
+.sf-guide label {
+  display: block;
+  color: #586970;
+  font-size: 12px;
+}
+.sf-guide select {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0 20px;
+  border: 1px solid #cbd5d5;
+  border-radius: 5px;
+  color: #354d53;
+  background: #fff;
+}
+.sf-field-steps {
+  padding-left: 20px;
+}
+.sf-field-steps li {
+  margin-bottom: 10px;
+}
+.sf-result {
+  padding: 16px 0;
+  border-top: 1px solid #dce2e5;
+}
+.sf-result span,
+.sf-result small {
+  display: block;
+  color: #62747a;
+  font-size: 11px;
+}
+.sf-result strong {
+  display: block;
+  color: #176d66;
+  font:
+    600 22px/1.8 ui-monospace,
+    monospace;
+}
+.sf-message {
+  margin-top: 22px;
+  padding: 14px 18px;
+  border-radius: 5px;
+  background: #e9f2ed;
+  color: #235951;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.sf-lesson > .lab-disclosure {
+  margin-top: 12px;
+}
+.sf-lesson .lab-disclosure code {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  line-height: 1.9;
+  margin: 8px 0;
+}
+.sf-lesson .lab-disclosure table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.sf-lesson .lab-disclosure th,
+.sf-lesson .lab-disclosure td {
+  padding: 10px;
+  border-bottom: 1px solid #dce2e5;
+  text-align: left;
+}
+.sp-error-experiment > p {
+  color: #586970;
+  font-size: 13px;
+  line-height: 1.8;
+}
+@media (max-width: 1100px) {
+  .sf-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sf-guide {
+    border-left: 0;
+    border-top: 1px solid #dce2e5;
+    padding: 16px 0 0;
+  }
+  .sf-guide h3 {
+    font-size: 16px;
+  }
+  .sf-insight {
+    margin-top: 12px;
+  }
+}
+@media (max-width: 560px) {
+  .sf-sequence {
+    gap: 4px;
+    margin-top: 14px;
+  }
+  .sf-sequence button {
+    padding: 9px 5px;
+    gap: 6px;
+    flex-direction: column;
+    align-items: start;
+  }
+  .sf-sequence strong {
+    font-size: 11px;
+  }
+  .sf-sequence small,
+  .sf-sequence button > b {
+    display: none;
+  }
+  .sf-sequence button > span {
+    width: 22px;
+    height: 22px;
+  }
+  .sf-heading h2 {
+    font-size: 19px;
+  }
+  .sf-plans.sf-with-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sf-plans figcaption {
+    padding: 12px 12px 0;
+  }
+  .sp-lab .sf-plans svg text {
+    font-size: 21px;
+  }
+  .sp-lab .sf-plans .sf-scale text {
+    font-size: 17px;
+  }
+}
 .sp-steps {
   display: flex;
   flex-wrap: wrap;

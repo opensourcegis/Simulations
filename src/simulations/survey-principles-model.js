@@ -30,6 +30,71 @@ export const CONTROL_NAMES = [
 ];
 const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
+// Primary coordinates are supplied control. Synthetic ranges establish each
+// secondary station; a bearing oriented to S2 then locates a building corner.
+export function surveyHierarchyExample(zone = 0, corner = 0) {
+  if (![0, 1].includes(zone) || ![0, 1, 2].includes(corner))
+    throw new RangeError("Invalid survey area or corner");
+  const controls = { A: [12, 16], B: [88, 16], C: [88, 70], D: [12, 70] };
+  const names = zone === 0 ? ["A", "B", "C"] : ["A", "C", "D"];
+  const baselineNames = zone === 0 ? ["A", "B"] : ["D", "C"];
+  const baseline = baselineNames.map((name) => controls[name]);
+  const fieldStations =
+    zone === 0
+      ? [
+          [62, 30],
+          [54, 34],
+        ]
+      : [
+          [30, 46],
+          [22, 47],
+        ];
+  const ties = fieldStations.map((p) => baseline.map((b) => distance(b, p)));
+  // A field sketch specifies north of AB or south of DC, respectively.
+  const stations = ties.map(
+    ([r1, r2]) =>
+      rangeIntersections(...baseline, r1, r2).points[zone === 0 ? 0 : 1],
+  );
+  const origin = zone === 0 ? [70, 35] : [41, 48];
+  const building = [
+    [0, 0],
+    [9, 0],
+    [9, 9],
+    [0, 9],
+  ].map((o) => o.map((v, j) => v + origin[j]));
+  // Both stations are south-west of the building. Only the three corners
+  // visible along its south/west faces are observed, never through a wall.
+  const target = building[[0, 1, 3][corner]];
+  const [S1, S2] = stations;
+  const bearing = (a, b) =>
+    (Math.atan2(b[0] - a[0], b[1] - a[1]) + 2 * Math.PI) % (2 * Math.PI);
+  const backsightBearing = bearing(S1, S2);
+  const horizontalAngle =
+    (bearing(S1, target) - backsightBearing + 2 * Math.PI) % (2 * Math.PI);
+  const gridBearing = (backsightBearing + horizontalAngle) % (2 * Math.PI);
+  const range = distance(S1, target);
+  const point = [
+    S1[0] + range * Math.sin(gridBearing),
+    S1[1] + range * Math.cos(gridBearing),
+  ];
+  return {
+    controls,
+    names,
+    baselineNames,
+    ties,
+    stations,
+    building,
+    corner,
+    point,
+    range,
+    backsightBearing,
+    horizontalAngle,
+    gridBearing,
+    checkRange: distance(S2, target),
+    computedCheck: distance(S2, point),
+  };
+}
+
 // Both strategies use exactly the same observed planar leg vectors. Only the
 // available independently established control differs. Compass/Bowditch rule,
 // not a disguised truth correction or a least-squares network adjustment.

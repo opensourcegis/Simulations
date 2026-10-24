@@ -5,10 +5,34 @@ in the Positioning catalogue category.
 
 ## 1. Work from the whole to the part
 
-Reveal checked primary controls A–D, then secondary stations 1–8, then the
-details tied to those stations. Introduce one intentionally large northing
-mistake into a measured leg. Compare two methods using the **same** observed
-leg vectors:
+Follow one site through three scales of work. This is a survey hierarchy, not
+an instruction to draw the whole map before measuring its details:
+
+1. **Whole site:** checked primary marks A–D enclose the area and establish its
+   common coordinate framework. Only this framework appears initially.
+2. **Smaller parts:** choose triangle ABC or ACD. Local working stations S1/S2
+   are established from synthetic ranges to two main controls, with a known
+   field-sketch side resolving the range ambiguity. Switching areas leaves the
+   primary framework unchanged. Real secondary control needs redundant checks.
+3. **Local details:** the whole-site plan stays visible beside a clearly labelled,
+   larger-scale building survey. Occupy S1, orient to S2 and observe one of three
+   building corners P. A polar-coordinate calculation positions P in the same
+   system as A–D. A distance from S2 is withheld as a detail check. The coordinate
+   disclosure shows the control ties, orientation, horizontal angle, distance,
+   and numerical `E = Eₛ₁ + d sin θ`, `N = Nₛ₁ + d cos θ` calculations.
+
+Both working stations can see the three offered corners along the south/west
+building faces. Neither locating nor check rays pass through the building.
+
+The main takeaway is **A–D → S1/S2 → P**. Control is not derived backwards from
+building corners. Observations are exact and synthetic; displayed calculations
+are rounded, while computation uses full precision. No instrument accuracy is
+claimed. Orientation is to grid north, using horizontal planar distances.
+
+An optional **Why this order? Try an error experiment** disclosure keeps the
+more advanced closure comparison separate from the first lesson. Introduce one
+intentionally large northing mistake into a measured leg. Compare two methods
+using the **same** observed leg vectors:
 
 - A single closed detail traverse holds A fixed and distributes the whole-loop
   misclosure across every leg.
@@ -56,10 +80,13 @@ uncorrelated observations; two repeats from A still leave the circle.
 
 ## Verification
 
-`npm test` tests closure distributions, propagation into details, exact and
+`npm test` tests the control hierarchy, area containment, polar detail solutions,
+unchanged primary control, closure distributions, propagation into details, exact and
 ambiguous circle intersections, rigid-frame invariance, invalid/tangent cases,
 range covariance, weak geometry and the withheld check.
 
-`npm run test:survey-principles:browser` checks guided steps, pointer dragging,
+`npm run test:survey-principles:browser` checks progressive stage visibility,
+both selected areas, all six detail solutions, the optional error experiment,
+guided steps, pointer dragging,
 keyboard-accessible sliders, input preservation, injected mistakes, corrections,
 expanded calculations, catalogue integration and six responsive viewport widths.

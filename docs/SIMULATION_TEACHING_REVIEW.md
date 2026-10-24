@@ -152,12 +152,13 @@ per browser: a newly opened foreground tab can suspend another tab's animation.
   adjustment and catalogue browser suites cover their detailed interactions and
   six viewport widths, including 1920 and 1024 px.
 
-The automated suite contains 235 tests, including nine scanning-optics and eleven
+The automated suite contains 238 tests, including nine scanning-optics and fourteen
 surveying-fundamentals regressions. It tests noiseless recovery, clock cancellation, DD reference
 invariance, wrong-integer sensitivity, hyperbolic travel time, critical angles,
 lensmaker units, SAR resolution, map area preservation, pole limits, clipping,
 seeded reset and frame-rate-independent IoT propagation.
-The new fundamentals checks cover compass-rule corrections, local error
+The new fundamentals checks cover the primary-to-secondary-to-detail hierarchy,
+polar coordinate solutions, fixed primary control, compass-rule corrections, local error
 containment and inherited detail errors, range-circle ambiguities, weak/singular
 geometry, covariance and a check observation withheld from the point solution.
 
