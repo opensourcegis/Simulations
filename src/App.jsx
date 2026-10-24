@@ -2,6 +2,7 @@ import { Component, lazy, Suspense, useState } from "react";
 import Thumbnail from "./SimulationThumbnail.jsx";
 
 const SIMULATION_LOADERS = {
+  "survey-principles": lazy(() => import("./simulations/SurveyPrinciples.jsx")),
   ortho: lazy(() => import("./simulations/OrthoRectification.jsx")),
   sfm: lazy(() => import("./simulations/StructureFromMotion.jsx")),
   "aerial-triangulation": lazy(
@@ -34,6 +35,22 @@ function simulatorHref(path) {
 }
 
 const simulators = [
+  {
+    title: "Two Principles of Surveying",
+    category: "Positioning",
+    level: "Beginner",
+    description:
+      "Build control from whole to part, then fix a point with independent references. See error containment, two-circle ambiguity and an independent check.",
+    tags: [
+      "Surveying fundamentals",
+      "Whole to part",
+      "Control framework",
+      "Independent measurements",
+      "Trilateration",
+    ],
+    path: "?simulation=survey-principles",
+    kind: "principles",
+  },
   {
     title: "LiDAR Ranging",
     category: "LiDAR",

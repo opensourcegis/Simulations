@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { openBrowserPage } from "./thumbnail-browser-client.mjs";
+import { THUMBNAILS } from "../src/thumbnail-catalog.js";
 
 const page = await openBrowserPage();
 const base = process.env.PHOTO_BASE_URL || "http://localhost:4173/Simulations/";
@@ -75,7 +76,7 @@ try {
   await go("");
   assert.equal(
     await evaluate('document.querySelectorAll("a.card").length'),
-    23,
+    Object.keys(THUMBNAILS).length,
   );
   assert.equal(await evaluate('!!document.querySelector(".stats")'), false);
   await screenshot("catalogue");

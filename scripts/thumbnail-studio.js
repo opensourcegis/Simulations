@@ -1188,7 +1188,27 @@ function adjustment(g) {
   });
   imagePlane(g, [0, 2.6, 3.2], 5.8, 2.2, texture).rotation.x = Math.PI / 2;
 }
+function surveyingPrinciples(g) {
+  site(g, {trees:true,houses:true});
+  const controls=[[-4,-2.5,0.08],[4,-2.5,0.08],[4,2.5,0.08],[-4,2.5,0.08]];
+  controls.forEach((p)=>{
+    box(g,[0.38,0.38,0.25],[p[0],p[1],0.18],metal);
+    target(g,[p[0],p[1],0.33],0.55);
+  });
+  line(g,[...controls,controls[0]],colors.cyan,0.8);
+  const P=[0,0.5,0.15];
+  for(const p of controls.slice(0,2)) {
+    for(const angle of [0,2.1,4.2]) rod(g,[p[0],p[1],1.4],[p[0]+0.45*Math.cos(angle),p[1]+0.45*Math.sin(angle),0.05],0.035,gold);
+    cylinder(g,0.18,0.18,[p[0],p[1],1.45],dark);
+    box(g,[0.36,0.35,0.42],[p[0],p[1],1.73],metal);
+    line(g,[[p[0],p[1],1.73],P],colors.gold,0.9);
+  }
+  target(g,P,0.65);
+  rod(g,P,[P[0],P[1],1.5],0.025,metal);
+  box(g,[0.45,0.02,0.28],[P[0]+0.21,P[1],1.45],mat(0xc06b3d));
+}
 const scenes = {
+  principles: surveyingPrinciples,
   ranging,
   scanning,
   interaction,

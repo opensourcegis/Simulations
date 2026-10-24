@@ -1,6 +1,6 @@
 # Catalogue previews
 
-All 23 simulation cards use locally hosted, responsive WebP previews. The incomplete duplicate React ortho card has been consolidated into the working standalone ortho lesson; old `?simulation=ortho` links still work. Every image has a descriptive alternative, explicit 16:9 dimensions, lazy loading, and 480/960-pixel sources. Hover enlargement respects reduced-motion preferences. No 3D renderer or third-party image host is needed on the catalogue page.
+All 24 simulation cards use locally hosted, responsive WebP previews. The incomplete duplicate React ortho card has been consolidated into the working standalone ortho lesson; old `?simulation=ortho` links still work. Every image has a descriptive alternative, explicit 16:9 dimensions, lazy loading, and 480/960-pixel sources. Hover enlargement respects reduced-motion preferences. No 3D renderer or third-party image host is needed on the catalogue page.
 
 ## Artwork
 

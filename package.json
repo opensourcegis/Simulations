@@ -23,6 +23,7 @@
     "test:lidar": "node --test scripts/lidar-physics.test.js scripts/survey-realism.test.js scripts/survey-teaching.test.js scripts/scanning.test.js",
     "test:scanning:browser": "node scripts/scanning-browser.mjs",
     "test:scan-optics:browser": "node scripts/scan-optics-browser.mjs",
+    "test:survey-principles:browser": "node scripts/survey-principles-browser.mjs",
     "test:survey:browser": "node scripts/survey-realism-browser.mjs",
     "test:compact:browser": "node scripts/compact-labs-browser.mjs",
     "test:lidar:browser": "node scripts/ranging-browser.mjs",

@@ -1,6 +1,6 @@
 # Simulation teaching and reliability review
 
-The catalogue contains 23 distinct laboratories. The incomplete duplicate React
+The catalogue contains 24 distinct laboratories. The incomplete duplicate React
 orthorectification preview has been retired; bookmarked `?simulation=ortho` URLs
 open the complete standalone lesson. This is an internal teaching/code review,
 not external academic peer review or certification for operational survey work.
@@ -22,6 +22,7 @@ were retained rather than covered with duplicate instructions.
 
 | Laboratory | Learner should explain | Evidence / important limit |
 | --- | --- | --- |
+| Two principles of surveying | Establish checked control before details; locate a point using independent geometric constraints | Same observed traverse vectors with global/local compass-rule balancing; actual two-circle intersections, ambiguity and an independent check. Supplied control, planar geometry and illustrative uncertainty, not a field-accuracy certificate |
 | LiDAR ranging | Convert round-trip delay to range; distinguish precision and ambiguity | Actual seeded shot, calibration delay, SNR detection and quantisation; AMCW uses ideal phase |
 | LiDAR scan patterns | Combine steering and aircraft motion | Points and displayed ray share timestamped first-surface intersections; nominal density is not local coverage |
 | Beam–target interaction | Partition pulse energy and detect returns | Material/angular backscatter and canopy waveform; illustrative BRDF and canopy cross-section, not full leaf ray tracing |
@@ -91,7 +92,7 @@ scene. Secondary exposure, bias, mounting, theory and record-export sections are
 closed until requested; selecting a relevant teaching stage opens its settings.
 Opening or closing a section does not regenerate observations or reset a fit.
 
-All 23 catalogue entries, including the three standalone laboratories, share a
+All 24 catalogue entries, including the three standalone laboratories, share a
 minimal workspace skin: neutral surfaces, compact headers, understated stage
 navigation and fewer boxed metrics. Diagram colours, warning states and scientific
 units are not restyled as decorative accents. The catalogue itself has a short
@@ -140,6 +141,9 @@ per browser: a newly opened foreground tab can suspend another tab's animation.
   comparisons, rendered diagrams, retained settings and camera captures, GSD
   sampling, responsive beam settings and ortho source/output layout. Writes
   `/tmp/minimal-*.png` visual-inspection screenshots.
+- `npm run test:survey-principles:browser`: whole-to-part error containment,
+  guided two-circle point fixing, ambiguity and independent checks, drag/slider
+  equivalence, retained inputs and six responsive viewport widths.
 - `npm run test:principles:browser`: GNSS stages/clock/integer hypotheses, GPR
   pause/acquisition, Snell TIR, seven projection factors, IoT pause/reset/latency,
   stationary 3D defaults, planner with external services blocked and the legacy
@@ -148,11 +152,14 @@ per browser: a newly opened foreground tab can suspend another tab's animation.
   adjustment and catalogue browser suites cover their detailed interactions and
   six viewport widths, including 1920 and 1024 px.
 
-The numerical suite includes 25 new principles regressions in addition to the
-existing 190 tests. It tests noiseless recovery, clock cancellation, DD reference
+The automated suite contains 235 tests, including nine scanning-optics and eleven
+surveying-fundamentals regressions. It tests noiseless recovery, clock cancellation, DD reference
 invariance, wrong-integer sensitivity, hyperbolic travel time, critical angles,
 lensmaker units, SAR resolution, map area preservation, pole limits, clipping,
 seeded reset and frame-rate-independent IoT propagation.
+The new fundamentals checks cover compass-rule corrections, local error
+containment and inherited detail errors, range-circle ambiguities, weak/singular
+geometry, covariance and a check observation withheld from the point solution.
 
 These checks establish the tested behavior, not a claim that every browser,
 parameter combination or scientific assumption has been exhaustively validated.
